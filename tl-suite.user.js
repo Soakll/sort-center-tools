@@ -5411,21 +5411,35 @@
 
         const tbl = container.querySelector('#vsm-ht');
         if (tbl) {
+            let hoverCss = document.getElementById('vsm-ht-hovercss');
+            if(!hoverCss) {
+                hoverCss = document.createElement('style');
+                hoverCss.id = 'vsm-ht-hovercss';
+                document.head.appendChild(hoverCss);
+            }
+            
+            let lastRow = null, lastCol = null, hraf = null;
             tbl.addEventListener('mouseover', e => {
                 const td = e.target.closest('[data-row],[data-col]');
                 if (!td) return;
-                const row = td.dataset.row;
-                const col = td.dataset.col;
-                tbl.querySelectorAll('[data-row]').forEach(el => {
-                    el.classList.toggle('vsm-row-hl', el.dataset.row === row && !!row);
-                });
-                tbl.querySelectorAll('[data-col]').forEach(el => {
-                    el.classList.toggle('vsm-col-hl', el.dataset.col === col && col !== undefined);
+                const row = td.dataset.row || null;
+                const col = td.dataset.col !== undefined ? td.dataset.col : null;
+                if (lastRow === row && lastCol === col) return;
+                lastRow = row; lastCol = col;
+                
+                if (hraf) cancelAnimationFrame(hraf);
+                hraf = requestAnimationFrame(() => {
+                    let css = '';
+                    if (row) css += `#vsm-ht td[data-row="${row.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"] { filter: brightness(1.35) !important; outline: 1px solid rgba(255,153,0,.35); z-index: 10; position:relative; }\n`;
+                    if (col !== null) css += `#vsm-ht td[data-col="${col}"] { filter: brightness(1.35) !important; outline: 1px solid rgba(255,153,0,.35); z-index: 10; position:relative; }\n`;
+                    hoverCss.textContent = css;
+                    hraf = null;
                 });
             });
             tbl.addEventListener('mouseleave', () => {
-                tbl.querySelectorAll('.vsm-row-hl').forEach(el => el.classList.remove('vsm-row-hl'));
-                tbl.querySelectorAll('.vsm-col-hl').forEach(el => el.classList.remove('vsm-col-hl'));
+                lastRow = null; lastCol = null;
+                if (hraf) cancelAnimationFrame(hraf);
+                hraf = requestAnimationFrame(() => { hoverCss.textContent = ''; hraf = null; });
             });
         }
     }
@@ -5831,11 +5845,16 @@
         const searchInput = document.getElementById('vrid-search-input');
         const itemsContainer = document.getElementById('vrid-list-items');
 
+        let filterraf = null;
         function filterList() {
-            const searchTerm = searchInput.value.trim().toLowerCase();
-            itemsContainer.querySelectorAll('.vrid-badge').forEach(badge => {
-                const text = badge.textContent.toLowerCase();
-                badge.style.display = (searchTerm === '' || text.includes(searchTerm)) ? '' : 'none';
+            if(filterraf) cancelAnimationFrame(filterraf);
+            filterraf = requestAnimationFrame(() => {
+                const searchTerm = searchInput.value.trim().toLowerCase();
+                itemsContainer.querySelectorAll('.vrid-badge').forEach(badge => {
+                    const text = badge.textContent.toLowerCase();
+                    badge.style.display = (searchTerm === '' || text.includes(searchTerm)) ? '' : 'none';
+                });
+                filterraf = null;
             });
         }
         searchInput.addEventListener('input', filterList);
@@ -9011,16 +9030,25 @@
         });
     });
 
+    let tphraf = null;
     document.addEventListener('mousemove', (e) => {
-        if (isDragging) {
-            popup.style.left = `${e.clientX - startX}px`; popup.style.top = `${e.clientY - startY}px`;
-        } else if (isResizing) {
-            if(currentHandle.includes('e')) popup.style.width = `${Math.max(CONFIG.ui.minWidth, startW + (e.clientX - startX))}px`;
-            if(currentHandle.includes('s')) popup.style.height = `${Math.max(CONFIG.ui.minHeight, startH + (e.clientY - startY))}px`;
-        }
+        if (!isDragging && !isResizing) return;
+        if (tphraf) cancelAnimationFrame(tphraf);
+        tphraf = requestAnimationFrame(() => {
+            if (isDragging) {
+                popup.style.left = `${e.clientX - startX}px`; popup.style.top = `${e.clientY - startY}px`;
+            } else if (isResizing) {
+                if(currentHandle.includes('e')) popup.style.width = `${Math.max(CONFIG.ui.minWidth, startW + (e.clientX - startX))}px`;
+                if(currentHandle.includes('s')) popup.style.height = `${Math.max(CONFIG.ui.minHeight, startH + (e.clientY - startY))}px`;
+            }
+            tphraf = null;
+        });
     });
 
-    document.addEventListener('mouseup', () => { isDragging = false; isResizing = false; });
+    document.addEventListener('mouseup', () => {
+        isDragging = false; isResizing = false;
+        if (tphraf) { cancelAnimationFrame(tphraf); tphraf = null; }
+    });
     document.getElementById('tl-v5-btn-fs').addEventListener('click', () => popup.classList.toggle('fullscreen'));
 
     // ── LÓGICA DO TIMER DE REFRESH ────────────────────────────────────────────
