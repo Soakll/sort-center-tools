@@ -75,6 +75,60 @@
     _SUITE.antiCsrfToken = '';
     _SUITE.ymsToken = '';
     _SUITE._capturedParams = {};
+    _SUITE.API = {
+        fetchContainers: function (planIds, callback) {
+            if (!planIds || (Array.isArray(planIds) && planIds.length === 0)) { callback(null, {}); return; }
+            const idsParam = Array.isArray(planIds) ? planIds.join(',') : planIds;
+            const nodeId = GM_getValue('tl_node', 'CGH7');
+            const params = new URLSearchParams({
+                entity: 'getCDTBasedContainerCount',
+                inboundLoadIds: idsParam,
+                nodeId: nodeId
+            });
+            const token = _SUITE.antiCsrfToken || GM_getValue('gql_csrf_token', '');
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: _SUITE.BASE + 'ssp/dock/hrz/ib/fetchdata',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'anti-csrftoken-a2z': token
+                },
+                data: params.toString(),
+                withCredentials: true,
+                timeout: 20000,
+                onload: function (response) {
+                    try {
+                        const data = JSON.parse(response.responseText.replace(/^\uFEFF/, ''));
+                        callback(null, data);
+                    } catch (e) {
+                        callback(e, null);
+                    }
+                },
+                onerror: function (error) { callback(error, null); },
+                ontimeout: function () { callback('Timeout', null); }
+            });
+        },
+        mapToAccum: function (containers) {
+            const accum = {};
+            if (!containers || !Array.isArray(containers)) return accum;
+            containers.forEach(c => {
+                const route = c.stacking_filter || 'Unmapped';
+                if (!accum[route]) accum[route] = { pkgs: 0, remaining: 0, cpts: {} };
+                accum[route].pkgs += (c.package_count || 0);
+                accum[route].remaining += (c.remaining_package_count || 0);
+                if (c.inboundContainerCountCPTMix) {
+                    c.inboundContainerCountCPTMix.forEach(cpt => {
+                        const label = cpt.cptTime || 'N/A';
+                        if (!accum[route].cpts[label]) accum[route].cpts[label] = { pkgs: 0, remaining: 0 };
+                        accum[route].cpts[label].pkgs += (cpt.packageCount || 0);
+                        accum[route].cpts[label].remaining += (cpt.remainingPackageCount || 0);
+                    });
+                }
+            });
+            return accum;
+        }
+    };
 
     (function patchXHR() {
         if (_SUITE.isStemPage) return;
@@ -91,7 +145,6 @@
                 _SUITE.ymsToken = value;
                 GM_setValue('yms_token', value);
                 GM_setValue('yms_token_ts', Date.now());
-                if (typeof ymsToken !== 'undefined') ymsToken = value;
             }
             if (/^authorization$/i.test(name) && /^Bearer /i.test(value) && value.length > 30) {
                 GM_setValue('relay_token', value);
@@ -148,7 +201,11 @@
 
         if (isYMS) {
             try {
-                const t = window.ymsSecurityToken || (typeof ymsSecurityToken !== 'undefined' ? ymsSecurityToken : '');
+                let t = window.ymsSecurityToken || (typeof ymsSecurityToken !== 'undefined' ? ymsSecurityToken : '');
+                if (!t && window.ymsStaticAssetsBaseUrl) {
+                    const m = window.ymsStaticAssetsBaseUrl.match(/"([^"]{50,})"/);
+                    if (m) t = m[1];
+                }
                 if (t && t.length > 20) {
                     GM_setValue('yms_token', t);
                     GM_setValue('yms_token_ts', Date.now());
@@ -312,8 +369,6 @@
                 tabRemaining: '🔄 Restante',
                 xdock: '🔀 X-Dock',
                 cptPriority: '📅 Prioridade CPT',
-                allRoutes: '🌐 Todas as Rotas',
-                fullExport: '📊 Exportar Tudo',
                 byPallet: '📦 Por Pallet',
                 byCpt: '📅 Por CPT',
 
@@ -412,10 +467,8 @@
                 tabRemaining: '🔄 Remaining',
                 xdock: '🔀 X-Dock',
                 cptPriority: '📅 CPT Priority',
-                allRoutes: '🌐 All Routes',
-                fullExport: '📊 Full Export',
-                byPallet: '📦 By Pallet',
-                byCpt: '📅 By CPT',
+                byPallet: '📦 Por Pallet',
+                byCpt: '📅 Por CPT',
                 settingsTitle: '⚙️ Settings',
                 themeLabel: 'Theme',
                 themeLight: '☀️ Light',
@@ -802,6 +855,7 @@
                 '<div id="vp-header">' +
                 '<span class="vp-title">\uD83C\uDFED Pallets Loaded</span>' +
                 '<span id="vp-status"></span>' +
+                '<button id="vp-download" type="button" title="Download CSV" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:12px;margin-right:5px;">📥 CSV</button>' +
                 '<button id="vp-close" type="button">\u2715</button>' +
                 '</div>' +
                 '<div id="vp-body"><div class="vp-loading">' + L("vistaLoading") + '</div></div>' +
@@ -835,7 +889,45 @@
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') vpClose(); });
             vpPopup.querySelector('#vp-close').addEventListener('click', function (e) { e.stopPropagation(); vpClose(); });
 
+            var currentContainers = [];
+            var currentLane = '';
+
+            function vpDownloadCSV() {
+                if (!currentContainers.length) return;
+                var csv = ['Scannable ID,Rota,Doca,CPT,Pacotes,Volume (ft3)'];
+                currentContainers.sort(function (a, b) {
+                    var docaA = (a.locationLabel || '').toUpperCase();
+                    var docbB = (b.locationLabel || '').toUpperCase();
+                    return docaA.localeCompare(docbB) || (a.scannableId || '').localeCompare(b.scannableId || '');
+                }).forEach(function (c) {
+                    var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '') : '—';
+                    var pkgs = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
+                    var vol = c.packageVolume ? cm3ToFt3(c.packageVolume) : '0';
+                    var row = [
+                        '"' + (c.scannableId || '') + '"',
+                        '"' + (c.sfName || '') + '"',
+                        '"' + (c.locationLabel || '').toUpperCase() + '"',
+                        '"' + cpt + '"',
+                        pkgs,
+                        vol
+                    ];
+                    csv.push(row.join(','));
+                });
+
+                var blob = new Blob(['\ufeff' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                var link = document.createElement('a');
+                var url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'pallets_' + currentLane.replace(/[^a-z0-9]/gi, '_') + '.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            vpPopup.querySelector('#vp-download').addEventListener('click', function (e) { e.stopPropagation(); vpDownloadCSV(); });
             function vpRenderTable(containers, lane) {
+                currentContainers = containers;
+                currentLane = lane;
                 var titleEl = vpShadow.getElementById('vp-header').querySelector('.vp-title');
                 var body = vpShadow.getElementById('vp-body');
                 var count = vpShadow.getElementById('vp-count');
@@ -1663,10 +1755,9 @@
             function ensureYmsToken(cb) {
                 var t = _SUITE.ymsToken || GM_getValue('yms_token', '');
                 var ts = GM_getValue('yms_token_ts', 0);
-                var isExpired = (Date.now() - ts) > (6 * 60 * 60 * 1000); 
+                var isExpired = (Date.now() - ts) > (12 * 60 * 60 * 1000);
 
-                if (t && t.length > 50 && !isExpired) {
-                    console.log('[YMS] Usando token em cache (Expira em ' + Math.round((6 * 3600 * 1000 - (Date.now() - ts)) / 60000) + ' min)');
+                if (t && t.length > 20 && !isExpired) {
                     _SUITE.ymsToken = t; cb(t); return;
                 }
                 _ymsQueue.push(cb);
@@ -2102,12 +2193,6 @@
                         b.textContent = L('settingsTitle');
                         b.title = L('settingsTitle');
                     });
-
-                    const allBtn = document.querySelector('#rd-global-bar .tl-btn-blue');
-                    if (allBtn) allBtn.textContent = L('allRoutes');
-
-                    const expBtn = document.getElementById('rd-full-export-btn');
-                    if (expBtn) expBtn.textContent = L('fullExport');
 
                     document.querySelectorAll('[data-vrid-getinfo]').forEach(b => {
                         if (!b.disabled && !b.textContent.startsWith('⏳') && !b.textContent.startsWith('⏸') && !b.textContent.startsWith('⚠')) {
@@ -2901,40 +2986,42 @@
                 }
 
                 fetchSingleRoutes = function (vrid, row, btn) {
-                    btn.textContent = '⏳ Reading...'
+                    btn.textContent = '⏳ API...';
                     btn.className = 'tl-btn tl-btn-gray tl-loading';
                     btn.disabled = true;
-                    const link = row.querySelector('a.packageDetails');
-                    if (!link) {
-                        btn.textContent = '⚠ No data';
+
+                    const cParams = _SUITE._capturedParams[vrid] || {};
+                    const planId = cParams.planId || row.getAttribute('planid') || row.getAttribute('planId');
+
+                    if (!planId) {
+                        btn.textContent = '⚠ No PlanID';
                         btn.className = 'tl-btn tl-btn-red';
                         btn.disabled = false;
                         return;
                     }
+
                     const laneEl = row.querySelector('[class*="lane"]');
                     const laneText = laneEl ? laneEl.textContent.trim() : vrid;
-                    const accum = {};
-
                     const sdtEl = row.querySelector('[data-sat]');
                     const sdtCell = row.querySelector('td.scheduledArrivalTimeCol');
                     const sdt = (sdtEl ? sdtEl.getAttribute('data-sat').trim() : null) || (sdtCell ? sdtCell.textContent.trim() : null);
 
-                    openAndRead(link, accum, () => {
-                        if (accum._xdock && accum._xdock.pallets > 0) {
-                            accum._xdock.vrids = {
-                                [vrid]: { pkgs: accum._xdock.pkgs, pallets: accum._xdock.pallets, lane: laneText, routes: accum._xdock.routes || {} }
-                            };
+                    _SUITE.API.fetchContainers(planId, (err, data) => {
+                        if (err || !data || !data.containers) {
+                            btn.textContent = '⚠ API Error';
+                            btn.className = 'tl-btn tl-btn-red';
+                            btn.disabled = false;
+                            return;
                         }
 
+                        const accum = _SUITE.API.mapToAccum(data.containers);
                         const routeVridMap = {};
                         Object.entries(accum).forEach(([route, v]) => {
-                            if (route === '_xdock') return;
                             if (v.remaining > 0) routeVridMap[route] = { [vrid]: { pkgs: v.remaining, lane: laneText } };
                         });
 
                         const cptAnalysis = {};
                         Object.entries(accum).forEach(([route, v]) => {
-                            if (route === '_xdock') return;
                             Object.entries(v.cpts || {}).forEach(([cpt, c]) => {
                                 if (!c.remaining) return;
                                 if (!cptAnalysis[cpt]) cptAnalysis[cpt] = {};
@@ -2944,46 +3031,32 @@
                                 cptAnalysis[cpt][vrid].routes[route] += c.remaining;
                             });
                         });
+
                         const vridSdtMap = sdt ? { [vrid]: sdt } : {};
-                        const routes = Object.entries(accum)
-                            .filter(([k]) => k !== '_xdock')
-                            .map(([route, v]) => ({ route, pkgs: v.pkgs, remaining: v.remaining, cpts: Object.entries(v.cpts || {}).map(([cpt, c]) => ({ cpt, pkgs: c.pkgs, remaining: c.remaining })) }));
+                        const routes = Object.entries(accum).map(([route, v]) => ({
+                            route,
+                            pkgs: v.pkgs,
+                            remaining: v.remaining,
+                            cpts: Object.entries(v.cpts || {}).map(([cpt, c]) => ({ cpt, pkgs: c.pkgs, remaining: c.remaining }))
+                        }));
+
                         const total = routes.reduce((s, r) => s + r.pkgs, 0);
                         btn.textContent = '📊 Routes';
                         btn.className = 'tl-btn tl-btn-green';
                         btn.disabled = false;
-                        showRoutesPopup('📊 Route Distribution', `${vrid} — ${laneText} · ${routes.length} route${routes.length !== 1 ? 's' : ''}`, routes, total, accum._xdock || null, cptAnalysis, routeVridMap, vridSdtMap);
-                    }, () => {
-                        btn.textContent = '⚠ Try again';
-                        btn.className = 'tl-btn tl-btn-red';
-                        btn.disabled = false;
+                        showRoutesPopup('📊 Route Distribution', `${vrid} — ${laneText} · ${routes.length} routes`, routes, total, null, cptAnalysis, routeVridMap, vridSdtMap);
                     });
                 }
 
                 runRoutesForBadge = function (vrid, row, badgeCard) {
-                    const link = row.querySelector('a.packageDetails');
-                    if (!link) return;
-                    const laneEl = row.querySelector('[class*="lane"]');
-                    const laneText = laneEl ? laneEl.textContent.trim() : vrid;
+                    const cParams = _SUITE._capturedParams[vrid] || {};
+                    const planId = cParams.planId || row.getAttribute('planid');
+                    if (!planId) return;
 
-                    const accum = {};
-                    openAndRead(link, accum, () => {
-                        if (accum._xdock && accum._xdock.pallets > 0) {
-                            accum._xdock.vrids = {
-                                [vrid]: { pkgs: accum._xdock.pkgs, pallets: accum._xdock.pallets, lane: laneText, routes: accum._xdock.routes || {} }
-                            };
-                        }
-                        const routeVridMap = {};
-                        Object.entries(accum).forEach(([route, v]) => {
-                            if (route === '_xdock') return;
-                            if (v.remaining > 0) routeVridMap[route] = { [vrid]: { pkgs: v.remaining, lane: laneText } };
-                        });
-                        const routes = Object.entries(accum)
-                            .filter(([k]) => k !== '_xdock')
-                            .map(([route, v]) => ({ route, pkgs: v.pkgs, remaining: v.remaining, cpts: Object.entries(v.cpts || {}).map(([cpt, c]) => ({ cpt, pkgs: c.pkgs, remaining: c.remaining })) }));
-                        const total = routes.reduce((s, r) => s + r.pkgs, 0);
-                    }, () => {
-
+                    _SUITE.API.fetchContainers(planId, (err, data) => {
+                        if (err || !data || !data.containers) return;
+                        const accum = _SUITE.API.mapToAccum(data.containers);
+                        mergeRoutesIntoStore(accum);
                     });
                 }
 
@@ -3090,87 +3163,83 @@
                     }
 
                     function processRowsOnPage(vrids, onPageDone) {
-                        let idx = 0;
-                        function nextRow() {
-                            if (idx >= vrids.length) { onPageDone(); return; }
-                            const { vrid, vridAttr, laneText } = vrids[idx];
-                            totalProcessed++;
-                            statusEl.textContent = 'Reading routes ' + totalProcessed + ' / ~' + totalFound + ' — ' + vrid + ' · ' + laneText;
+                        const validVrids = vrids.map(v => {
+                            const params = _SUITE._capturedParams[v.vrid] || {};
+                            const row = document.querySelector(`tr[vrid="${v.vridAttr}"]`);
+                            const pid = params.planId || (row ? row.getAttribute('planid') || row.getAttribute('planId') : null);
+                            return { ...v, pid };
+                        }).filter(v => !!v.pid);
 
-                            const liveRow = document.querySelector(`tr[vrid="${vridAttr}"]`);
-                            const link = liveRow ? liveRow.querySelector('a.packageDetails') : null;
-                            if (!link) { idx++; nextRow(); return; }
-                            const truckAccum = {};
-                            openAndRead(link, truckAccum, () => {
-                                Object.entries(truckAccum).forEach(([k, v]) => {
-                                    if (k === '_xdock') {
-                                        if (!accum._xdock) accum._xdock = { pkgs: 0, pallets: 0, vrids: {} };
-                                        accum._xdock.pkgs += v.pkgs || 0;
-                                        accum._xdock.pallets += v.pallets || 0;
-                                        if ((v.pkgs || 0) > 0) {
-                                            if (!accum._xdock.vrids[vrid]) accum._xdock.vrids[vrid] = { pkgs: 0, pallets: 0, lane: laneText, routes: {} };
-                                            accum._xdock.vrids[vrid].pkgs += v.pkgs || 0;
-                                            accum._xdock.vrids[vrid].pallets += v.pallets || 0;
-                                            Object.entries(v.routes || {}).forEach(([r, rv]) => {
-                                                if (!accum._xdock.vrids[vrid].routes[r]) accum._xdock.vrids[vrid].routes[r] = { pkgs: 0, pallets: 0 };
-                                                accum._xdock.vrids[vrid].routes[r].pkgs += rv.pkgs || 0;
-                                                accum._xdock.vrids[vrid].routes[r].pallets += rv.pallets || 0;
+                        if (validVrids.length === 0) { onPageDone(); return; }
+
+                        let completed = 0;
+                        let active = 0;
+                        let queue = validVrids.slice();
+
+                        function next() {
+                            while (active < 5 && queue.length > 0) {
+                                const v = queue.shift();
+                                active++;
+                                _SUITE.API.fetchContainers(v.pid, (err, data) => {
+                                    active--;
+                                    completed++;
+                                    statusEl.textContent = `API Fetching ${completed}/${validVrids.length} trucks on this page...`;
+
+                                    if (!err && data && data.containers) {
+                                        totalProcessed++;
+                                        const truckAccum = _SUITE.API.mapToAccum(data.containers);
+
+                                        Object.entries(truckAccum).forEach(([k, val]) => {
+                                            if (!accum[k]) accum[k] = { pkgs: 0, remaining: 0, cpts: {} };
+                                            accum[k].pkgs += val.pkgs;
+                                            accum[k].remaining += val.remaining;
+                                            Object.entries(val.cpts || {}).forEach(([cpt, c]) => {
+                                                if (!accum[k].cpts[cpt]) accum[k].cpts[cpt] = { pkgs: 0, remaining: 0 };
+                                                accum[k].cpts[cpt].pkgs += c.pkgs;
+                                                accum[k].cpts[cpt].remaining += c.remaining;
                                             });
-                                        }
-                                        return;
-                                    }
-                                    if (!accum[k]) accum[k] = { pkgs: 0, remaining: 0, cpts: {} };
-                                    accum[k].pkgs += v.pkgs;
-                                    accum[k].remaining += v.remaining;
-                                    Object.entries(v.cpts || {}).forEach(([cpt, c]) => {
-                                        if (!accum[k].cpts[cpt]) accum[k].cpts[cpt] = { pkgs: 0, remaining: 0 };
-                                        accum[k].cpts[cpt].pkgs += c.pkgs;
-                                        accum[k].cpts[cpt].remaining += c.remaining;
-                                    });
-                                });
+                                        });
 
-                                const _truckRemaining = Object.entries(truckAccum)
-                                    .filter(([k]) => k !== '_xdock')
-                                    .reduce((s, [, v]) => s + (v.remaining || 0), 0);
-
-                                Object.entries(truckAccum).forEach(([route, v]) => {
-                                    if (route === '_xdock') return;
-                                    if (v.remaining > 0) {
-                                        if (!routeVridMap[route]) routeVridMap[route] = {};
-                                        if (!routeVridMap[route][vrid]) routeVridMap[route][vrid] = { pkgs: 0, lane: laneText };
-                                        routeVridMap[route][vrid].pkgs += v.remaining;
+                                        Object.entries(truckAccum).forEach(([route, val]) => {
+                                            if (val.remaining > 0) {
+                                                if (!routeVridMap[route]) routeVridMap[route] = {};
+                                                routeVridMap[route][v.vrid] = { pkgs: val.remaining, lane: v.laneText };
+                                            }
+                                            Object.entries(val.cpts || {}).forEach(([cpt, c]) => {
+                                                if (!c.remaining) return;
+                                                if (!cptAnalysis[cpt]) cptAnalysis[cpt] = {};
+                                                if (!cptAnalysis[cpt][v.vrid]) cptAnalysis[cpt][v.vrid] = { pkgs: 0, lane: v.laneText, routes: {} };
+                                                cptAnalysis[cpt][v.vrid].pkgs += c.remaining;
+                                                if (!cptAnalysis[cpt][v.vrid].routes[route]) cptAnalysis[cpt][v.vrid].routes[route] = 0;
+                                                cptAnalysis[cpt][v.vrid].routes[route] += c.remaining;
+                                            });
+                                        });
                                     }
 
-                                    if (_truckRemaining === 0) return;
-                                    Object.entries(v.cpts || {}).forEach(([cpt, c]) => {
-                                        if (!c.remaining) return;
-                                        if (!cptAnalysis[cpt]) cptAnalysis[cpt] = {};
-                                        if (!cptAnalysis[cpt][vrid]) cptAnalysis[cpt][vrid] = { pkgs: 0, lane: laneText, routes: {} };
-                                        cptAnalysis[cpt][vrid].pkgs += c.remaining;
-                                        if (!cptAnalysis[cpt][vrid].routes[route]) cptAnalysis[cpt][vrid].routes[route] = 0;
-                                        cptAnalysis[cpt][vrid].routes[route] += c.remaining;
-                                    });
+                                    if (completed === validVrids.length) {
+                                        onPageDone();
+                                    } else {
+                                        next();
+                                    }
                                 });
-                                idx++;
-                                nextRow();
-                            }, () => { idx++; nextRow(); });
+                            }
                         }
-                        nextRow();
+
+                        statusEl.textContent = `API Fetching ${completed}/${validVrids.length} trucks on this page...`;
+                        next();
                     }
 
                     function processNextPage() {
 
                         const vrids = [];
                         document.querySelectorAll('tr[vrid]').forEach(row => {
-
-                            const statusEl = row.querySelector('[class*="originalStatusCheck"][data-status]') || row.querySelector('[data-status]');
-                            const status = statusEl ? statusEl.getAttribute('data-status') : '';
-                            if (status === 'FINISHED_LOADING') return;
-                            const bar = row.querySelector('.progressbarDashboard');
-                            if (!bar || !bar.querySelector('.progressLoaded') || bar.querySelector('.width100')) return;
-                            if (!row.querySelector('a.packageDetails')) return;
                             const vridAttr = row.getAttribute('vrid') || '';
                             if (!vridAttr) return;
+
+                            const cParams = _SUITE._capturedParams[vridAttr.toUpperCase()] || {};
+                            const planId = cParams.planId || row.getAttribute('planid') || row.getAttribute('planId');
+                            if (!planId) return;
+
                             const laneEl = row.querySelector('[class*="lane"]');
                             const laneText = laneEl ? laneEl.textContent.trim() : vridAttr.toUpperCase();
 
@@ -3211,30 +3280,6 @@
                     label.className = 'rd-global-label';
                     label.textContent = L('ibBarLabel');
 
-                    const globalBtn = document.createElement('button');
-                    globalBtn.className = 'tl-btn tl-btn-blue';
-                    globalBtn.textContent = L('allRoutes');
-                    globalBtn.title = 'Aggregate route distribution for all active trucks';
-
-                    function updateGlobalBtnState() {
-                        const hasAny = !!document.querySelector('tr[vrid] a.packageDetails');
-                        globalBtn.disabled = !hasAny;
-                        globalBtn.title = hasAny ? 'Aggregate route distribution for all active trucks' : '' + L('waitingPackages') + '';
-                    }
-                    updateGlobalBtnState();
-                    let globalBtnEnableTimer = null;
-                    const globalBtnObs = new MutationObserver(() => {
-                        if (document.querySelector('tr[vrid] a.packageDetails')) {
-                            if (!globalBtnEnableTimer) {
-                                globalBtnEnableTimer = setTimeout(() => {
-                                    updateGlobalBtnState();
-                                    globalBtnObs.disconnect();
-                                }, 1000);
-                            }
-                        }
-                    });
-                    globalBtnObs.observe(document.body, { childList: true, subtree: true });
-
                     const settingsBtn = document.createElement('button');
                     settingsBtn.className = 'tl-btn tl-btn-gray';
                     settingsBtn.setAttribute('data-rd-settings-btn', '1');
@@ -3245,58 +3290,11 @@
                     const statusEl = document.createElement('span');
                     statusEl.className = 'rd-global-status';
 
-                    globalBtn.addEventListener('click', () => {
-                        fetchAllRoutes(globalBtn, statusEl, null);
-                    });
-
-                    const fullExportBtn = document.createElement('button');
-                    fullExportBtn.id = 'rd-full-export-btn';
-                    fullExportBtn.className = 'tl-btn tl-btn-purple';
-                    fullExportBtn.textContent = L('fullExport');
-                    fullExportBtn.title = 'Run All Routes + Fetch All Info simultaneously, then download XLSX';
-                    fullExportBtn.disabled = false;
-
-                    fullExportBtn.addEventListener('click', () => {
-                        fullExportBtn.disabled = true;
-                        globalBtn.disabled = true;
-                        fullExportBtn.className = 'tl-btn tl-btn-gray tl-loading';
-                        fullExportBtn.textContent = '⏳ Collecting...';
-                        statusEl.textContent = L('runningExport');
-
-                        let routesDone = false;
-                        let infoDone = false;
-
-                        function tryFinish() {
-                            if (!routesDone || !infoDone) return;
-                            statusEl.textContent = L('generatingXlsx');
-                            setTimeout(() => {
-                                downloadFullExcel();
-                                fullExportBtn.disabled = false;
-                                globalBtn.disabled = false;
-                                fullExportBtn.className = 'tl-btn tl-btn-purple';
-                                fullExportBtn.textContent = '📊 Full Export';
-                                statusEl.textContent = `Exported — ${Object.keys(infoStore).length} VRIDs · ${Object.keys(routeStore).length} routes`;
-                            }, 200);
-                        }
-
-                        fetchAllRoutes(globalBtn, statusEl, () => {
-                            routesDone = true;
-                            tryFinish();
-                        });
-
-                        fetchAllInfo(() => {
-                            infoDone = true;
-                            tryFinish();
-                        }, statusEl);
-                    });
-
                     const creditEl = document.createElement('span');
                     creditEl.style.cssText = 'margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,0.45);font-family:"Amazon Ember",Arial,sans-serif;white-space:nowrap;letter-spacing:0.3px;';
                     creditEl.textContent = 'By emanunec@';
 
                     bar.appendChild(label);
-                    bar.appendChild(globalBtn);
-                    bar.appendChild(fullExportBtn);
                     bar.appendChild(settingsBtn);
                     bar.appendChild(statusEl);
                     bar.appendChild(creditEl);
@@ -3559,8 +3557,7 @@
                     if (document.getElementById('rd-global-bar')) return;
                     const bar = document.createElement('div');
                     bar.id = 'rd-global-bar';
-                    bar.style.background = '#0d47a1';
-                    bar.style.borderBottomColor = '#90caf9';
+                    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:40px;background:#0d47a1;border-bottom:2px solid #90caf9;z-index:9999;display:flex;align-items:center;padding:0 20px;gap:15px;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
 
                     const label = document.createElement('span');
                     label.className = 'rd-global-label';
@@ -3572,7 +3569,7 @@
                     const fullExportBtn = document.createElement('button');
                     fullExportBtn.id = 'rd-full-export-btn';
                     fullExportBtn.className = 'tl-btn tl-btn-purple';
-                    fullExportBtn.textContent = L('fullExport');
+                    fullExportBtn.textContent = L('Full Export');
                     fullExportBtn.title = 'Fetch Get Info for all eligible VRIDs, then download XLSX';
 
                     fullExportBtn.addEventListener('click', () => {
@@ -4666,7 +4663,7 @@
             ];
 
             const DEFAULT_FINGERS = [
-                { id: 1, name: "Finger 1", belts: [1, 2, 3, 4, 5, 6, 7, 8] },
+                { id: 1, name: "Finger 1", belts: [1, 2, 3, 4, 5, 6, 7, 8, 17] },
                 { id: 2, name: "Finger 2", belts: [9, 10, 11, 12, 13, 14, 15, 16] }
             ];
 
@@ -5358,7 +5355,7 @@
                 if (!value || value === "") return false;
                 const upper = String(value).toUpperCase();
                 if (upper === "0") return true;
-                if (/^\[.*\]$/.test(upper)) return true; 
+                if (/^\[.*\]$/.test(upper)) return true;
                 if (/^[HX][-]/.test(upper)) return true;
                 if (/^CC/.test(upper)) return true;
                 if (/^AA/.test(upper)) return true;
@@ -6063,6 +6060,42 @@
                 computeAndRenderAll();
                 renderVridList();
                 renderCardsFromCache();
+
+                const csvBtn = document.getElementById('vl-vsm-export-csv-btn');
+                if (csvBtn) {
+                    csvBtn.onclick = function () { vsmDownloadExportDataCSV(); };
+                    csvBtn.style.display = lastExportData.length > 0 ? 'block' : 'none';
+                }
+            }
+
+            function vsmDownloadExportDataCSV() {
+                const data = getFilteredExportData();
+                if (!data.length) return;
+
+                const csv = ['VRID,Plan ID,Scheduled Arrival,Route,Actual Arrival,Total Pkgs,Total Containers,Percent Complete'];
+                data.forEach(v => {
+                    const totalP = (v.containers || []).reduce((s, c) => s + getCounts(c).P, 0);
+                    const totalC = (v.containers || []).reduce((s, c) => s + getCounts(c).C, 0);
+                    const row = [
+                        '"' + (v.vrid || '') + '"',
+                        '"' + (v.planId || '') + '"',
+                        '"' + (v.scheduledArrivalTime || '') + '"',
+                        '"' + (v.route || '') + '"',
+                        '"' + (v.actualArrivalTime || '') + '"',
+                        totalP,
+                        totalC,
+                        (v.completePercent !== null ? v.completePercent + '%' : '—')
+                    ];
+                    csv.push(row.join(','));
+                });
+
+                const blob = new Blob(['\ufeff' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '_');
+                link.setAttribute('download', `vrid_vsm_export_${ts}.csv`);
+                link.click();
             }
 
             async function doSingleSearch(vrid) {
@@ -6594,6 +6627,7 @@
                     <button class="vl-tab active" data-tab="hourly">Horas x VSM</button>
                     <button class="vl-tab" data-tab="static">Layout Físico</button>
                     <button class="vl-tab" data-tab="config">⚙️ Configurações</button>
+                    <button id="vl-clear-cache-btn" style="background:#e05; color:white; border:none; padding:4px 10px; border-radius:12px; font-size:10px; margin-left:auto; cursor:pointer;" title="Limpa tokens e dados salvos do YMS/Relay">🧹 Limpar Cache</button>
                 </div>
 
                 <div id="tab-hourly" class="vl-tab-content active">
@@ -6624,7 +6658,10 @@
                     </div>
 
                     <div class="vl-section">
-                        <div class="vl-section-title">🗺 Mapa VSM (Horas x VSM)</div>
+                        <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>🗺 Mapa VSM (Horas x VSM)</span>
+                            <button class="vl-btn" id="vl-vsm-export-csv-btn" style="padding: 2px 8px; font-size: 11px; margin: 0;">📥 Exportar VRIDs (CSV)</button>
+                        </div>
                         <div id="vsm-map-container">
                             <div class="vsm-map-empty">Carregue VRIDs para visualizar o mapa.</div>
                         </div>
@@ -6853,6 +6890,23 @@
                 document.getElementById('cfg-import-btn').addEventListener('click', () => {
                     if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou. Tente novamente em alguns segundos."); return; }
                     document.getElementById('cfg-file-input').click();
+                });
+
+                document.getElementById('vl-clear-cache-btn').addEventListener('click', () => {
+                    if (confirm("Deseja limpar o cache de tokens (YMS/Relay) e dados salvos dos VRIDs? Isso pode forçar novos popups de validação.")) {
+                        const keys = GM_listValues();
+                        let count = 0;
+                        keys.forEach(k => {
+                            if (k.startsWith('yms_') || k.startsWith('relay_') || k.startsWith('cuft_')) {
+                                GM_deleteValue(k);
+                                count++;
+                            }
+                        });
+                        _SUITE.ymsToken = '';
+                        _SUITE.antiCsrfToken = '';
+                        alert(`Cache limpo! ${count} itens removidos. Recarregue a página.`);
+                        location.reload();
+                    }
                 });
 
                 document.getElementById('cfg-file-input').addEventListener('change', (e) => {
@@ -7378,7 +7432,7 @@
                         }
                     }
                 } catch (e) { }
-                if (attempts >= 200) { 
+                if (attempts >= 200) {
                     clearInterval(iv);
                     GM_setValue('obdv_vsm_status', 'error');
                     GM_setValue('obdv_vsm_body', 'Timeout: token não capturado');
@@ -7386,7 +7440,7 @@
                     try { window.close(); } catch (e) { }
                 }
             }, 200);
-            return; 
+            return;
         }
 
         function apiWindow(customWin) {
@@ -7595,7 +7649,7 @@
                 });
                 vsmSet[routeCode.toUpperCase()] = true;
 
-                if (!_hasAnyStackFilter(palletNode)) return false; 
+                if (!_hasAnyStackFilter(palletNode)) return false;
                 return _findStackFilter(palletNode, vsmSet);
             }
 
@@ -7620,7 +7674,7 @@
                         palletCount += areaCount;
                         positionsData.push({ label: node.container.label });
                     }
-                    return; 
+                    return;
                 }
 
                 if (_isValidContainerLabel(node.container.label) && _palletMatchesRoute(node.container, routeCptMs)) {
@@ -8471,9 +8525,9 @@
                     pixelsPerPoint: 65,
                     minWidth: 400,
                     minHeight: 300,
-                    metaColor: '#ff2a5f',             
-                    realColor: '#a89dff',             
-                    needColor: '#39ff14',             
+                    metaColor: '#ff2a5f',
+                    realColor: '#a89dff',
+                    needColor: '#39ff14',
                     upColor: '#34d399',
                     downColor: '#f87171'
                 }
@@ -8992,7 +9046,7 @@
                 id: 'alwaysShowLabels',
                 afterDatasetsDraw(chart) {
                     const { ctx, data } = chart;
-                    const metaReal = chart.getDatasetMeta(0);       
+                    const metaReal = chart.getDatasetMeta(0);
                     const needDataset = data.datasets.find(ds => ds.label === 'Necessidade');
                     const needMeta = needDataset
                         ? chart.getDatasetMeta(data.datasets.indexOf(needDataset))
@@ -9396,11 +9450,11 @@
                 '#tl-prod-body tbody td.td-na{color:#9ca3af;font-style:italic;text-align:right}',
                 '#tl-prod-body tbody td.td-pph{text-align:right;font-weight:700}',
 
-                'tr.tier-top td{background:#dbeafe}',        
-                'tr.tier-good td{background:#d1fae5}',       
-                'tr.tier-mid td{background:#fef3c7}',        
-                'tr.tier-low td{background:#fee2e2}',        
-                'tr.tier-none td{background:#f9fafb}',       
+                'tr.tier-top td{background:#dbeafe}',
+                'tr.tier-good td{background:#d1fae5}',
+                'tr.tier-mid td{background:#fef3c7}',
+                'tr.tier-low td{background:#fee2e2}',
+                'tr.tier-none td{background:#f9fafb}',
 
                 '#tl-prod-footer{padding:8px 16px;font-size:11px;color:#6b7280;border-top:1px solid #e5e7eb;background:#f9fafb;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}',
 
@@ -9813,9 +9867,9 @@
                     return sortAsc ? va - vb : vb - va;
                 });
 
-                lastSorted = sorted; 
+                lastSorted = sorted;
 
-                var maxPph = sorted.reduce(function (m, r) { return Math.max(m, pphOf(r)); }, 0); 
+                var maxPph = sorted.reduce(function (m, r) { return Math.max(m, pphOf(r)); }, 0);
 
                 var totalPkgs = filtered.reduce(function (s, r) { return s + (r.successfulScans || 0); }, 0);
                 var totalEl = document.getElementById('tl-prod-total');
@@ -9875,7 +9929,7 @@
             }
 
             var lastSorted = [];
-            var chainPanels = [];   
+            var chainPanels = [];
             var syncTimer = null;
 
             function debounceSync() {
@@ -9894,7 +9948,7 @@
                         return parseInt(rows[i].getAttribute('data-idx') || String(i));
                     }
                 }
-                return -1; 
+                return -1;
             }
 
             function buildChainRow(r, absIdx) {
@@ -9941,14 +9995,14 @@
                 cp.bodyEl.onscroll = debounceSync;
             }
 
-            var popupBaseLeft = null; 
+            var popupBaseLeft = null;
 
             function computeAllWidths() {
 
                 var chainCount = chainPanels.filter(function (cp) { return cp.open; }).length;
                 var total = 1 + chainCount;
-                var margin = 8;   
-                var gap = 6;   
+                var margin = 8;
+                var gap = 6;
                 var available = window.innerWidth - margin * 2 - gap * (total - 1);
                 var w = Math.max(260, Math.floor(available / total));
                 return { mainW: w, chainW: w, count: total };
@@ -9957,7 +10011,7 @@
             function applyAllWidths() {
                 if (!chainPanels.length) return;
                 var ws = computeAllWidths();
-                var left = 8; 
+                var left = 8;
 
                 popup.style.transform = 'none';
                 popup.style.width = ws.mainW + 'px';
@@ -9998,15 +10052,15 @@
                 var needed = 0;
                 var startIdxs = [];
 
-                for (var pass = 0; pass < 20; pass++) { 
+                for (var pass = 0; pass < 20; pass++) {
                     var si = getFirstHiddenIdx(prevBody);
                     if (si < 0 || si >= lastSorted.length) break;
                     startIdxs.push(si);
                     needed++;
 
-                    var rowH = 37; 
+                    var rowH = 37;
                     var mainH = popup.getBoundingClientRect().height;
-                    var headers = 56; 
+                    var headers = 56;
                     var rows = Math.max(1, Math.floor((mainH - headers) / rowH));
                     var nextSi = si + rows;
                     if (nextSi >= lastSorted.length) break;
