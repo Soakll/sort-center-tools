@@ -1,21 +1,13 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.5
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
-// @match        https://trans-logistics.amazon.com/*
-// @match        https://trans-logistics-eu.amazon.com/*
-// @match        https://trans-logistics-fe.amazon.com/*
-// @match        https://trans-logistics.amazon.com/sortcenter/*
-// @match        https://trans-logistics-eu.amazon.com/sortcenter/*
-// @match        https://trans-logistics-fe.amazon.com/sortcenter/*
-// @match        https://trans-logistics.amazon.com/sortcenter/flowrate*
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ib*
 // @match        https://trans-logistics.amazon.com/yms/*
 // @match        https://track.relay.amazon.dev/*
-// @match        https://stem-na.corp.amazon.com/*
 // @run-at       document-start
 // @require      https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
@@ -23,22 +15,24 @@
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @connect      ii51s3lexd.execute-api.us-east-1.amazonaws.com
 // @connect      trans-logistics.amazon.com
-// @connect      stem-na.corp.amazon.com
+// @connect      trans-logistics-fe.amazon.com
+// @connect      trans-logistics-eu.amazon.com
 // @connect      track.relay.amazon.dev
+// @connect      *.amazon.com
+// @connect      *.amazon.dev
+// @connect      *.amazonaws.com
+// @connect      stem-na.corp.amazon.com
 // @updateURL    https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js
 // @downloadURL  https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js
 // ==/UserScript==
-
-/* global XLSX, Chart */
-
 (function () {
     'use strict';
 
-    const VERSION = "1.0.2";
+    const VERSION = "1.0.5";
     const LAST_VER = GM_getValue("suite_last_version", "0.0.0");
 
-    // Lógica de Changelog - Aparece apenas uma vez por atualização
     if (VERSION !== LAST_VER) {
         setTimeout(() => {
             const updates = [
@@ -47,7 +41,6 @@
                 "🗺️ Seus mapas e configurações continuam salvos com segurança."
             ];
 
-            // Criando um modal simples de aviso
             const modal = document.createElement('div');
             modal.style = "position:fixed;top:20px;right:20px;background:#1a1a2e;color:white;padding:20px;border-radius:10px;z-index:100000;box-shadow:0 10px 30px rgba(0,0,0,0.5);border-left:5px solid #FF9900;font-family:sans-serif;max-width:350px;animation:slideIn 0.5s ease;";
             modal.innerHTML = `
@@ -90,9 +83,15 @@
         var oSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.open = function (m, u) { this._u = u || ''; return oOpen.apply(this, arguments); };
         XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-            if (/anti-csrftoken-a2z/i.test(name) && value && value.length > 10) _SUITE.antiCsrfToken = value;
+            if (/anti-csrftoken-a2z/i.test(name) && value && value.length > 10) {
+                _SUITE.antiCsrfToken = value;
+                if (typeof _SUITE.antiCsrfToken !== 'undefined') _SUITE.antiCsrfToken = value;
+            }
             if (/^token$/i.test(name) && value && value.length > 20) {
-                _SUITE.ymsToken = value; GM_setValue('yms_token', value);
+                _SUITE.ymsToken = value;
+                GM_setValue('yms_token', value);
+                GM_setValue('yms_token_ts', Date.now());
+                if (typeof ymsToken !== 'undefined') ymsToken = value;
             }
             if (/^authorization$/i.test(name) && /^Bearer /i.test(value) && value.length > 30) {
                 GM_setValue('relay_token', value);
@@ -132,11 +131,9 @@
         else fn();
     }
 
-    // MODULE: VRID Info
     (function loadModuleVridInfo() {
+        if (!_SUITE.isDock && !_SUITE.isYMS && !_SUITE.isRTT && !_SUITE.isVista) return;
         'use strict';
-
-
 
         var _openObPanel = null;
 
@@ -148,6 +145,17 @@
         const isIB = href.includes('/ssp/dock/hrz/ib');
         const isYMS = location.hostname === 'trans-logistics.amazon.com' && location.pathname.includes('/yms/');
         const isRTT = location.hostname === 'track.relay.amazon.dev';
+
+        if (isYMS) {
+            try {
+                const t = window.ymsSecurityToken || (typeof ymsSecurityToken !== 'undefined' ? ymsSecurityToken : '');
+                if (t && t.length > 20) {
+                    GM_setValue('yms_token', t);
+                    GM_setValue('yms_token_ts', Date.now());
+                    _SUITE.ymsToken = t;
+                }
+            } catch (e) { }
+        }
         const isDock = isOutbound || isIB;
 
         function detectCurrentNode() {
@@ -161,71 +169,20 @@
             for (const fn of selectors) {
                 try { const v = fn(); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
             }
-            return 'CGH7';
+            return GM_getValue('tl_node', 'CGH7');
         }
 
         const CURRENT_NODE = detectCurrentNode();
-
-
-
 
         var BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
             : location.hostname.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
                 : 'https://trans-logistics.amazon.com/';
 
-        var antiCsrfToken = '';
-        var ymsToken = '';
-        var _capturedParams = {};
-
-
         var MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
         var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-
-        (function () {
-            var oOpen = XMLHttpRequest.prototype.open;
-            var oSet = XMLHttpRequest.prototype.setRequestHeader;
-            var oSend = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.open = function (m, u) { this._u = u || ''; return oOpen.apply(this, arguments); };
-            XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-                if (/^token$/i.test(name) && value && value.length > 20) {
-                    ymsToken = value; GM_setValue('yms_token', value);
-                }
-                if (/^authorization$/i.test(name) && /^Bearer /i.test(value) && value.length > 30) {
-                    GM_setValue('relay_token', value);
-                    GM_setValue('relay_token_ts', Date.now());
-                }
-                return oSet.apply(this, arguments);
-            };
-            XMLHttpRequest.prototype.send = function (body) {
-
-                if (this._u && this._u.includes('/ssp/dock/hrz/ob/fetchdata') && body) {
-                    try {
-                        var _lpdP = {};
-                        String(body).split('&').forEach(function (pair) {
-                            var i2 = pair.indexOf('='); if (i2 === -1) return;
-                            _lpdP[decodeURIComponent(pair.slice(0, i2))] = decodeURIComponent(pair.slice(i2 + 1));
-                        });
-                        var _lv = (_lpdP.vrid || '').toUpperCase();
-                        if (_lv) {
-                            if (!_capturedParams[_lv]) _capturedParams[_lv] = {};
-                            var _lc = _capturedParams[_lv];
-                            if (_lpdP.loadGroupId) _lc.loadGroupId = _lpdP.loadGroupId;
-                            if (_lpdP.trailerId) _lc.trailerId = _lpdP.trailerId;
-                            if (_lpdP.trailerNumber) _lc.trailerNumber = _lpdP.trailerNumber;
-                            if (_lpdP.planId) _lc.planId = _lpdP.planId;
-                            if (_lpdP.nodeId) _lc.nodeId = _lpdP.nodeId;
-                        }
-                    } catch (e) { }
-                }
-                if (!antiCsrfToken && body && typeof body === 'string' && body.includes('nti-csrftoken-a2z=')) {
-                    try { var ex = decodeURIComponent(body.split('nti-csrftoken-a2z=')[1].split('&json')[0]); if (ex && ex.length > 10) antiCsrfToken = ex; } catch (e) { }
-                }
-                return oSend.apply(this, arguments);
-            };
-        })();
         function fetchTokenFallback(callback) {
-            if (antiCsrfToken) { callback(antiCsrfToken); return; }
+            if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
             GM_xmlhttpRequest({
                 method: 'GET',
                 url: BASE + 'sortcenter/vista',
@@ -234,16 +191,16 @@
                         var div = document.createElement('div');
                         div.innerHTML = resp.responseText;
                         div.querySelectorAll('input').forEach(function (inp) {
-                            if (!antiCsrfToken && /csrf|token|anti/i.test(inp.name || '') && inp.value)
-                                antiCsrfToken = inp.value;
+                            if (!_SUITE.antiCsrfToken && /csrf|token|anti/i.test(inp.name || '') && inp.value)
+                                _SUITE.antiCsrfToken = inp.value;
                         });
-                        if (!antiCsrfToken) {
+                        if (!_SUITE.antiCsrfToken) {
                             var m = resp.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
                             if (!m) m = resp.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                            if (m) antiCsrfToken = m[1];
+                            if (m) _SUITE.antiCsrfToken = m[1];
                         }
                     } catch (e) { }
-                    callback(antiCsrfToken);
+                    callback(_SUITE.antiCsrfToken);
                 },
                 onerror: function () { callback(''); }
             });
@@ -329,10 +286,7 @@
             return (cm3 * 0.0000353147).toFixed(2);
         }
 
-
         var BUS_WHITELIST = ['DRJ3', 'SRP9', 'SFC9', 'STJ9', 'SJO9'];
-
-
 
         function normalizeDestination(dest) {
             var m = dest.match(/^([A-Z0-9]+)-BUS$/i);
@@ -340,15 +294,10 @@
             return BUS_WHITELIST.indexOf(m[1].toUpperCase()) !== -1 ? dest : m[1] + '-B';
         }
 
-
-
         function laneToDestination(lane) {
             var parts = lane.split('->');
             return normalizeDestination((parts[1] || lane).trim());
         }
-
-
-
 
         const SETTINGS = {
             theme: GM_getValue('rd_theme', 'light'),
@@ -746,7 +695,6 @@
         .rd-cpt-pkgs    { font-weight: 600; color: #444; }
         .rd-cpt-pct     { font-weight: 700; }
 
-        /* ── Dark mode ───────────────────────────────────────── */
         .rd-dark.rd-popup            { background: #1a1a2e !important; }
         .rd-dark .rd-popup-header    { background: #16213e !important; border-bottom-color: #3a3a5e !important; }
         .rd-dark .rd-popup-title     { color: #e0e0f0 !important; }
@@ -770,13 +718,11 @@
         .rd-dark .rd-vrid-sub-lane   { color: #7878a8 !important; }
         .rd-dark .rd-vrid-sub-pkgs   { color: #90caf9 !important; }
 
-        /* ── VRID sub-row in Remaining ───────────────────────── */
         .rd-vrid-sub      { padding: 3px 4px 5px 8px; border-top: 1px dashed #e0e0e0; display: flex; flex-wrap: wrap; gap: 4px; }
         .rd-vrid-sub-item { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 20px; background: #f3f4ff; border: 1px solid #c5cae9; font-size: 10px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; cursor: default; }
         .rd-vrid-sub-lane { font-weight: 400; color: #777; font-size: 9.5px; }
         .rd-vrid-sub-pkgs { font-weight: 700; color: #0d47a1; }
 
-        /* ── Settings panel ──────────────────────────────────── */
         .rd-settings-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999999;display:flex;align-items:center;justify-content:center; }
         .rd-settings-panel   { background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);padding:20px 24px;min-width:280px;font-family:'Amazon Ember',Arial,sans-serif; }
         .rd-settings-panel.rd-dark-panel { background:#1a1a2e;color:#e0e0f0; }
@@ -814,11 +760,7 @@
             return g;
         }
 
-
-
-
         if (isVista) {
-
 
             var vpHost = document.createElement('div');
             vpHost.style.cssText = 'all:initial;position:fixed;bottom:80px;right:24px;z-index:2147483647;width:0;height:0;overflow:visible;pointer-events:none';
@@ -866,7 +808,6 @@
                 '<div id="vp-footer"><span id="vp-info"></span><span id="vp-count"></span></div>';
             vpShadow.appendChild(vpPopup);
 
-
             var vpDragX = 0, vpDragY = 0, vpDragging = false;
             vpPopup.querySelector('#vp-header').addEventListener('mousedown', function (e) {
                 if (e.target.closest('button')) return;
@@ -894,13 +835,11 @@
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') vpClose(); });
             vpPopup.querySelector('#vp-close').addEventListener('click', function (e) { e.stopPropagation(); vpClose(); });
 
-
             function vpRenderTable(containers, lane) {
                 var titleEl = vpShadow.getElementById('vp-header').querySelector('.vp-title');
                 var body = vpShadow.getElementById('vp-body');
                 var count = vpShadow.getElementById('vp-count');
                 if (titleEl) titleEl.textContent = '\uD83C\uDFED Loaded \u2014 ' + lane;
-
 
                 var docas = {};
                 containers.forEach(function (c) {
@@ -932,7 +871,7 @@
                         '</tr>';
                     group.containers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); });
                     group.containers.forEach(function (c) {
-                        var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '\u2014';
+                        var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
                         var pkgs = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
                         var vol = c.packageVolume ? cm3ToFt3(c.packageVolume) : '\u2014';
                         html += '<tr>' +
@@ -950,7 +889,6 @@
                 var total = containers.length;
                 if (count) count.textContent = total + ' ' + L('containerIn') + ' ' + Object.keys(docas).length + ' ' + L('docksWord');
             }
-
 
             function vpLoadData(lane) {
                 var destination = laneToDestination(lane);
@@ -980,12 +918,11 @@
                         fetchContainerDetails(token, ids, function (detailMap) {
                             vpRenderTable(Object.values(detailMap), lane);
                             if (status) status.textContent = '';
-                            if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString();
+                            if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString('pt-BR', { hour12: false });
                         });
                     });
                 });
             }
-
 
             function addVistaButtons() {
                 var rows = document.querySelectorAll('tr.route-level-row');
@@ -994,7 +931,6 @@
                     if (row.querySelector('.vista-route-btn')) continue;
                     var routeSpan = row.querySelector('span.route.float-left');
                     if (!routeSpan) continue;
-
 
                     var fullRoute = '';
                     var rowId = row.id || '';
@@ -1007,7 +943,6 @@
                         });
                     }
                     if (!fullRoute) continue;
-
 
                     var lane = fullRoute.includes('->') ? fullRoute : CURRENT_NODE + '->' + fullRoute;
 
@@ -1032,9 +967,6 @@
             }).observe(document.body, { childList: true, subtree: true });
             setTimeout(addVistaButtons, 2000);
         }
-
-
-
 
         if (isOutbound) {
             function getDock(row) {
@@ -1063,8 +995,6 @@
                 var statusEl = row.querySelector('.originalStatusCheck[data-status]');
                 return statusEl && statusEl.getAttribute('data-status') === 'FINISHED_LOADING';
             }
-
-
 
             function fetchCuft(dock, lane, wrapper) {
                 wrapper.innerHTML = '';
@@ -1119,11 +1049,7 @@
 
         }
 
-
-
-
         if (isRTT) {
-
 
             if (location.href.includes('relay_token_init=1')) {
                 var _checkClose = setInterval(function () {
@@ -1138,9 +1064,6 @@
             }
             return;
         }
-
-
-
 
         if (isYMS && !window.opener) {
             function parseYmsTimestamp(raw) {
@@ -1157,7 +1080,6 @@
                 return { formatted, ms };
             }
 
-
             function waitFor(condFn, timeoutMs, intervalMs, onReady, onTimeout) {
                 const deadline = Date.now() + timeoutMs;
                 const iv = setInterval(() => {
@@ -1171,7 +1093,6 @@
                 if (!vridMatch) return false;
                 const vrid = vridMatch[1].toUpperCase();
                 const isIbVehicle = location.href.includes('isib=1');
-
 
                 let checkIn = null, checkInMs = null, tdrDock = null, tdrDockMs = null;
                 let dockStarted = null, dockCompleted = null, checkOut = null;
@@ -1227,7 +1148,6 @@
                 return true;
             }
 
-
             function ymsInit() {
                 const vridMatch = location.href.match(/loadIdentifier=([A-Z0-9]{6,15})/i);
                 if (!vridMatch) return;
@@ -1235,7 +1155,6 @@
                 const nodeParam = (location.href + location.hash).match(/[?&#]yms_node=([A-Z0-9]+)/i);
                 const expectedNode = nodeParam ? nodeParam[1].toUpperCase() : null;
                 const isIbVehicle = location.href.includes('isib=1');
-
 
                 waitFor(
                     () => !!document.querySelector('#availableNodeName'),
@@ -1250,7 +1169,6 @@
                     const currentVal = (nodeSelect.value || '').trim().toUpperCase();
                     if (currentVal === expectedNode) { stepOutboundTab(); return; }
 
-
                     let targetOpt = null;
                     nodeSelect.querySelectorAll('option').forEach(opt => {
                         const id = (opt.id || '').trim().toUpperCase();
@@ -1260,10 +1178,8 @@
                     });
                     if (!targetOpt) { stepOutboundTab(); return; }
 
-
                     nodeSelect.value = targetOpt.value || targetOpt.id || expectedNode;
                     nodeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
 
                     const prevCount = document.querySelectorAll('tr[ng-repeat-start]').length;
                     waitFor(
@@ -1302,7 +1218,6 @@
                 }
             }
 
-
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', ymsInit);
             } else {
@@ -1311,12 +1226,10 @@
             return;
         }
 
-
-
-
         if (isDock) {
             function parseSdtToMs(sdtText) {
-                const m = sdtText.trim().match(/^(\d{2})-([A-Za-z]{3})-(\d{2})\s+(\d{2}):(\d{2})$/);
+
+                const m = sdtText.trim().match(/^(\d{2})[- ]([A-Za-z]{3})[- ](\d{2})\s+(\d{2}):(\d{2})$/);
                 if (!m) return null;
                 const month = MONTHS[m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase()];
                 if (month === undefined) return null;
@@ -1393,13 +1306,9 @@
                 return card;
             }
 
-
             const infoStore = {};
 
-
-
             const routeStore = {};
-
 
             function mergeRoutesIntoStore(accumObj) {
                 Object.entries(accumObj).forEach(([route, v]) => {
@@ -1431,14 +1340,12 @@
                     : 'No data collected yet';
             }
 
-
             function downloadFullExcel() {
                 if (typeof XLSX === 'undefined') {
                     alert('SheetJS (XLSX) not loaded. Check @require in the script header.');
                     return;
                 }
                 const wb = XLSX.utils.book_new();
-
 
                 function autoColWidths(rows) {
                     if (!rows.length) return [];
@@ -1447,7 +1354,6 @@
                     );
                     return widths.map(w => ({ wch: w + 2 }));
                 }
-
 
                 const infoHeaders = isIB
                     ? ['VRID', 'Pacotes', 'CuFt', 'Cube (ft³/pkg)', 'Check-In', 'Atraso Chegada', 'TDR-Dock', 'Doca(s)', 'Início Descarreg.', 'Fim Descarreg.', 'Check-Out']
@@ -1491,7 +1397,6 @@
                 wsInfo['!freeze'] = { xSplit: 0, ySplit: 1 };
                 XLSX.utils.book_append_sheet(wb, wsInfo, isIB ? 'Info IB' : 'Info OB');
 
-
                 const hasRoutes = Object.keys(routeStore).length > 0;
                 if (hasRoutes) {
                     const routeHeaders = [
@@ -1531,7 +1436,6 @@
                     wsRoutes['!freeze'] = { xSplit: 0, ySplit: 1 };
                     XLSX.utils.book_append_sheet(wb, wsRoutes, 'Rotas');
                 }
-
 
                 const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', 'h').replace(':', 'm');
                 const name = `${isIB ? 'IB' : 'OB'}_export_${ts}.xlsx`;
@@ -1575,7 +1479,6 @@
                 const packages = pkgEl ? parseInt(pkgEl.textContent.trim(), 10) || 0 : 0;
                 return { vrid, sdt, yard, packages, routeName };
             }
-
 
             const infoQueue = [];
             let infoRunning = false;
@@ -1688,7 +1591,6 @@
                 return (hasData || lateDeparture) ? { cuft, checkIn, checkInMs, arrivalDelay, tdrDock, dockStarted, dockCompleted, checkOut, lateDeparture, dockDoors, cube } : null;
             }
 
-
             const YMS_API = 'https://ii51s3lexd.execute-api.us-east-1.amazonaws.com/call/getEventReport';
 
             function tsToYmsFmt(unixSec) {
@@ -1713,7 +1615,6 @@
                     var fmt = tsToYmsFmt(ts);
                     var loc = ev.location || '';
                     var et = ev.eventType || '';
-
 
                     var ddMatch = loc.match(/(DD\d+)/);
                     if (ddMatch) docksSet[ddMatch[1]] = true;
@@ -1760,35 +1661,42 @@
 
             var _ymsPending = false, _ymsQueue = [];
             function ensureYmsToken(cb) {
-                var t = ymsToken || GM_getValue('yms_token', '');
-                if (t && t.length > 20) { cb(t); return; }
+                var t = _SUITE.ymsToken || GM_getValue('yms_token', '');
+                var ts = GM_getValue('yms_token_ts', 0);
+                var isExpired = (Date.now() - ts) > (6 * 60 * 60 * 1000); 
+
+                if (t && t.length > 50 && !isExpired) {
+                    console.log('[YMS] Usando token em cache (Expira em ' + Math.round((6 * 3600 * 1000 - (Date.now() - ts)) / 60000) + ' min)');
+                    _SUITE.ymsToken = t; cb(t); return;
+                }
                 _ymsQueue.push(cb);
                 if (_ymsPending) return;
                 _ymsPending = true;
                 var win = null;
                 try { win = window.open(BASE + 'yms/eventHistory', 'yms_token_popup', 'width=1,height=1,left=-300,top=-300,toolbar=no,menubar=no'); } catch (e) { }
                 if (!win) {
-                    console.warn('[YMS] popup bloqueado');
+                    console.warn('[YMS] popup bloqueado ou erro ao abrir');
                     _ymsPending = false;
                     _ymsQueue.splice(0).forEach(function (c) { c(''); });
                     return;
                 }
+                console.log('[YMS] Aguardando token do YMS (popup aberto)...');
                 var start = Date.now();
                 var iv = setInterval(function () {
-                    var t2 = ymsToken || GM_getValue('yms_token', '');
+                    var t2 = _SUITE.ymsToken || GM_getValue('yms_token', '');
                     if (t2 && t2.length > 20) {
+                        console.log('[YMS] Token capturado com sucesso.');
                         clearInterval(iv); try { win.close(); } catch (e) { }
-                        ymsToken = t2; _ymsPending = false;
+                        _SUITE.ymsToken = t2; _ymsPending = false;
                         _ymsQueue.splice(0).forEach(function (c) { c(t2); });
-                    } else if (Date.now() - start > 12000) {
+                    } else if (Date.now() - start > 15000) {
                         clearInterval(iv); try { win.close(); } catch (e) { }
-                        console.warn('[YMS] timeout');
+                        console.warn('[YMS] Timeout ao aguardar token do YMS.');
                         _ymsPending = false;
                         _ymsQueue.splice(0).forEach(function (c) { c(''); });
                     }
                 }, 200);
             }
-
 
             var _relayPending = false, _relayQueue = [];
             function ensureRelayToken(cb) {
@@ -1887,7 +1795,9 @@
                 });
             }
 
-            function fetchYmsViaApi(vrid, yard, sdt, isIbVehicle) {
+            function fetchYmsViaApi(vrid_raw, yard_raw, sdt, isIbVehicle) {
+                var vrid = String(vrid_raw).trim().toUpperCase();
+                var yard = String(yard_raw).trim().toUpperCase();
                 var now = Math.floor(Date.now() / 1000);
                 var fromDate = now - 7 * 86400;
                 var toDate = now + 86400;
@@ -1899,9 +1809,12 @@
                         toDate = Math.floor(range.toDate / 1000);
                     }
                 }
+
+                console.log('[YMS-API] Buscando VRID:', vrid, 'em:', yard, 'Range:', fromDate, '-', toDate);
+
                 var payload = JSON.stringify({
-                    firstRow: 0, rowCount: 50, yard: yard,
-                    loadIdentifier: vrid, loadIdentifierType: '',
+                    firstRow: 0, rowCount: 1000, yard: yard,
+                    loadIdentifier: vrid, loadIdentifierType: 'VRID',
                     fromDate: fromDate, toDate: toDate,
                     eventType: '', location: '', vehicleType: '', vehicleOwner: '',
                     vehicleNumber: '', seal: '', userId: '', visitReason: '',
@@ -1912,7 +1825,8 @@
                 var _retried = false;
                 function doPost(t) {
                     GM_xmlhttpRequest({
-                        method: 'POST', url: YMS_API,
+                        method: 'POST',
+                        url: YMS_API,
                         headers: {
                             'Content-Type': 'application/json;charset=utf-8',
                             'Accept': 'application/json, text/plain, */*',
@@ -1920,25 +1834,69 @@
                             'method': 'POST',
                             'token': t
                         },
-                        data: payload, withCredentials: true,
+                        data: payload,
+                        withCredentials: true,
                         onload: function (resp) {
+                            console.log('[YMS-API] Resposta recebida, Status:', resp.status);
                             if (resp.status === 401 && !_retried) {
-                                _retried = true; ymsToken = ''; GM_setValue('yms_token', '');
+                                console.warn('[YMS-API] Token expirado ou inválido (401), tentando refresh...');
+                                _retried = true; _SUITE.ymsToken = ''; GM_setValue('yms_token', '');
                                 ensureYmsToken(function (t2) { doPost(t2); }); return;
                             }
                             try {
                                 if (resp.status !== 200) throw new Error('HTTP ' + resp.status);
                                 var json = JSON.parse(resp.responseText);
-                                if (!json.events) throw new Error('no events');
-                                parseAndStoreYmsEvents(vrid, json.events, isIbVehicle);
+                                if (json.events && json.events.length > 0) {
+                                    const filtered = json.events.filter(e => {
+
+                                        const evVrid = String(e.vrId || e.vrid || '').trim().toUpperCase();
+                                        return evVrid === vrid || evVrid.includes(vrid) || vrid.includes(evVrid) || evVrid.startsWith(vrid + '_');
+                                    });
+
+                                    var finalEvents = filtered.length > 0 ? filtered : (json.events.length <= 15 ? json.events : []);
+
+                                    if (finalEvents.length > 0) {
+                                        parseAndStoreYmsEvents(vrid, finalEvents, isIbVehicle);
+                                    } else if (!_retried) {
+                                        console.warn('[YMS-API] VRID não encontrado nos eventos (Filtro Zero)');
+
+                                        GM_setValue('yms_done_' + vrid, '0');
+                                        GM_setValue('yms_done_ts_' + vrid, Date.now());
+                                    } else {
+
+                                        const msg = document.getElementById('yms-status-msg-' + vrid);
+                                        if (msg) {
+                                            msg.innerHTML = '<span style="color:#ff4444">Nenhum dado YMS encontrado para este VRID. </span>' +
+                                                '<button id="retry-yms-' + vrid + '" style="background:#FF9900;border:none;color:white;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:10px;">🔄 Atualizar YMS</button>';
+                                            const btn = document.getElementById('retry-yms-' + vrid);
+                                            if (btn) btn.onclick = function () {
+                                                btn.disabled = true; btn.textContent = '...';
+                                                GM_setValue('yms_token', ''); _SUITE.ymsToken = '';
+                                                ensureYmsToken(function (t) { msg.textContent = 'Recarregando...'; doPost(t); });
+                                            };
+                                        }
+                                        throw new Error('no match');
+                                    }
+                                } else {
+                                    console.warn('[YMS-API] Lista de eventos vazia returned pela API');
+                                    throw new Error('no events');
+                                }
                             } catch (e) {
-                                console.warn('[YMS-API] ' + e.message);
+                                console.warn('[YMS-API] Erro no processamento:', e.message);
                                 GM_setValue('yms_done_' + vrid, '0');
                                 GM_setValue('yms_done_ts_' + vrid, Date.now());
                             }
                         },
-                        onerror: function () { GM_setValue('yms_done_' + vrid, '0'); GM_setValue('yms_done_ts_' + vrid, Date.now()); },
-                        ontimeout: function () { GM_setValue('yms_done_' + vrid, '0'); GM_setValue('yms_done_ts_' + vrid, Date.now()); }
+                        onerror: function (err) {
+                            console.error('[YMS-API] Erro de rede (onerror):', err);
+                            GM_setValue('yms_done_' + vrid, '0');
+                            GM_setValue('yms_done_ts_' + vrid, Date.now());
+                        },
+                        ontimeout: function () {
+                            console.error('[YMS-API] Timeout na requisição API');
+                            GM_setValue('yms_done_' + vrid, '0');
+                            GM_setValue('yms_done_ts_' + vrid, Date.now());
+                        }
                     });
                 }
                 ensureYmsToken(function (t) { doPost(t); });
@@ -1956,7 +1914,6 @@
                     GM_setValue(p + 'ts_' + vrid, 0);
                 });
                 GM_setValue('yms_checkin_ms_' + vrid, 0);
-
 
                 if (!skipRtt) fetchCuftFromRelay(vrid, function () { });
                 fetchYmsViaApi(vrid, yard, sdt, isIB);
@@ -1986,10 +1943,7 @@
                     return;
                 }
 
-
-
                 if (statusEl) statusEl.textContent = L('scanningPages');
-
 
                 const firstBtn = document.querySelector('#dashboard_paginate .first');
                 if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) firstBtn.click();
@@ -2042,10 +1996,8 @@
                     });
                 }
 
-
                 setTimeout(scanPages, firstBtn && !firstBtn.classList.contains('ui-state-disabled') ? 300 : 0);
             }
-
 
             function runInfoBatch(candidates, onDone, statusEl) {
                 const CONCURRENCY = 3;
@@ -2094,7 +2046,6 @@
 
                 for (let i = 0; i < Math.min(CONCURRENCY, candidates.length); i++) startNext();
             }
-
 
             let fetchSingleRoutes = null;
             let runRoutesForBadge = null;
@@ -2234,7 +2185,6 @@
                         row.appendChild(name); row.appendChild(pkgs); row.appendChild(barWrap); row.appendChild(pctLabel);
                         scroll.appendChild(row);
 
-
                         if (r.cpts && r.cpts.length > 0) {
                             const cptList = document.createElement('div');
                             cptList.className = 'rd-cpt-list';
@@ -2250,7 +2200,6 @@
                             });
                             scroll.appendChild(cptList);
                         }
-
 
                         if (sortKey === 'remaining' && routeVridMap && routeVridMap[r.route]) {
                             const vridEntries = Object.entries(routeVridMap[r.route])
@@ -2601,10 +2550,8 @@
                         }
                     }
 
-
                     const paneRemaining = makePanel('rd-panel-header-rest', L('tabRemaining'), totalRemaining, routes, 'remaining', routeVridMap || null);
                     paneRemaining.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;';
-
 
                     const xdTotalPkgs = xdData ? (xdData.pkgs || 0) : 0;
                     const xdTotalPallets = xdData ? (xdData.pallets || 0) : 0;
@@ -2625,7 +2572,6 @@
                         const xdC = isDark
                             ? { title: '#ffcc80', info: '#ffaa57', border: '#4a2800', vridName: '#d0d0e8', lane: '#8080a8', vridInfo: '#ffaa57', routeName: '#b0b0cc', pallet: '#ffaa57', bar: '#ff8c42', pct: '#ffaa57' }
                             : { title: '#e65100', info: '#bf360c', border: '#ffe0b2', vridName: '#333', lane: '#888', vridInfo: '#e65100', routeName: '#555', pallet: '#e65100', bar: '#e65100', pct: '#e65100' };
-
 
                         const xdTotalHeader = document.createElement('div');
                         xdTotalHeader.style.cssText = `padding:6px 0 4px;border-bottom:2px solid ${xdC.border};display:flex;align-items:center;gap:6px;margin-bottom:4px;`;
@@ -2662,7 +2608,6 @@
                         paneXd.appendChild(xdScroll);
                     }
 
-
                     let paneCpt = null;
                     if (cptAnalysis && Object.keys(cptAnalysis).length > 0) {
                         const parseCptDate = s => {
@@ -2682,7 +2627,6 @@
                         const nowNaive = _n.getFullYear() * 100000000 + (_n.getMonth() + 1) * 1000000 + _n.getDate() * 10000 + _n.getHours() * 100 + _n.getMinutes();
                         const sortedCpts = Object.keys(cptAnalysis).sort((a, b) => parseCptDate(a) - parseCptDate(b)); paneCpt = document.createElement('div');
                         paneCpt.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;';
-
 
                         let hideExpired = false;
                         const toggleBar = document.createElement('div');
@@ -2798,7 +2742,6 @@
                         paneCpt.appendChild(cptScroll);
                     }
 
-
                     const tabs = [
                         { label: L('total'), pane: paneTotal, color: '#1b5e20' },
                         { label: L('tabRemaining'), pane: paneRemaining, color: '#0d47a1' },
@@ -2866,7 +2809,6 @@
                             const rawRoute = cells[8].textContent.trim();
                             const route = rawRoute.replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || rawRoute;
                             if (!route) return;
-
 
                             if (noReboqueC > 0) {
                                 if (!accum._xdock) accum._xdock = { pkgs: 0, pallets: 0, routes: {} };
@@ -3018,7 +2960,6 @@
                     });
                 }
 
-
                 runRoutesForBadge = function (vrid, row, badgeCard) {
                     const link = row.querySelector('a.packageDetails');
                     if (!link) return;
@@ -3045,7 +2986,6 @@
 
                     });
                 }
-
 
                 function collectAllPagesRows(statusEl, callback) {
 
@@ -3105,7 +3045,6 @@
                     globalBtn.disabled = true;
                     globalBtn.className = 'tl-btn tl-btn-gray tl-loading';
                     statusEl.textContent = L('scanningPages');
-
 
                     const firstBtn = document.querySelector('#dashboard_paginate .first');
                     if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) firstBtn.click();
@@ -3277,7 +3216,6 @@
                     globalBtn.textContent = L('allRoutes');
                     globalBtn.title = 'Aggregate route distribution for all active trucks';
 
-
                     function updateGlobalBtnState() {
                         const hasAny = !!document.querySelector('tr[vrid] a.packageDetails');
                         globalBtn.disabled = !hasAny;
@@ -3307,11 +3245,9 @@
                     const statusEl = document.createElement('span');
                     statusEl.className = 'rd-global-status';
 
-
                     globalBtn.addEventListener('click', () => {
                         fetchAllRoutes(globalBtn, statusEl, null);
                     });
-
 
                     const fullExportBtn = document.createElement('button');
                     fullExportBtn.id = 'rd-full-export-btn';
@@ -3343,12 +3279,10 @@
                             }, 200);
                         }
 
-
                         fetchAllRoutes(globalBtn, statusEl, () => {
                             routesDone = true;
                             tryFinish();
                         });
-
 
                         fetchAllInfo(() => {
                             infoDone = true;
@@ -3371,7 +3305,6 @@
 
                 injectGlobalBar();
 
-
                 _openIbPanel = function openIbPanel(vrid, sdt, yard, packages, row, status, btn) {
                     document.querySelectorAll('.ib-panel-overlay').forEach(function (e) { e.remove(); });
 
@@ -3383,7 +3316,6 @@
                     overlay.className = 'ib-panel-overlay rd-popup-overlay';
                     const popup = document.createElement('div');
                     popup.className = 'rd-popup' + (isDark ? ' rd-dark' : '');
-
 
                     ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'].forEach(function (dir) {
                         const h = document.createElement('div');
@@ -3400,7 +3332,6 @@
                         });
                     });
 
-
                     const header = document.createElement('div');
                     header.className = 'rd-popup-header';
                     header.innerHTML = '<div><div class="rd-popup-title">🚛 ' + esc(vrid) + '</div><div class="rd-popup-sub">' + esc(lane) + '</div></div><button class="rd-popup-close" title="Fechar">✕</button>';
@@ -3413,18 +3344,15 @@
                     document.addEventListener('mousemove', function (e) { if (!dragging) return; popup.style.left = (e.clientX - dragX) + 'px'; popup.style.top = (e.clientY - dragY) + 'px'; });
                     document.addEventListener('mouseup', function () { dragging = false; });
 
-
                     const tabBar = document.createElement('div');
                     tabBar.className = 'rd-tab-bar';
                     tabBar.style.cssText = 'display:flex;gap:0;border-bottom:2px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';background:' + (isDark ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
                     const body = document.createElement('div');
                     body.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
 
-
                     const paneInfo = document.createElement('div');
                     paneInfo.style.cssText = 'flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px;';
                     paneInfo.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';" class="tl-loading">' + L('fetchingYms') + '</div>';
-
 
                     const hasLink = !!row.querySelector('a.packageDetails');
                     const paneRoutes = document.createElement('div');
@@ -3461,7 +3389,6 @@
                     popup.appendChild(header); popup.appendChild(tabBar); popup.appendChild(body);
                     overlay.appendChild(popup); document.body.appendChild(overlay);
 
-
                     fetchInfoCore(vrid, sdt, yard, packages, function (data) {
                         paneInfo.innerHTML = '';
                         if (!data) {
@@ -3492,7 +3419,6 @@
                         btn.textContent = 'Info'; btn.className = 'tl-btn tl-btn-blue'; btn.disabled = false;
                         btn.onclick = function (e) { e.stopPropagation(); if (_openIbPanel) _openIbPanel(vrid, sdt, yard, packages, row, status, btn); };
                     }, false);
-
 
                     if (hasLink) {
                         const link = row.querySelector('a.packageDetails');
@@ -3528,10 +3454,8 @@
 
                             mergeRoutesIntoStore(accumR);
 
-
                             paneRoutes.innerHTML = '';
                             paneRoutes.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
-
 
                             const rHdr = document.createElement('div');
                             rHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 14px;background:' + (isDark ? '#252535' : '#f9f9f9') + ';border-bottom:1px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';flex-shrink:0;flex-wrap:wrap;';
@@ -3543,7 +3467,6 @@
                             xlBtn.addEventListener('click', function () { downloadExcel(vrid + ' — ' + laneText, routes, totPkgs, xdD, cptA, rvm, vsdtM); });
                             rHdr.appendChild(xlBtn);
                             paneRoutes.appendChild(rHdr);
-
 
                             const stBar = document.createElement('div');
                             stBar.style.cssText = 'display:flex;border-bottom:2px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';background:' + (isDark ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
@@ -3629,10 +3552,7 @@
                     }
                 };
 
-
             }
-
-
 
             if (isOutbound) {
                 function injectOBBar() {
@@ -3695,7 +3615,6 @@
                 injectOBBar();
             }
 
-
             function getVridFromRow(row) {
                 if (isIB) return (row.getAttribute('vrid') || '').trim().toUpperCase() || null;
                 const span = row.querySelector('span.loadId[data-vrid]');
@@ -3704,7 +3623,8 @@
 
             function processRows() {
                 const selector = isIB ? 'tr[vrid]' : 'tr';
-                document.querySelectorAll(selector).forEach(row => {
+                const allRows = document.querySelectorAll(selector);
+                allRows.forEach(row => {
                     const statusEl = isIB
                         ? row.querySelector('[class*="originalStatusCheck"][data-status]')
                         : row.querySelector('[data-status]');
@@ -3761,7 +3681,6 @@
 
             new MutationObserver(processRows).observe(document.body, { childList: true, subtree: true });
             window.addEventListener('load', () => setTimeout(processRows, 2500));
-
 
             _openObPanel = function openObPanel(vrid, sdt, yard, packages, row, status, btn) {
                 document.querySelectorAll('.ob-panel-overlay').forEach(function (e) { e.remove(); });
@@ -3850,7 +3769,6 @@
                 popup.appendChild(header); popup.appendChild(tabBar); popup.appendChild(body);
                 overlay.appendChild(popup); document.body.appendChild(overlay);
 
-
                 var skipRtt = status !== 'COMPLETED';
                 fetchInfoCore(vrid, sdt, yard, packages, function (data) {
                     paneInfo.innerHTML = '';
@@ -3873,7 +3791,6 @@
                     }
                     btn.textContent = 'Info'; btn.className = 'tl-btn tl-btn-blue'; btn.disabled = false;
                 }, skipRtt);
-
 
                 if (canCuft) {
                     function loadCuft() {
@@ -3902,16 +3819,15 @@
                                     var tbody = tbl.querySelector('tbody');
                                     var rowBase = isDark ? 'color:#d0d0e8;border-bottom:1px solid #2e2e45;' : 'border-bottom:1px solid #e0e0e0;';
                                     var rowAlt = isDark ? 'background:#1e0e00;' : 'background:#fff8f5;';
-                                    dockContainers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); }).forEach(function (c, ci) { var cptFmt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'; var pkgs2 = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0; var vol2 = c.packageVolume ? cm3ToFt3(c.packageVolume) : '—'; var tr = document.createElement('tr'); tr.style.cssText = rowBase + (ci % 2 ? rowAlt : ''); tr.innerHTML = '<td style="padding:6px 10px;">' + esc(dock) + '</td><td style="padding:6px 10px;">' + esc(c.sfName || '—') + '</td><td style="padding:6px 10px;font-weight:700;">' + esc(c.scannableId || '—') + '</td><td style="padding:6px 10px;">' + esc(cptFmt) + '</td><td style="padding:6px 10px;text-align:right;">' + pkgs2 + '</td><td style="padding:6px 10px;text-align:right;">' + esc(vol2) + '</td>'; tbody.appendChild(tr); });
+                                    dockContainers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); }).forEach(function (c, ci) { var cptFmt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'; var pkgs2 = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0; var vol2 = c.packageVolume ? cm3ToFt3(c.packageVolume) : '—'; var tr = document.createElement('tr'); tr.style.cssText = rowBase + (ci % 2 ? rowAlt : ''); tr.innerHTML = '<td style="padding:6px 10px;">' + esc(dock) + '</td><td style="padding:6px 10px;">' + esc(c.sfName || '—') + '</td><td style="padding:6px 10px;font-weight:700;">' + esc(c.scannableId || '—') + '</td><td style="padding:6px 10px;">' + esc(cptFmt) + '</td><td style="padding:6px 10px;text-align:right;">' + pkgs2 + '</td><td style="padding:6px 10px;text-align:right;">' + esc(vol2) + '</td>'; tbody.appendChild(tr); });
                                     tblWrap.appendChild(tbl); paneCuft.appendChild(tblWrap);
-                                    var footer = document.createElement('div'); footer.style.cssText = 'padding:6px 14px;font-size:11px;color:' + (isDark ? '#8080a0' : '#757575') + ';border-top:1px solid ' + (isDark ? '#2e2e45' : '#e0e0e0') + ';background:' + (isDark ? '#16213e' : '#fafafa') + ';display:flex;justify-content:space-between;flex-shrink:0;'; footer.innerHTML = '<span>Atualizado: ' + new Date().toLocaleTimeString('pt-BR') + '</span><span>' + dockContainers.length + ' ' + L('containerIn') + ' ' + esc(dock) + '</span>'; paneCuft.appendChild(footer);
+                                    var footer = document.createElement('div'); footer.style.cssText = 'padding:6px 14px;font-size:11px;color:' + (isDark ? '#8080a0' : '#757575') + ';border-top:1px solid ' + (isDark ? '#2e2e45' : '#e0e0e0') + ';background:' + (isDark ? '#16213e' : '#fafafa') + ';display:flex;justify-content:space-between;flex-shrink:0;'; footer.innerHTML = '<span>Atualizado: ' + new Date().toLocaleTimeString('pt-BR', { hour12: false }) + '</span><span>' + dockContainers.length + ' ' + L('containerIn') + ' ' + esc(dock) + '</span>'; paneCuft.appendChild(footer);
                                 });
                             });
                         });
                     }
                     loadCuft();
                 }
-
 
                 if (canCpt) {
                     var formBody = ['entity=getOutboundLoadContainerDetails', 'nodeId=' + encodeURIComponent(pRow.nodeId), 'loadGroupId=' + encodeURIComponent(pRow.loadGroupId), 'planId=' + encodeURIComponent(pRow.planId), 'vrid=' + encodeURIComponent(vrid), 'status=', 'trailerId=' + encodeURIComponent(pRow.trailerId), 'trailerNumber=' + encodeURIComponent(pRow.trailerNumber)].join('&');
@@ -3947,20 +3863,14 @@
             }
         }
 
-
-
-
-
-
         var _logLines = [];
 
         function log(msg, level) {
-            var ts = new Date().toLocaleTimeString('pt-BR');
+            var ts = new Date().toLocaleTimeString('pt-BR', { hour12: false });
             _logLines.push({ ts: ts, msg: msg, level: level || 'info' });
             if (_logLines.length > 400) _logLines.shift();
             console.log('[LPD ' + ts + '] ' + msg);
         }
-
 
         function parseApiDate(str) {
             if (!str) return null;
@@ -3973,9 +3883,6 @@
             return new Date(year, mon, parseInt(m[1], 10), parseInt(m[4], 10), parseInt(m[5], 10));
         }
 
-
-
-
         function walkNodes(nodes, palletLabel, cptMap, palletMap, satTime) {
             if (!Array.isArray(nodes)) return;
             nodes.forEach(function (node) {
@@ -3986,7 +3893,6 @@
                     var assTime = parseApiDate(assStr);
                     var cptTime = parseApiDate(cpt);
 
-
                     var category = 'inCpt';
                     if (!assTime || !cptTime) {
                         category = 'inCpt';
@@ -3996,14 +3902,11 @@
                         category = 'preHour';
                     }
 
-
                     var pkgEntry = { label: c.label || '?', assTime: assStr, cpt: cpt, cptTime: cptTime, category: category, pallet: palletLabel };
-
 
                     if (!cptMap[cpt]) cptMap[cpt] = { inCpt: 0, preHour: 0, late: 0, early: 0, pkgs: [] };
                     cptMap[cpt][category]++;
                     cptMap[cpt].pkgs.push(pkgEntry);
-
 
                     if (!palletMap[palletLabel]) palletMap[palletLabel] = { inCpt: 0, preHour: 0, late: 0, early: 0, pkgs: [] };
                     palletMap[palletLabel][category]++;
@@ -4015,14 +3918,12 @@
             });
         }
 
-
         function processFetchData(responseText, satTime) {
             if (!responseText || !responseText.trim()) {
                 log('Resposta vazia da API', 'error'); return null;
             }
 
             var text = responseText.replace(/^\uFEFF/, '').trim();
-
 
             if (text.charAt(0) === '<') {
                 log('Resposta e HTML — sessao expirada ou redirecionamento. Recarregue a pagina.', 'error');
@@ -4035,7 +3936,6 @@
                 log('JSON parse error: ' + e.message + ' — inicio da resposta: ' + text.slice(0, 120), 'error');
                 return null;
             }
-
 
             var aaData = data && data.ret && (typeof data.ret.aaData === 'object') ? data.ret.aaData : null;
             if (!aaData) {
@@ -4073,10 +3973,6 @@
                 });
             });
 
-
-
-
-
             var refCptTime = satTime;
             if (!refCptTime) {
 
@@ -4090,13 +3986,11 @@
 
                 var mainDay = refCptTime.getFullYear() * 10000 + (refCptTime.getMonth() + 1) * 100 + refCptTime.getDate();
 
-
                 Object.keys(cptMap).forEach(function (cptStr) {
                     var cptT = parseApiDate(cptStr);
                     if (!cptT) return;
                     var cptDay = cptT.getFullYear() * 10000 + (cptT.getMonth() + 1) * 100 + cptT.getDate();
                     if (cptDay <= mainDay) return;
-
 
                     var bucket = cptMap[cptStr];
                     bucket.pkgs.forEach(function (pkg) {
@@ -4104,12 +3998,10 @@
                         var oldCat = pkg.category;
                         pkg.category = 'early';
 
-
                         if (oldCat !== 'early') {
                             bucket[oldCat]--;
                             bucket.early++;
                         }
-
 
                         var pm = palletMap[pkg.pallet];
                         if (pm && oldCat !== 'early') {
@@ -4119,7 +4011,6 @@
                     });
                 });
             }
-
 
             var totals = { inCpt: 0, preHour: 0, late: 0, early: 0 };
             Object.values(cptMap).forEach(function (v) {
@@ -4136,18 +4027,15 @@
             return { cptMap: cptMap, palletMap: palletMap, totals: totals, total: total };
         }
 
-
         function getVridFromRow(row) {
             var span = row.querySelector('span.loadId[data-vrid]');
             return span ? span.getAttribute('data-vrid').trim().toUpperCase() : '';
         }
 
-
         function getTrailerIdFromRow(row) {
 
             var fromAttr = row.getAttribute('data-trailerid') || row.getAttribute('data-trailer-id') || '';
             if (fromAttr) return fromAttr;
-
 
             var trailerCell = row.querySelector('td.trailerNumberCol, td[class*="trailer"]');
             if (trailerCell) {
@@ -4155,16 +4043,17 @@
                 if (txt && txt.length > 4) return txt;
             }
 
-
             var el = row.querySelector('[data-trailerid]');
             if (el) return el.getAttribute('data-trailerid');
-
 
             var loadIdCell = row.querySelector('td.loadIdCol');
             if (loadIdCell) {
 
-                var m = loadIdCell.textContent.match(/\b([A-Z]{2,3}\d{8,})\b/);
+                var m = loadIdCell.textContent.match(/\b([A-Z0-9]{9,})\b/);
                 if (m) return m[1];
+
+                var raw = loadIdCell.textContent.trim();
+                if (raw.length >= 9 && raw.length <= 15) return raw;
             }
 
             return '';
@@ -4175,7 +4064,7 @@
         }
 
         function extractParamsFromRow(row, vrid) {
-            var captured = _capturedParams[vrid] || {};
+            var captured = _SUITE._capturedParams[vrid] || {};
 
             var loadGroupId = captured.loadGroupId || row.getAttribute('data-loadgroupid') || '';
             var trailerId = captured.trailerId || getTrailerIdFromRow(row);
@@ -4183,15 +4072,12 @@
             var planId = captured.planId || row.getAttribute('planid') || '';
             var nodeId = captured.nodeId || CURRENT_NODE;
 
-
             log('  DOM trailerId="' + getTrailerIdFromRow(row) + '"' +
                 ' captured.trailerId="' + (captured.trailerId || '') + '"' +
                 ' → usando="' + trailerId + '"', 'debug');
 
             return { nodeId, loadGroupId, planId, vrid, trailerId, trailerNumber };
         }
-
-
 
         function openCptPanelLoading(vrid, lane) {
             var _D = SETTINGS.theme === 'dark';
@@ -4211,7 +4097,6 @@
                 'font-family:"Amazon Ember",Arial,sans-serif;z-index:99999'
             ].join(';');
 
-
             var hdr = document.createElement('div');
             hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid ' + (_D ? '#2e2e45' : '#e0e0e0') + ';background:' + (_D ? '#16213e' : '#f5f5f5') + ';flex-shrink:0;cursor:grab;user-select:none;';
             var hdrInfo = document.createElement('div');
@@ -4226,7 +4111,6 @@
             hdr.appendChild(closeBtn);
             popup.appendChild(hdr);
 
-
             var dragX = 0, dragY = 0, dragging = false;
             hdr.addEventListener('mousedown', function (e) {
                 if (e.target.closest('button')) return;
@@ -4240,20 +4124,16 @@
             document.addEventListener('mousemove', function (e) { if (!dragging) return; popup.style.left = (e.clientX - dragX) + 'px'; popup.style.top = (e.clientY - dragY) + 'px'; });
             document.addEventListener('mouseup', function () { dragging = false; });
 
-
             var summaryBar = document.createElement('div');
             summaryBar.style.cssText = 'display:flex;gap:8px;padding:10px 16px;background:' + (_D ? '#252535' : '#fafafa') + ';border-bottom:1px solid ' + (_D ? '#2e2e45' : '#e0e0e0') + ';flex-shrink:0;flex-wrap:wrap;align-items:center;min-height:40px;';
             popup.appendChild(summaryBar);
-
 
             var tabBar = document.createElement('div');
             tabBar.style.cssText = 'display:flex;border-bottom:2px solid ' + (_D ? '#2e2e45' : '#e0e0e0') + ';background:' + (_D ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
             popup.appendChild(tabBar);
 
-
             var bodyEl = document.createElement('div');
             bodyEl.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;background:' + (_D ? '#1a1a2e' : '#fff') + ';';
-
 
             var skeletonStyle = '@keyframes lpd-shimmer{0%{background-position:-600px 0}100%{background-position:600px 0}}';
             if (!document.getElementById('lpd-skeleton-style')) {
@@ -4279,12 +4159,10 @@
             document.addEventListener('keydown', function onEsc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); } });
             document.body.appendChild(overlay);
 
-
             function populate(result) {
 
                 var sub = hdrInfo.querySelector('.lpd-hdr-sub');
                 if (sub) { sub.textContent = esc(lane) + ' · ' + result.total + ' packages'; sub.style.color = _D ? '#8080a0' : '#555'; }
-
 
                 summaryBar.innerHTML = '';
                 var t = result.totals, tot = result.total;
@@ -4302,7 +4180,6 @@
                 summaryBar.appendChild(summaryChip(_sc[1][0], _sc[1][1], L('lastHour'), t.preHour));
                 summaryBar.appendChild(summaryChip(_sc[2][0], _sc[2][1], L('lateLabel'), t.late));
                 if (t.early > 0) summaryBar.appendChild(summaryChip(_sc[3][0], _sc[3][1], L('earlyLabel'), t.early));
-
 
                 tabBar.innerHTML = '';
                 bodyEl.innerHTML = '';
@@ -4350,7 +4227,6 @@
             var handle = openCptPanelLoading(vrid, lane);
             handle.populate(result);
         }
-
 
         function buildCptPane(result, isDark) {
             var D = isDark || SETTINGS.theme === 'dark';
@@ -4425,7 +4301,6 @@
             return pane;
         }
 
-
         function buildPalletPane(result, isDark) {
             var D = isDark || SETTINGS.theme === 'dark';
             var pane = document.createElement('div');
@@ -4477,7 +4352,6 @@
                 countChip('#fff3e0', '#2b1200', '#e65100', '#ffcc80', L('lastHour'), v.preHour);
                 countChip('#ffebee', '#2a0a0a', '#c62828', '#ff8a80', L('lateLabel'), v.late);
                 countChip('#e3f2fd', '#0a1929', '#0d47a1', '#90caf9', L('earlyLabel'), v.early || 0);
-
 
                 var dropdown = document.createElement('div');
                 dropdown.style.cssText = 'display:none;border-top:1px solid ' + (D ? '#2e2e45' : '#e0e0e0') + ';max-height:200px;overflow-y:auto;background:' + (D ? '#1a1a2e' : '#fff') + ';';
@@ -4545,10 +4419,6 @@
             return pane;
         }
 
-
-
-
-
         function getCptFromRow(row) {
             if (!row) return null;
             var candidates = [
@@ -4579,7 +4449,6 @@
         function runCheck(row, btn) {
             var vrid = getVridFromRow(row);
             if (!vrid) { log('Não foi possível determinar VRID', 'error'); return; }
-
 
             var _p0 = extractParamsFromRow(row, vrid);
             if (!_p0.loadGroupId) {
@@ -4641,7 +4510,6 @@
             btn.disabled = true;
             btn.style.background = '#555';
 
-
             var laneEl = row.querySelector('td.routeCol, td[class*="route"], span[class*="stackFilter"]');
             var lane = (laneEl && laneEl.textContent.trim()) || vrid;
             var panelHandle = openCptPanelLoading(vrid, lane);
@@ -4688,7 +4556,6 @@
                         return;
                     }
 
-
                     var btnBg = '#2e7d32';
                     if (result.totals.preHour > 0) btnBg = '#e65100';
                     if (result.totals.late > 0) btnBg = '#c62828';
@@ -4715,9 +4582,9 @@
 
     })();
 
-    // MODULE: Mapa VSM
     if (_SUITE.isIB) {
         (function loadModuleMapaVSM() {
+            if (!_SUITE.isDock) return;
             'use strict';
 
             const BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
@@ -4729,9 +4596,6 @@
 
             let _csrf = '';
 
-            // ==========================================
-            // CONFIGURAÇÕES PADRÃO (DEFAULT)
-            // ==========================================
             const DEFAULT_VSM_SEGMENT_MAP = {
                 'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
                 'SBP9': ['AA32'],
@@ -4806,8 +4670,7 @@
                 { id: 2, name: "Finger 2", belts: [9, 10, 11, 12, 13, 14, 15, 16] }
             ];
 
-            // Variáveis ativas baseadas na configuração
-            let activeNodeId = 'CGH7';
+            let activeNodeId = GM_getValue('tl_node', 'Node não selecionado');
             let ALL_VSMS = [];
             let VSM_SEGMENT_MAP = {};
             let BELT_GROUPS = [];
@@ -4836,9 +4699,6 @@
             let selectedVrids = new Set();
             let hideZeroPkgs = true;
 
-            // ==========================================
-            // SISTEMA DE CONFIGURAÇÕES
-            // ==========================================
             function initializeConfig() {
                 const savedNode = GM_getValue('vsm_custom_node');
                 if (savedNode) activeNodeId = savedNode;
@@ -4971,7 +4831,7 @@
 
             function resetConfigToDefault() {
                 if (confirm("Tem certeza que deseja restaurar as configurações padrão (Node, Rotas, VSM, Grupos e Fingers)?")) {
-                    activeNodeId = 'CGH7';
+                    activeNodeId = detectCurrentNode() || GM_getValue('tl_node', 'Node não selecionado');
                     buildDefaultMappings();
                     activeFingers = JSON.parse(JSON.stringify(DEFAULT_FINGERS));
 
@@ -4988,7 +4848,6 @@
                     if (lastExportData.length > 0) computeAndRenderAll();
                 }
             }
-
 
             function loadCsrfFromStorage() {
                 try {
@@ -5499,7 +5358,7 @@
                 if (!value || value === "") return false;
                 const upper = String(value).toUpperCase();
                 if (upper === "0") return true;
-                if (/^\[.*\]$/.test(upper)) return true; // Mantém todas as TAGS criadas pra não ser cortadas do grid
+                if (/^\[.*\]$/.test(upper)) return true; 
                 if (/^[HX][-]/.test(upper)) return true;
                 if (/^CC/.test(upper)) return true;
                 if (/^AA/.test(upper)) return true;
@@ -5611,7 +5470,6 @@
                     }
                 }
 
-                // Lógica de Somas Específicas Dinâmicas
                 const fingerSums = {};
                 let totalSortation = 0;
 
@@ -5631,7 +5489,6 @@
                     for (let c = 0; c < croppedMatrix[r].length; c++) {
                         let cellValue = String(croppedMatrix[r][c]).trim();
 
-                        // Lógica de Leitura das Tags Dinâmicas
                         if (cellValue === '[SKIP]') {
                             continue;
                         }
@@ -5648,7 +5505,6 @@
                             continue;
                         }
 
-                        // MATCH DINÂMICO DOS LABELS DOS FINGERS: [L_F1], [L_F2], [L_F3]...
                         const lfMatch = cellValue.match(/^\[L_F(\d+)\]$/);
                         if (lfMatch) {
                             const fId = parseInt(lfMatch[1], 10);
@@ -5657,7 +5513,6 @@
                             continue;
                         }
 
-                        // MATCH DINÂMICO DOS VALORES DOS FINGERS: [F1], [F2], [F3]...
                         const fMatch = cellValue.match(/^\[F(\d+)\]$/);
                         if (fMatch) {
                             const fId = parseInt(fMatch[1], 10);
@@ -5691,7 +5546,6 @@
                             continue;
                         }
 
-                        // Renderização padrão da célula
                         let content = cellValue;
                         let cellClass = '';
                         let dataCat = '';
@@ -5901,17 +5755,16 @@
                 document.getElementById('btn-sel-all').addEventListener('click', () => {
                     const visibleBadges = Array.from(itemsContainer.querySelectorAll('.vrid-badge:not([style*="display: none"])'));
 
-                    // Verifica se TODOS os visíveis já estão selecionados
                     const allSelected = visibleBadges.length > 0 && visibleBadges.every(b => b.classList.contains('selected'));
 
                     visibleBadges.forEach(b => {
                         const vrid = b.dataset.vrid;
                         if (allSelected) {
-                            // Se já estiverem todos selecionados, vamos DESMARCAR tudo
+
                             selectedVrids.delete(vrid);
                             b.classList.remove('selected');
                         } else {
-                            // Se faltar algum (ou nenhum estiver), SELECIONAMOS tudo
+
                             selectedVrids.add(vrid);
                             b.classList.add('selected');
                         }
@@ -6642,10 +6495,8 @@
                 const tbody = document.getElementById('config-table-body');
                 if (!tbody) return;
 
-                // Clone para ordenar sem quebrar a array base
                 const rows = [...activeMappings];
 
-                // Ordena por número do Grupo e depois Alfabeticamente pela Rota
                 rows.sort((a, b) => {
                     const gA = parseInt(a.group, 10) || 999;
                     const gB = parseInt(b.group, 10) || 999;
@@ -6666,7 +6517,6 @@
 
                 tbody.innerHTML = html;
 
-                // Eventos para detectar alterações e remoções
                 tbody.addEventListener('input', () => { configIsDirty = true; });
                 tbody.querySelectorAll('.cfg-del-btn').forEach(btn => {
                     btn.addEventListener('click', e => {
@@ -6675,9 +6525,6 @@
                     });
                 });
 
-                // ==========================================
-                // Render Fingers Table
-                // ==========================================
                 const fTbody = document.getElementById('config-finger-body');
                 if (fTbody) {
                     let fHtml = '';
@@ -6700,7 +6547,6 @@
                     });
                 }
 
-                // Refaz a pesquisa caso a pessoa mude algo enquanto procura
                 document.getElementById('cfg-search').dispatchEvent(new Event('input'));
             }
 
@@ -6712,7 +6558,7 @@
 
                 const panel = document.createElement('div');
                 panel.id = 'vl-panel';
-                // Inicia o painel escondido para evitar bugs de getComputedStyle depois
+
                 panel.style.display = 'none';
                 panel.innerHTML = `
             <div id="vl-panel-head">
@@ -6846,7 +6692,7 @@
                                 <span style="font-weight: 700; color: #ff9900; font-size: 14px;">⚙️ Configurações Gerais</span>
                                 <div class="vl-ctrl-chip" style="background: #0f1923; border-color: #3a4a5a; padding: 6px 10px;">
                                     <label style="font-size: 12px;">📍 Site (Node):</label>
-                                    <input type="text" id="cfg-node-input" class="vsm-meta-input" style="text-transform: uppercase; width: 75px;" value="${activeNodeId}" maxlength="8">
+                                    <input type="text" id="cfg-node-input" class="vsm-meta-input" style="text-transform: uppercase; width: 75px; font-weight: 700; border: 1px solid #ff9900;" value="${activeNodeId || 'CGH7'}" maxlength="8">
                                 </div>
                             </div>
                             <button id="cfg-save-btn" class="vl-btn" style="background:#ff9900; color:#0f1923; font-size: 13px; padding: 8px 20px; box-shadow: 0 2px 8px rgba(255,153,0,0.4);">💾 Salvar Todas as Alterações</button>
@@ -6925,7 +6771,6 @@
         `;
                 document.body.appendChild(panel);
 
-                // Handler pro Node input ficar sujo e sempre maiúsculo
                 const nodeInputEl = document.getElementById('cfg-node-input');
                 if (nodeInputEl) {
                     nodeInputEl.addEventListener('input', (e) => {
@@ -6934,9 +6779,6 @@
                     });
                 }
 
-                // ==========================================
-                // HANDLERS MAPEAMENTO BASE
-                // ==========================================
                 document.getElementById('cfg-add-btn').addEventListener('click', () => {
                     const tbody = document.getElementById('config-table-body');
                     const tr = document.createElement('tr');
@@ -7056,9 +6898,6 @@
                     reader.readAsArrayBuffer(file);
                 });
 
-                // ==========================================
-                // HANDLERS MATRIZ DO MAPA
-                // ==========================================
                 document.getElementById('cfg-map-export-btn').addEventListener('click', () => {
                     if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou."); return; }
 
@@ -7130,7 +6969,6 @@
                 toggle.id = 'vl-toggle';
                 toggle.textContent = '🔍 Layout Digital';
 
-                // Lógica CORRIGIDA do Toggle de abertura do painel
                 toggle.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -7429,8 +7267,8 @@
         })();
     }
 
-    // MODULE: CPT Tracker
     (function loadModuleCptTracker() {
+        if (!_SUITE.isDock) return;
         'use strict';
 
         var BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
@@ -7439,7 +7277,6 @@
 
         var isStemPage = location.hostname === 'stem-na.corp.amazon.com';
 
-        // ── Token capture (trans-logistics only) ──────────────────────────────────
         var _csrfToken = '';
         if (!isStemPage) {
             (function patchXhr() {
@@ -7460,9 +7297,6 @@
             })();
         }
 
-        // ════════════════════════════════════════════════════════════════════════════
-        // STEM PAGE LOGIC — roda na popup oculta do stem-na
-        // ════════════════════════════════════════════════════════════════════════════
         if (isStemPage) {
             var LSKEY_RESULT = 'obdv_vsm_result';
             var LSKEY_TS = 'obdv_vsm_ts';
@@ -7544,7 +7378,7 @@
                         }
                     }
                 } catch (e) { }
-                if (attempts >= 200) { // 40s
+                if (attempts >= 200) { 
                     clearInterval(iv);
                     GM_setValue('obdv_vsm_status', 'error');
                     GM_setValue('obdv_vsm_body', 'Timeout: token não capturado');
@@ -7552,14 +7386,9 @@
                     try { window.close(); } catch (e) { }
                 }
             }, 200);
-            return; // ← fim da lógica STEM, não executa nada mais
+            return; 
         }
 
-        // ════════════════════════════════════════════════════════════════════════════
-        // TRANS-LOGISTICS PAGE LOGIC
-        // ════════════════════════════════════════════════════════════════════════════
-
-        // ── Helpers ───────────────────────────────────────────────────────────────
         function apiWindow(customWin) {
             if (customWin) {
                 return { start: customWin.start - 3 * 3600000, end: customWin.end + 3 * 3600000 };
@@ -7605,7 +7434,6 @@
             return [route];
         }
 
-        // ── VSM Cache (1 week via GM_setValue) ───────────────────────────────────
         var VSM_CACHE_KEY = 'obdv_vsm_cache';
         var VSM_CACHE_TTL = 7 * 24 * 3600 * 1000;
 
@@ -7623,7 +7451,6 @@
             try { GM_setValue(VSM_CACHE_KEY, JSON.stringify({ ts: Date.now(), map: map })); } catch (e) { }
         }
 
-        // ── Status config ─────────────────────────────────────────────────────────
         var STATUS_MAP = {
             'outboundscheduled': { label: 'Agendado', color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
             'outboundinprogress': { label: 'Em carregamento', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
@@ -7663,10 +7490,8 @@
             return STATUS_PRIORITY[key] || 99;
         }
 
-        // ── Module-level VSM map ──────────────────────────────────────────────────
         var _vsmMap = loadVsmCache();
 
-        // ── Container positions ───────────────────────────────────────────────────
         var _containerMap = {};
         var _containerFetchQueue = [];
         var _containerFetchActive = 0;
@@ -7680,7 +7505,6 @@
             return vp.some(function (p) { return u.indexOf(p) === 0; });
         }
 
-        // ── Compara dois timestamps por dia calendário (local) ────────────────────
         function _sameDay(msA, msB) {
             var a = new Date(msA), b = new Date(msB);
             return a.getFullYear() === b.getFullYear() &&
@@ -7688,7 +7512,6 @@
                 a.getDate() === b.getDate();
         }
 
-        // Prioriza scheduleDepartureTime para comparação de CPT do pallet
         function _extractContainerTimeMs(container) {
             if (!container) return null;
             var fields = ['scheduleDepartureTime', 'cpt', 'criticalPullTime', 'sdt', 'shipDate',
@@ -7737,12 +7560,11 @@
             var palletCount = 0, positionsData = [];
             if (!nodes || !Array.isArray(nodes)) return { palletCount: 0, positionsData: [] };
 
-            // Busca stackFilter recursivamente em todos os descendentes do pallet
             function _findStackFilter(node, vsmSet) {
                 if (!node) return false;
                 var c = node.container;
                 if (c && c.stackFilter) {
-                    // achou um stackFilter — verifica se bate com a rota
+
                     return vsmSet[c.stackFilter.toUpperCase()] === true;
                 }
                 var children = node.childNodes || [];
@@ -7752,8 +7574,6 @@
                 return false;
             }
 
-            // Verifica se um pallet (ou algum descendente) tem stackFilter que bate com a rota
-            // Se nenhum descendente tiver stackFilter → não mostra (não usa fallback de CPT)
             function _hasAnyStackFilter(node) {
                 if (!node) return false;
                 var c = node.container;
@@ -7775,7 +7595,7 @@
                 });
                 vsmSet[routeCode.toUpperCase()] = true;
 
-                if (!_hasAnyStackFilter(palletNode)) return false; // sem stackFilter → não mostra
+                if (!_hasAnyStackFilter(palletNode)) return false; 
                 return _findStackFilter(palletNode, vsmSet);
             }
 
@@ -7783,11 +7603,10 @@
                 if (!node.container || !node.container.label) return;
 
                 if (node.container.contType === 'STACKING_AREA') {
-                    // Filtra por data da área (se existir)
+
                     var areaTime = _extractContainerTimeMs(node.container);
                     if (areaTime !== null && routeCptMs && !_sameDay(areaTime, routeCptMs)) return;
 
-                    // Conta pallets dentro desta stacking area que pertencem à rota
                     var areaCount = 0;
                     (node.childNodes || []).forEach(function (child) {
                         if (child.container && child.container.label &&
@@ -7801,10 +7620,9 @@
                         palletCount += areaCount;
                         positionsData.push({ label: node.container.label });
                     }
-                    return; // não processa a área como pallet direto
+                    return; 
                 }
 
-                // Pallet solto (não dentro de STACKING_AREA)
                 if (_isValidContainerLabel(node.container.label) && _palletMatchesRoute(node.container, routeCptMs)) {
                     palletCount++;
                 }
@@ -7876,7 +7694,6 @@
             _processContainerQueue(gen, onProgress);
         }
 
-        // ── VSM popup mechanism ───────────────────────────────────────────────────
         var _vsmPending = false;
 
         function fetchVSM(node, onDone) {
@@ -7938,7 +7755,6 @@
             }, 200);
         }
 
-        // ── Inject CSS once ───────────────────────────────────────────────────────
         function injectStyles() {
             if (document.getElementById('obdv-styles')) return;
             var st = document.createElement('style');
@@ -7976,7 +7792,6 @@
             document.head.appendChild(st);
         }
 
-        // ── UI ────────────────────────────────────────────────────────────────────
         var _panel = null;
 
         function buildPanel() {
@@ -7993,7 +7808,6 @@
                 'font-family:"Amazon Ember",Arial,sans-serif;z-index:2147483647'
             ].join(';');
 
-            // Header
             var hdr = document.createElement('div');
             hdr.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 16px;background:#161b22;border-bottom:1px solid #21262d;flex-shrink:0;cursor:grab;user-select:none;';
             hdr.innerHTML = '<span style="font-size:16px;font-weight:900;color:#f0f6ff;flex:1;letter-spacing:0.5px;">🚛 OB — Rotas, CPT &amp; VSM</span>';
@@ -8009,13 +7823,12 @@
             document.addEventListener('mousemove', function (e) { if (!dragging) return; _panel.style.left = (e.clientX - dX) + 'px'; _panel.style.top = (e.clientY - dY) + 'px'; });
             document.addEventListener('mouseup', function () { dragging = false; });
 
-            // Toolbar
             var toolbar = document.createElement('div');
             toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 14px;background:#0d1117;border-bottom:1px solid #21262d;flex-shrink:0;flex-wrap:wrap;';
 
             var nodeInput = document.createElement('input');
-            nodeInput.value = detectNode();
-            nodeInput.style.cssText = 'background:#161b22;border:1px solid #30363d;color:#f0f6ff;border-radius:6px;padding:5px 9px;font-size:11px;width:64px;font-family:monospace;outline:none;';
+            nodeInput.value = detectNode() || 'CGH7';
+            nodeInput.style.cssText = 'background:#161b22;border:2px solid #58a6ff;color:#f0f6ff;border-radius:6px;padding:5px 9px;font-size:12px;width:75px;font-family:monospace;outline:none;font-weight:bold;text-align:center;';
 
             var fetchBtn = document.createElement('button');
             fetchBtn.textContent = '🔄 Buscar';
@@ -8066,7 +7879,6 @@
             toolbar.appendChild(countEl);
             toolbar.appendChild(vsmStatusEl);
 
-            // Routes drawer — fechado por padrão
             var routePanel = document.createElement('div');
             routePanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.25s ease;';
             var routePanelInner = document.createElement('div');
@@ -8106,10 +7918,9 @@
                 if (isOpen) { routePanel.style.maxHeight = '0'; routePanel.classList.remove('open'); routesPanelBtn.style.color = '#8b949e'; routesPanelBtn.style.borderColor = '#30363d'; }
                 else { buildRoutePanel(); routePanel.style.maxHeight = '200px'; routePanel.classList.add('open'); routesPanelBtn.style.color = '#58a6ff'; routesPanelBtn.style.borderColor = '#58a6ff'; }
             };
-            // Apenas popula o painel, não abre
+
             setTimeout(function () { buildRoutePanel(); }, 0);
 
-            // ── Calendar / Window Panel ─────────────────────────────────────────────
             var calPanel = document.createElement('div');
             calPanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:visible;max-height:0;transition:max-height 0.3s ease;';
             var calInner = document.createElement('div');
@@ -8347,14 +8158,12 @@
                 calBtn.style.color = '#58a6ff'; calBtn.style.borderColor = '#58a6ff';
             }, 50);
 
-            // Grid
             var gridWrap = document.createElement('div');
             gridWrap.style.cssText = 'flex:1;overflow-y:auto;padding:14px 16px;background:#0d1117;min-height:0;';
             var grid = document.createElement('div');
             grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:10px;';
             gridWrap.appendChild(grid);
 
-            // Status bar
             var statusBar = document.createElement('div');
             statusBar.style.cssText = 'padding:5px 14px;font-size:10px;color:#6e7681;border-top:1px solid #21262d;background:#0d1117;flex-shrink:0;';
             statusBar.textContent = 'Pronto — clique em 🔄 Buscar';
@@ -8365,7 +8174,6 @@
             _panel.appendChild(_pop);
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _panel) _panel.style.display = 'none'; });
 
-            // ── State ──────────────────────────────────────────────────────────────
             var _routes = [];
             var _vsmLoading = false;
             var _activeWindow = null;
@@ -8456,7 +8264,6 @@
                 badge.textContent = st.label;
                 body.appendChild(badge);
 
-                // Container section — só para rotas ativas
                 var cdata = _containerMap[r.route + '|' + (r.cptMs || 0)];
                 if (!expired) {
                     if (cdata === undefined) {
@@ -8507,7 +8314,6 @@
             filterInput.addEventListener('input', function () { renderCards(filterInput.value.trim()); });
             setInterval(function () { if (_routes.length) renderCards(filterInput.value.trim()); }, 30000);
 
-            // ── Fetch OB + VSM ─────────────────────────────────────────────────────
             function doFetch() {
                 fetchBtn.disabled = true; fetchBtn.textContent = '⏳ Buscando...';
                 statusBar.textContent = 'Consultando API OB...';
@@ -8575,7 +8381,6 @@
                         renderCards(filterInput.value.trim());
                         if (routePanel.classList.contains('open')) buildRoutePanel();
 
-                        // Busca containers só para rotas ativas (não expiradas e não finalizadas)
                         var now0 = Date.now();
                         var activeRoutes = _routes.filter(function (r) {
                             return !_isCompleted(r.status) && (!r.cptMs || r.cptMs >= now0);
@@ -8621,16 +8426,14 @@
             }, 5 * 60 * 1000);
         }
 
-        // ── detectNode ────────────────────────────────────────────────────────────
         function detectNode() {
             var m = location.href.match(/[?&]node=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i);
             if (m) return m[1].toUpperCase();
             var el = document.querySelector('#nodeId, select[name="nodeId"] option:checked');
             if (el) return (el.value || el.textContent || '').trim().toUpperCase();
-            return 'CGH7';
+            return GM_getValue('tl_node', 'CGH7');
         }
 
-        // ── Toggle button ─────────────────────────────────────────────────────────
         function injectToggle() {
             if (document.getElementById('ob-dock-view-toggle')) return;
             var btn = document.createElement('button');
@@ -8647,14 +8450,13 @@
 
     })();
 
-    // MODULE: TPH Chart
     _onReady(function () {
         (function loadModuleTPH() {
+            if (!_SUITE.isDock) return;
             'use strict';
 
             if (location.pathname.includes('/yms/')) return;
 
-            // ── CONFIGURAÇÕES CENTRAIS ────────────────────────────────────────────────
             const CONFIG = {
                 baseUrls: {
                     fe: 'https://trans-logistics-fe.amazon.com/',
@@ -8669,9 +8471,9 @@
                     pixelsPerPoint: 65,
                     minWidth: 400,
                     minHeight: 300,
-                    metaColor: '#ff2a5f',             // Rosa/Vermelho (Meta Fixa)
-                    realColor: '#a89dff',             // Roxo (Real)
-                    needColor: '#39ff14',             // Verde Neon (Necessidade Dinâmica)
+                    metaColor: '#ff2a5f',             
+                    realColor: '#a89dff',             
+                    needColor: '#39ff14',             
                     upColor: '#34d399',
                     downColor: '#f87171'
                 }
@@ -8681,7 +8483,6 @@
                 : document.URL.includes('-eu.') ? CONFIG.baseUrls.eu
                     : CONFIG.baseUrls.us;
 
-            // ── VARIÁVEIS SALVAS NO NAVEGADOR ─────────────────────────────────────────
             let CURRENT_NODE = GM_getValue('tl_v5_chart_node', detectCurrentNode());
             let GOAL_5MIN = GM_getValue('tl_v5_chart_goal', 800);
             let REFRESH_MS = GM_getValue('tl_v5_refresh_ms', 5 * 60 * 1000);
@@ -8692,7 +8493,6 @@
             let PAUSA2_END = GM_getValue('tl_v5_pausa2_end', '15:15');
             let AUTO_REFRESH_ON = GM_getValue('tl_v5_auto_on', true);
 
-            let antiCsrfToken = '';
             let chartInstance = null;
             let timeBlocks = [];
             let isFetching = false;
@@ -8700,7 +8500,6 @@
             let countdownInterval = null;
             let nextRefreshTime = 0;
 
-            // ── DETECÇÃO DE NODE E CSRF ───────────────────────────────────────────────
             function detectCurrentNode() {
                 const fns = [
                     () => { const el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
@@ -8712,11 +8511,11 @@
                 for (let fn of fns) {
                     try { let v = fn(); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
                 }
-                return 'CGH7';
+                return GM_getValue('tl_node', 'CGH7');
             }
 
             function fetchAntiCsrfToken(callback) {
-                if (antiCsrfToken) { callback(antiCsrfToken); return; }
+                if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
                 GM_xmlhttpRequest({
                     method: 'GET', url: BASE + 'sortcenter/vista',
                     onload: function (response) {
@@ -8725,21 +8524,20 @@
                             div.innerHTML = response.responseText;
                             var inputs = div.querySelectorAll('input');
                             for (var i = 0; i < inputs.length; i++) {
-                                if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) { antiCsrfToken = inputs[i].value; break; }
+                                if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) { _SUITE.antiCsrfToken = inputs[i].value; break; }
                             }
-                            if (!antiCsrfToken) {
+                            if (!_SUITE.antiCsrfToken) {
                                 var m = response.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
                                 if (!m) m = response.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                                if (m) antiCsrfToken = m[1];
+                                if (m) _SUITE.antiCsrfToken = m[1];
                             }
                         } catch (e) { }
-                        callback(antiCsrfToken);
+                        callback(_SUITE.antiCsrfToken);
                     },
                     onerror: function () { callback(''); }
                 });
             }
 
-            // ── FORMATADORES E CÁLCULOS DE PAUSA ──────────────────────────────────────
             function pad(n) { return n < 10 ? '0' + n : n; }
             function fmtDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
             function fmtTime(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
@@ -8749,7 +8547,6 @@
                 return new Date(`${dateEl.value}T${timeEl.value}:00`).getTime();
             }
 
-            // Calcula a duração total de uma pausa em minutos
             function getPauseDuration(startStr, endStr) {
                 const [h1, m1] = startStr.split(':').map(Number);
                 const [h2, m2] = endStr.split(':').map(Number);
@@ -8758,7 +8555,6 @@
                 return diff;
             }
 
-            // Verifica se um bloco de 5 minutos cai dentro de um intervalo de pausa
             function isPauseBlock(blockStartMs, startStr, endStr) {
                 const d = new Date(blockStartMs);
                 const blockTime = pad(d.getHours()) + ':' + pad(d.getMinutes());
@@ -8769,7 +8565,6 @@
                 }
             }
 
-            // Verifica se um bloco cai em QUALQUER pausa configurada
             function isAnyPauseBlock(blockStartMs) {
                 const p1s = inputs.pausaStart.value || '11:00';
                 const p1e = inputs.pausaEnd.value || '12:15';
@@ -8778,7 +8573,6 @@
                 return isPauseBlock(blockStartMs, p1s, p1e) || isPauseBlock(blockStartMs, p2s, p2e);
             }
 
-            // Calcula total de minutos de pausa combinados (sem sobreposição, simplificado)
             function getTotalPauseMinutes() {
                 const p1s = inputs.pausaStart.value || '11:00';
                 const p1e = inputs.pausaEnd.value || '12:15';
@@ -8787,7 +8581,6 @@
                 return getPauseDuration(p1s, p1e) + getPauseDuration(p2s, p2e);
             }
 
-            // ── ESTILOS CSS ───────────────────────────────────────────────────────────
             GM_addStyle(`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');
 
@@ -8858,7 +8651,6 @@
         .sep-line { width: 1px; height: 30px; background: rgba(255,255,255,0.1); margin: 0 4px; }
     `);
 
-            // ── INJEÇÃO DO DOM ────────────────────────────────────────────────────────
             const fab = document.createElement('button');
             fab.id = 'tl-v5-fab';
             fab.title = 'Painel Gráfico Global V5';
@@ -9002,7 +8794,6 @@
                 timerText: document.getElementById('tl-v5-timer')
             };
 
-            // ── MASCARAS PARA OS CAMPOS DE TEMPO (FORÇA 24H) ──────────────────────────
             function applyTimeMask(inputEl) {
                 inputEl.addEventListener('input', function () {
                     let v = this.value.replace(/\D/g, '');
@@ -9020,7 +8811,6 @@
             applyTimeMask(inputs.pausa2Start);
             applyTimeMask(inputs.pausa2End);
 
-            // ── ARRASTAR E REDIMENSIONAR ──────────────────────────────────────────────
             let isDragging = false, isResizing = false;
             let startX, startY, startW, startH, currentHandle;
 
@@ -9065,7 +8855,6 @@
             });
             document.getElementById('tl-v5-btn-fs').addEventListener('click', () => popup.classList.toggle('fullscreen'));
 
-            // ── LÓGICA DO TIMER DE REFRESH ────────────────────────────────────────────
             function startCountdownTimer() {
                 clearInterval(countdownInterval);
                 nextRefreshTime = Date.now() + REFRESH_MS;
@@ -9085,7 +8874,6 @@
                 }, 1000);
             }
 
-            // ── LÓGICA DE TEMPO E BLOCOS ──────────────────────────────────────────────
             function generateTimeBlocks() {
                 let startTime = getMsFromInputs(inputs.dateStart, inputs.timeStart);
                 let endTime = getMsFromInputs(inputs.dateEnd, inputs.timeEnd);
@@ -9105,7 +8893,6 @@
                 return blocks;
             }
 
-            // ── API REQUESTS ──────────────────────────────────────────────────────────
             function fetchSingleBlock(node, token, startMs, endMs) {
                 return new Promise((resolve, reject) => {
                     const payload = {
@@ -9124,7 +8911,7 @@
                         onload: function (response) {
                             const finalUrl = response.finalUrl || '';
                             if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || response.status === 401 || response.status === 403) {
-                                antiCsrfToken = ''; return reject(new Error('Sessão expirada.'));
+                                _SUITE.antiCsrfToken = ''; return reject(new Error('Sessão expirada.'));
                             }
                             try {
                                 const json = typeof response.responseText === 'object' ? response.responseText : JSON.parse(response.responseText);
@@ -9154,7 +8941,7 @@
 
                 isFetching = true;
                 timeBlocks = newBlocks;
-                CURRENT_NODE = inputs.node.value.trim().toUpperCase() || 'CGH7';
+                CURRENT_NODE = inputs.node.value.trim().toUpperCase() || (typeof CURRENT_NODE !== 'undefined' ? CURRENT_NODE : GM_getValue('tl_node', 'CGH7'));
                 GM_setValue('tl_v5_chart_node', CURRENT_NODE);
 
                 GM_setValue('tl_v5_vol_total', parseInt(inputs.vol.value) || 0);
@@ -9201,12 +8988,11 @@
                 });
             }
 
-            // ── PLUGIN DO CANVAS: LABELS NO "REAL" E NA "NECESSIDADE" ────────────────
             const labelsPlugin = {
                 id: 'alwaysShowLabels',
                 afterDatasetsDraw(chart) {
                     const { ctx, data } = chart;
-                    const metaReal = chart.getDatasetMeta(0);       // Linha "Real"
+                    const metaReal = chart.getDatasetMeta(0);       
                     const needDataset = data.datasets.find(ds => ds.label === 'Necessidade');
                     const needMeta = needDataset
                         ? chart.getDatasetMeta(data.datasets.indexOf(needDataset))
@@ -9220,16 +9006,14 @@
                     ctx.shadowOffsetX = 1;
                     ctx.shadowOffsetY = 1;
 
-                    // ── Labels da linha REAL ──────────────────────────────────────
                     metaReal.data.forEach((point, index) => {
                         const val = data.datasets[0].data[index];
                         if (val > 0) {
-                            // Valor absoluto
+
                             ctx.font = 'bold 16px "DM Sans", sans-serif';
                             ctx.fillStyle = '#fff';
                             ctx.fillText(val, point.x, point.y - 12);
 
-                            // Porcentagem vs necessidade (ou meta fixa)
                             let target = GOAL_5MIN;
                             if (needDataset && needDataset.data[index] > 0) {
                                 target = needDataset.data[index];
@@ -9251,24 +9035,20 @@
                         }
                     });
 
-                    // ── Labels da linha NECESSIDADE (verde neon) ──────────────────
                     if (needDataset && needMeta) {
                         needMeta.data.forEach((point, index) => {
                             const needVal = needDataset.data[index];
                             const realVal = data.datasets[0].data[index];
 
-                            // Só exibe se houver necessidade calculada E não for ponto de pausa
                             if (needVal > 0) {
-                                // Posiciona ABAIXO do ponto para não colidir com os labels do Real
+
                                 const yPos = point.y + 18;
 
-                                // Valor absoluto da necessidade
                                 ctx.font = 'bold 13px "DM Sans", sans-serif';
                                 ctx.fillStyle = CONFIG.ui.needColor;
                                 ctx.textBaseline = 'top';
                                 ctx.fillText(needVal, point.x, yPos);
 
-                                // Porcentagem do real vs necessidade (só se já há dado real)
                                 if (realVal > 0) {
                                     const diffPct = ((realVal - needVal) / needVal) * 100;
                                     const diffRounded = Math.round(diffPct);
@@ -9296,18 +9076,15 @@
                 const dataValues = timeBlocks.map(b => b.value);
                 const metaValues = Array(labels.length).fill(GOAL_5MIN);
 
-                // ── CONSTRUÇÃO DA LINHA DE NECESSIDADE DINÂMICA (BURN-DOWN) ──
                 let remVol = parseInt(inputs.vol.value) || 0;
                 const pMin = getTotalPauseMinutes();
 
-                // Calcula o range total do turno em minutos a partir dos inputs de data/hora
                 const startTimeMs = getMsFromInputs(inputs.dateStart, inputs.timeStart);
                 const endTimeMs = getMsFromInputs(inputs.dateEnd, inputs.timeEnd);
                 const turnoTotalMin = startTimeMs && endTimeMs
                     ? Math.max(0, (endTimeMs - startTimeMs) / 60000)
                     : 0;
 
-                // Blocos úteis = (tempo total do turno - pausas) / 5 min por bloco
                 let remBlocks = Math.floor((turnoTotalMin - pMin) / 5);
                 let needValues = [];
                 let currentNeedMetric = 0;
@@ -9335,7 +9112,6 @@
                     }
                 }
 
-                // ── MÉTRICAS DE RESUMO DO PAINEL ──
                 const totalPkgs = dataValues.reduce((a, b) => a + b, 0);
                 const validValues = dataValues.filter(v => v > 0);
                 const avg = validValues.length > 0 ? Math.round(validValues.reduce((a, b) => a + b, 0) / validValues.length) : 0;
@@ -9386,7 +9162,6 @@
                     });
                 }
 
-                // Padding extra em baixo para acomodar os labels da linha de necessidade
                 const bottomPadding = (currentNeedMetric > 0 || remVol !== 0) ? 55 : 10;
 
                 chartInstance = new Chart(ctx, {
@@ -9418,9 +9193,8 @@
                 }, 100);
             }
 
-            // ── EVENT LISTENERS ───────────────────────────────────────────────────────
             fab.addEventListener('click', () => {
-                popup.classList.add('open'); overlay.classList.add('open');
+                popup.classList.add('open', 'fullscreen'); overlay.classList.add('open');
                 if (ui.loaderMsg.style.color === 'rgb(248, 113, 113)') ui.loader.style.display = 'none';
                 if (timeBlocks.length === 0) syncData(false);
             });
@@ -9440,7 +9214,6 @@
                 GM_setValue('tl_v5_refresh_ms', REFRESH_MS); startCountdownTimer();
             });
 
-            // Se o usuário alterar dados da calculadora, o gráfico só redesenha (não baixa nada)
             [inputs.goal, inputs.vol, inputs.pausaStart, inputs.pausaEnd, inputs.pausa2Start, inputs.pausa2End].forEach(el => {
                 el.addEventListener('change', () => {
                     GOAL_5MIN = parseInt(inputs.goal.value) || 800;
@@ -9463,9 +9236,9 @@
         })();
     });
 
-    // MODULE: Painel Produtividade
     _onReady(function () {
         (function loadModulePainelProd() {
+            if (!_SUITE.isDock) return;
             'use strict';
 
             if (location.pathname.includes('/yms/')) return;
@@ -9474,7 +9247,6 @@
                 : document.URL.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
                     : 'https://trans-logistics.amazon.com/';
 
-            // ── Detecta node ──────────────────────────────────────────────────────────
             function detectCurrentNode() {
                 var fns = [
                     function () { var el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
@@ -9486,13 +9258,11 @@
                 for (var i = 0; i < fns.length; i++) {
                     try { var v = fns[i](); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
                 }
-                return 'CGH7';
+                return GM_getValue('tl_node', 'CGH7');
             }
 
-            var CURRENT_NODE = GM_getValue('tl_node', detectCurrentNode());
-            var antiCsrfToken = '';
+            var CURRENT_NODE = GM_getValue('tl_node', detectCurrentNode()) || 'CGH7';
 
-            // ── Auto-refresh state ────────────────────────────────────────────────────
             var AUTO_INTERVALS = [
                 { label: '1 min', ms: 1 * 60 * 1000 },
                 { label: '2 min', ms: 2 * 60 * 1000 },
@@ -9508,20 +9278,12 @@
             var countdownTimer = null;
             var nextRefreshAt = 0;
 
-            // ── Blur errors ───────────────────────────────────────────────────────────
             var blurErrors = GM_getValue('tl_blur_errors', false);
 
-            // ── Meta pkgs/h ───────────────────────────────────────────────────────────
-            // Tiers baseados na meta:
-            //   🔵 Azul  : ≥ 110% da meta
-            //   🟢 Verde : ≥ 100% da meta
-            //   🟡 Amarelo: ≥  80% da meta
-            //   🔴 Vermelho: <  80% da meta
             var goalPph = GM_getValue('tl_goal_pph', 300);
 
-            // ── CSRF token ────────────────────────────────────────────────────────────
             function fetchAntiCsrfToken(callback) {
-                if (antiCsrfToken) { callback(antiCsrfToken); return; }
+                if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
                 GM_xmlhttpRequest({
                     method: 'GET', url: BASE + 'sortcenter/vista',
                     onload: function (response) {
@@ -9531,35 +9293,31 @@
                             var inputs = div.querySelectorAll('input');
                             for (var i = 0; i < inputs.length; i++) {
                                 if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) {
-                                    antiCsrfToken = inputs[i].value; break;
+                                    _SUITE.antiCsrfToken = inputs[i].value; break;
                                 }
                             }
-                            if (!antiCsrfToken) {
+                            if (!_SUITE.antiCsrfToken) {
                                 var m = response.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
                                 if (!m) m = response.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                                if (m) antiCsrfToken = m[1];
+                                if (m) _SUITE.antiCsrfToken = m[1];
                             }
                         } catch (e) { console.warn('[TL Prod] token error:', e); }
-                        callback(antiCsrfToken);
+                        callback(_SUITE.antiCsrfToken);
                     },
                     onerror: function () { callback(''); }
                 });
             }
 
-            // ── Styles ────────────────────────────────────────────────────────────────
             GM_addStyle([
-                // FAB
+
                 '#tl-prod-fab{position:fixed;bottom:20px;right:20px;z-index:99999;width:44px;height:44px;border-radius:50%;background:#fff;color:#1a56db;font-size:20px;border:2px solid #e5e7eb;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;transition:box-shadow .2s,transform .2s;padding:0}',
                 '#tl-prod-fab:hover{box-shadow:0 4px 20px rgba(0,0,0,.22);transform:scale(1.07)}',
 
-                // Overlay
                 '#tl-prod-overlay{position:fixed;inset:0;background:rgba(17,24,39,.35);z-index:99998;display:none;backdrop-filter:blur(2px);opacity:0;transition:opacity .22s ease}',
                 '#tl-prod-overlay.open{display:block;opacity:1}',
 
-                // Popup
                 '#tl-prod-popup{position:fixed;top:10%;left:50%;transform:translate(-50%,0);z-index:99999;width:640px;max-width:96vw;background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;min-height:320px;max-height:88vh;border:1px solid #e5e7eb;transition:width .25s cubic-bezier(.4,0,.2,1),left .25s cubic-bezier(.4,0,.2,1),top .15s ease}',
 
-                // Resize handles
                 '.tl-rh{position:absolute;z-index:100000}',
                 '.tl-rh-n{top:-4px;left:8px;right:8px;height:8px;cursor:n-resize}',
                 '.tl-rh-s{bottom:-4px;left:8px;right:8px;height:8px;cursor:s-resize}',
@@ -9570,7 +9328,6 @@
                 '.tl-rh-sw{bottom:-4px;left:-4px;width:16px;height:16px;cursor:sw-resize}',
                 '.tl-rh-se{bottom:-4px;right:-4px;width:16px;height:16px;cursor:se-resize}',
 
-                // Header — clean, like the modal in the image
                 '#tl-prod-header{background:#fff;color:#111827;padding:14px 16px 0;flex-shrink:0;cursor:grab;user-select:none;border-bottom:1px solid #e5e7eb}',
                 '#tl-prod-header:active{cursor:grabbing}',
                 '#tl-prod-header-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}',
@@ -9583,24 +9340,21 @@
                 '#tl-node-input{font-size:12px;font-weight:700;padding:3px 7px;border:1.5px solid #d1d5db;border-radius:6px;color:#374151;background:#f3f4f6;width:68px;text-align:center;text-transform:uppercase;cursor:text}',
                 '#tl-node-input:focus{outline:none;border-color:#1a56db;background:#fff}',
 
-                // Tabs — período
                 '#tl-prod-tabs{display:flex;gap:0;border-bottom:0;margin:0 -1px}',
                 '.tl-tab{font-size:12px;font-weight:600;padding:7px 14px;border:none;background:none;cursor:pointer;color:#6b7280;border-bottom:2px solid transparent;transition:color .18s ease,border-color .18s ease;display:flex;align-items:center;gap:5px;white-space:nowrap}',
                 '.tl-tab:hover{color:#1a56db}',
                 '.tl-tab.active{color:#1a56db;border-bottom:2px solid #1a56db}',
                 '.tl-tab-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}',
 
-                // Custom range
                 '#tl-custom-row{display:flex;align-items:center;gap:6px;padding:8px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;flex-shrink:0}',
                 '#tl-custom-row.hidden{display:none}',
-                '#tl-time-start,#tl-time-end{font-size:12px;padding:4px 7px;border:1.5px solid #d1d5db;border-radius:6px;color:#374151;background:#fff;width:90px;-webkit-date-and-time-value:{hour-cycle:h23}}',
-                '#tl-date-pick{font-size:12px;padding:4px 7px;border:1.5px solid #d1d5db;border-radius:6px;color:#374151;background:#fff;width:120px}',
-                '#tl-date-pick:focus,#tl-time-start:focus,#tl-time-end:focus{outline:none;border-color:#1a56db}',
+                '#tl-time-start,#tl-time-end{font-size:12px;padding:4px 7px;border:1.5px solid #d1d5db;border-radius:6px;color:#374151;background:#fff;width:80px;height:28px;box-sizing:border-box}',
+                '#tl-date-pick,#tl-date-pick-end{font-size:12px;padding:4px 7px;border:1.5px solid #d1d5db;border-radius:6px;color:#374151;background:#fff;width:115px;height:28px;box-sizing:border-box}',
+                '#tl-date-pick:focus,#tl-date-pick-end:focus,#tl-time-start:focus,#tl-time-end:focus{outline:none;border-color:#1a56db}',
                 '.tl-arrow{color:#9ca3af;font-size:13px}',
                 '#tl-apply-btn{font-size:11px;font-weight:700;padding:4px 12px;border-radius:6px;border:none;background:#1a56db;color:#fff;cursor:pointer;margin-left:4px}',
                 '#tl-apply-btn:hover{background:#1e40af}',
 
-                // Auto-refresh bar
                 '#tl-auto-bar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;flex-shrink:0}',
                 '#tl-auto-label{font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
                 '#tl-auto-toggle{position:relative;width:34px;height:19px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0}',
@@ -9614,7 +9368,6 @@
                 '#tl-refresh-btn{margin-left:auto;background:none;border:1.5px solid #d1d5db;color:#374151;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;font-weight:600;transition:border-color .15s,color .15s}',
                 '#tl-refresh-btn:hover{border-color:#1a56db;color:#1a56db}',
 
-                // Meta bar
                 '#tl-goal-bar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0}',
                 '#tl-goal-label{font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
                 '#tl-goal-input{width:72px;font-size:12px;font-weight:700;padding:3px 7px;border:1.5px solid #d1d5db;border-radius:6px;color:#374151;text-align:center;-moz-appearance:textfield}',
@@ -9626,17 +9379,14 @@
                 '#tl-goal-legend{margin-left:8px;display:flex;gap:10px;align-items:center}',
                 '.tl-goal-chip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap}',
 
-                // Body
                 '#tl-prod-body{overflow-y:auto;flex:1;min-height:0}',
                 '#tl-prod-body table{width:100%;border-collapse:collapse}',
 
-                // Thead — estilo da imagem: sticky, limpo
                 '#tl-prod-body thead th{position:sticky;top:0;background:#f9fafb;padding:8px 14px;text-align:left;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #e5e7eb;cursor:pointer;user-select:none;white-space:nowrap}',
                 '#tl-prod-body thead th:hover{color:#1a56db}',
                 '#tl-prod-body thead th.sort-asc::after{content:" ▴"}',
                 '#tl-prod-body thead th.sort-desc::after{content:" ▾"}',
 
-                // Tbody — cada row tem cor suave, como na imagem
                 '#tl-prod-body tbody tr{border-bottom:1px solid #f3f4f6;transition:background .15s ease}',
                 '#tl-prod-body tbody tr:hover td{background:rgba(219,234,254,.5)!important}',
                 '#tl-prod-body tbody td{padding:9px 14px;font-size:13px;color:#111827}',
@@ -9646,16 +9396,14 @@
                 '#tl-prod-body tbody td.td-na{color:#9ca3af;font-style:italic;text-align:right}',
                 '#tl-prod-body tbody td.td-pph{text-align:right;font-weight:700}',
 
-                // Row color tiers — espelhando as cores suaves da imagem
-                'tr.tier-top td{background:#dbeafe}',        // azul — top performers
-                'tr.tier-good td{background:#d1fae5}',       // verde
-                'tr.tier-mid td{background:#fef3c7}',        // amarelo
-                'tr.tier-low td{background:#fee2e2}',        // vermelho suave
-                'tr.tier-none td{background:#f9fafb}',       // neutro
+                'tr.tier-top td{background:#dbeafe}',        
+                'tr.tier-good td{background:#d1fae5}',       
+                'tr.tier-mid td{background:#fef3c7}',        
+                'tr.tier-low td{background:#fee2e2}',        
+                'tr.tier-none td{background:#f9fafb}',       
 
                 '#tl-prod-footer{padding:8px 16px;font-size:11px;color:#6b7280;border-top:1px solid #e5e7eb;background:#f9fafb;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}',
 
-                // Chain panels
                 '.tl-chain-panel{position:fixed;z-index:100000;width:420px;max-width:96vw;background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;border:1px solid #e5e7eb;transition:width .25s cubic-bezier(.4,0,.2,1),left .25s cubic-bezier(.4,0,.2,1),top .15s ease,max-height .2s ease;animation:tl-panel-in .2s cubic-bezier(.4,0,.2,1)}',
                 '@keyframes tl-panel-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
                 '.tl-cp-header{background:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e5e7eb;flex-shrink:0}',
@@ -9666,21 +9414,19 @@
                 '.tl-cp-body tbody tr{border-bottom:1px solid #f3f4f6;transition:background .1s}',
                 '.tl-cp-body tbody tr:hover td{background:rgba(219,234,254,.45)!important}',
 
-                // States
                 '.tl-prod-loading{padding:32px;text-align:center;color:#9ca3af;font-size:13px}',
                 '.tl-prod-error{padding:16px 20px;color:#dc2626;font-size:12px;line-height:1.8}',
                 '.tl-prod-error a{color:#1a56db;font-weight:700}',
-                // Blur errors
+
                 'body.tl-blur-errors .tl-err-col{filter:blur(5px);color:#9ca3af!important;transition:filter .2s ease,color .2s ease;cursor:default;user-select:none}',
                 'body.tl-blur-errors .tl-err-col:hover{filter:none;color:inherit!important}',
-                // Blur toggle button
+
                 '#tl-blur-toggle{background:none;border:1.5px solid #d1d5db;color:#6b7280;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:3px;transition:border-color .15s,color .15s,background .15s}',
                 '#tl-blur-toggle:hover{border-color:#1a56db;color:#1a56db}',
                 '#tl-blur-toggle.on{background:#fef3c7;border-color:#f59e0b;color:#92400e}',
                 '@keyframes tl-popup-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}',
             ].join(''));
 
-            // ── FAB ───────────────────────────────────────────────────────────────────
             var fab = document.createElement('button');
             fab.id = 'tl-prod-fab';
             fab.type = 'button';
@@ -9688,16 +9434,13 @@
             fab.textContent = '👥';
             document.body.appendChild(fab);
 
-            // ── Overlay ───────────────────────────────────────────────────────────────
             var overlay = document.createElement('div');
             overlay.id = 'tl-prod-overlay';
             document.body.appendChild(overlay);
 
-            // ── Popup ─────────────────────────────────────────────────────────────────
             var popup = document.createElement('div');
             popup.id = 'tl-prod-popup';
 
-            // Resize handles
             ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'].forEach(function (dir) {
                 var h = document.createElement('div');
                 h.className = 'tl-rh tl-rh-' + dir;
@@ -9722,11 +9465,9 @@
                 popup.appendChild(h);
             });
 
-            // ── Header ────────────────────────────────────────────────────────────────
             var header = document.createElement('div');
             header.id = 'tl-prod-header';
 
-            // Tabs de período
             var PRESETS = [
                 { label: 'Custom', ms: 0, dot: '#94a3b8' },
                 { label: '30min', ms: 30 * 60 * 1000, dot: '#60a5fa' },
@@ -9758,7 +9499,6 @@
 
             popup.appendChild(header);
 
-            // Drag — ignora cliques no input do node também
             var dragX = 0, dragY = 0, dragging = false;
             header.addEventListener('mousedown', function (e) {
                 if (e.target.closest('button') || e.target.closest('.tl-tab') || e.target.closest('input')) return;
@@ -9777,8 +9517,6 @@
             });
             document.addEventListener('mouseup', function () { dragging = false; });
 
-            // ── Custom range row ──────────────────────────────────────────────────────
-            // 6 dias anteriores ao dia de hoje
             function getDateLimits() {
                 var today = new Date();
                 var min = new Date(today); min.setDate(today.getDate() - 6);
@@ -9793,17 +9531,16 @@
             customRow.className = '';
             customRow.setAttribute('lang', 'pt-BR');
             customRow.innerHTML =
-                '<span style="font-size:11px;font-weight:600;color:#6b7280;">Data</span>' +
-                '<input type="date" id="tl-date-pick" value="' + dl.today + '" min="' + dl.min + '" max="' + dl.max + '">' +
-                '<span class="tl-arrow">|</span>' +
                 '<span style="font-size:11px;font-weight:600;color:#6b7280;">De</span>' +
-                '<input type="time" id="tl-time-start" value="06:00" lang="pt-BR">' +
+                '<input type="date" id="tl-date-pick" value="' + dl.today + '" min="' + dl.min + '" max="' + dl.max + '">' +
+                '<input type="text" id="tl-time-start" value="06:00" placeholder="HH:MM" maxlength="5" style="width:45px; text-align:center; border:1px solid #d1d5db; border-radius:4px; padding:2px 4px; font-size:12px;">' +
                 '<span class="tl-arrow">→</span>' +
-                '<input type="time" id="tl-time-end" value="18:00" lang="pt-BR">' +
+                '<span style="font-size:11px;font-weight:600;color:#6b7280;">Até</span>' +
+                '<input type="date" id="tl-date-pick-end" value="' + dl.today + '" min="' + dl.min + '" max="' + dl.max + '">' +
+                '<input type="text" id="tl-time-end" value="18:00" placeholder="HH:MM" maxlength="5" style="width:45px; text-align:center; border:1px solid #d1d5db; border-radius:4px; padding:2px 4px; font-size:12px;">' +
                 '<button type="button" id="tl-apply-btn">▶ Aplicar</button>';
             popup.appendChild(customRow);
 
-            // ── Auto-refresh bar ──────────────────────────────────────────────────────
             var autoBar = document.createElement('div');
             autoBar.id = 'tl-auto-bar';
 
@@ -9823,7 +9560,6 @@
                 '<button type="button" id="tl-refresh-btn">↺ Atualizar</button>';
             popup.appendChild(autoBar);
 
-            // ── Meta bar ──────────────────────────────────────────────────────────────
             var goalBar = document.createElement('div');
             goalBar.id = 'tl-goal-bar';
             goalBar.innerHTML =
@@ -9843,7 +9579,6 @@
             body.innerHTML = '<div class="tl-prod-loading">Selecione um período e clique em ↺ Atualizar.</div>';
             popup.appendChild(body);
 
-            // ── Footer ────────────────────────────────────────────────────────────────
             var footer = document.createElement('div');
             footer.id = 'tl-prod-footer';
             footer.innerHTML = '<span id="tl-prod-range"></span><span id="tl-prod-total"></span>';
@@ -9851,13 +9586,11 @@
 
             document.body.appendChild(popup);
 
-            // ── State ─────────────────────────────────────────────────────────────────
             var popupOpen = false;
             var sortCol = 'successfulScans';
             var sortAsc = false;
             var lastData = [];
 
-            // ── Helpers ───────────────────────────────────────────────────────────────
             function getTimeRange() {
                 if (!customMode) {
                     var now = Date.now();
@@ -9866,15 +9599,17 @@
                 var startInput = document.getElementById('tl-time-start');
                 var endInput = document.getElementById('tl-time-end');
                 var datePick = document.getElementById('tl-date-pick');
-                var d = datePick && datePick.value ? datePick.value : new Date().toISOString().slice(0, 10);
-                var startMs = new Date(d + 'T' + (startInput ? startInput.value : '06:00') + ':00').getTime();
-                var endMs = new Date(d + 'T' + (endInput ? endInput.value : '18:00') + ':00').getTime();
-                // Se fim <= início, assume que cruza meia-noite (adiciona 1 dia ao fim)
-                if (endMs <= startMs) endMs += 86400000;
+                var datePickEnd = document.getElementById('tl-date-pick-end');
+
+                var dStart = datePick && datePick.value ? datePick.value : new Date().toISOString().slice(0, 10);
+                var dEnd = datePickEnd && datePickEnd.value ? datePickEnd.value : dStart;
+
+                var startMs = new Date(dStart + 'T' + (startInput ? startInput.value : '06:00') + ':00').getTime();
+                var endMs = new Date(dEnd + 'T' + (endInput ? endInput.value : '18:00') + ':00').getTime();
+
                 return { start: startMs, end: endMs };
             }
 
-            // ── Auto-refresh logic ────────────────────────────────────────────────────
             function stopAutoRefresh() {
                 clearInterval(autoRefreshTimer);
                 clearInterval(countdownTimer);
@@ -9914,7 +9649,6 @@
                 }
             }
 
-            // ── Blur errors logic ─────────────────────────────────────────────────────
             function applyBlurErrors() {
                 if (blurErrors) document.body.classList.add('tl-blur-errors');
                 else document.body.classList.remove('tl-blur-errors');
@@ -9922,7 +9656,6 @@
                 if (btn) btn.classList.toggle('on', blurErrors);
             }
 
-            // ── Skeleton ──────────────────────────────────────────────────────────────
             GM_addStyle([
                 '@keyframes tl-shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}',
                 '.tl-sk{background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 50%,#e5e7eb 75%);background-size:800px 100%;animation:tl-shimmer 1.4s infinite linear;border-radius:4px}',
@@ -9956,7 +9689,6 @@
                 bodyEl.innerHTML = html;
             }
 
-            // ── Fetch ─────────────────────────────────────────────────────────────────
             function fetchProductivity() {
                 var nodeInp = document.getElementById('tl-node-input');
                 if (nodeInp && nodeInp.value.trim()) CURRENT_NODE = nodeInp.value.trim().toUpperCase();
@@ -9995,13 +9727,13 @@
                         onload: function (response) {
                             var finalUrl = response.finalUrl || '';
                             if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/')) {
-                                antiCsrfToken = '';
+                                _SUITE.antiCsrfToken = '';
                                 if (statusEl) statusEl.textContent = '⚠ sessão expirada';
                                 if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">🔐 <b>Sessão expirada.</b><br><a href="' + location.href + '">Recarregue a página</a> e tente novamente.</div>';
                                 return;
                             }
                             if (response.status === 403 || response.status === 401) {
-                                antiCsrfToken = '';
+                                _SUITE.antiCsrfToken = '';
                                 if (statusEl) statusEl.textContent = '⚠ ' + response.status;
                                 if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">⛔ <b>Erro ' + response.status + '</b><br><a href="' + location.href + '">Recarregue a página</a>.</div>';
                                 return;
@@ -10013,7 +9745,7 @@
                                 lastData = (json && json.ret &&
                                     json.ret.getQualityMetricDetailsOutput &&
                                     json.ret.getQualityMetricDetailsOutput.qualityMetrics) || [];
-                                var fmt = function (ms) { return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+                                var fmt = function (ms) { return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false }); };
                                 var rangeEl = document.getElementById('tl-prod-range');
                                 if (rangeEl) rangeEl.textContent = fmt(range.start) + ' → ' + fmt(range.end);
                                 if (statusEl) statusEl.textContent = '';
@@ -10031,7 +9763,6 @@
                 });
             }
 
-            // ── Render ────────────────────────────────────────────────────────────────
             var LOWER_WORDS = { de: 1, da: 1, do: 1, das: 1, dos: 1, e: 1, em: 1 };
             function normalizeName(raw) {
                 if (!raw || raw === '—') return raw;
@@ -10082,9 +9813,9 @@
                     return sortAsc ? va - vb : vb - va;
                 });
 
-                lastSorted = sorted; // keep in sync for chain panels
+                lastSorted = sorted; 
 
-                var maxPph = sorted.reduce(function (m, r) { return Math.max(m, pphOf(r)); }, 0); // kept for reference only
+                var maxPph = sorted.reduce(function (m, r) { return Math.max(m, pphOf(r)); }, 0); 
 
                 var totalPkgs = filtered.reduce(function (s, r) { return s + (r.successfulScans || 0); }, 0);
                 var totalEl = document.getElementById('tl-prod-total');
@@ -10143,9 +9874,8 @@
                 debounceSync();
             }
 
-            // ── Chain panels (continuação reativa) ───────────────────────────────────
             var lastSorted = [];
-            var chainPanels = [];   // array de { el, bodyEl, open }
+            var chainPanels = [];   
             var syncTimer = null;
 
             function debounceSync() {
@@ -10153,7 +9883,6 @@
                 syncTimer = setTimeout(syncChain, 80);
             }
 
-            // Retorna o índice do primeiro row oculto abaixo da área visível de um scrollBody
             function getFirstHiddenIdx(scrollBodyEl) {
                 if (!scrollBodyEl) return -1;
                 if (scrollBodyEl._fakeStart !== undefined) return scrollBodyEl._fakeStart;
@@ -10165,10 +9894,9 @@
                         return parseInt(rows[i].getAttribute('data-idx') || String(i));
                     }
                 }
-                return -1; // sem overflow
+                return -1; 
             }
 
-            // Constrói HTML de uma row a partir dos dados brutos
             function buildChainRow(r, absIdx) {
                 var name = normalizeName(r.userName || r.userLogin || '—');
                 var pkgs = r.successfulScans || 0;
@@ -10210,19 +9938,17 @@
                 html += '</tbody></table>';
                 cp.bodyEl.innerHTML = html;
 
-                // Scroll no body do chain panel → sync o próximo
                 cp.bodyEl.onscroll = debounceSync;
             }
 
-            // Largura base do popup antes de qualquer redimensionamento manual
-            var popupBaseLeft = null; // será fixado quando os painéis forem abertos
+            var popupBaseLeft = null; 
 
             function computeAllWidths() {
-                // Total de painéis = popup principal + chain panels
+
                 var chainCount = chainPanels.filter(function (cp) { return cp.open; }).length;
                 var total = 1 + chainCount;
-                var margin = 8;   // margem nas bordas
-                var gap = 6;   // gap entre painéis
+                var margin = 8;   
+                var gap = 6;   
                 var available = window.innerWidth - margin * 2 - gap * (total - 1);
                 var w = Math.max(260, Math.floor(available / total));
                 return { mainW: w, chainW: w, count: total };
@@ -10231,16 +9957,14 @@
             function applyAllWidths() {
                 if (!chainPanels.length) return;
                 var ws = computeAllWidths();
-                var left = 8; // começa na margem esquerda
+                var left = 8; 
 
-                // Redimensiona e reposiciona o popup principal
                 popup.style.transform = 'none';
                 popup.style.width = ws.mainW + 'px';
                 popup.style.left = left + 'px';
-                // Mantém top atual (não força novo top)
+
                 left += ws.mainW + 6;
 
-                // Reposiciona chain panels
                 var mainR = popup.getBoundingClientRect();
                 chainPanels.forEach(function (cp, i) {
                     if (!cp.open) return;
@@ -10263,46 +9987,39 @@
             }
 
             function positionChainPanel(cp, chainIdx, widths) {
-                // widths param kept for compat but we now use applyAllWidths for everything
+
                 applyAllWidths();
             }
 
             function syncChain() {
                 if (!popupOpen) return;
 
-                // Calcula quantos painéis são necessários percorrendo o overflow
                 var prevBody = document.getElementById('tl-prod-body');
                 var needed = 0;
                 var startIdxs = [];
 
-                for (var pass = 0; pass < 20; pass++) { // max 20 painéis
+                for (var pass = 0; pass < 20; pass++) { 
                     var si = getFirstHiddenIdx(prevBody);
                     if (si < 0 || si >= lastSorted.length) break;
                     startIdxs.push(si);
                     needed++;
 
-                    // Simula o body do próximo painel usando um elemento temporário
-                    // Não podemos calcular overflow sem renderizar, então limitamos pela altura
-                    // e estimamos quantas rows cabem
-                    var rowH = 37; // altura média de uma row em px
+                    var rowH = 37; 
                     var mainH = popup.getBoundingClientRect().height;
-                    var headers = 56; // header + footer do chain panel
+                    var headers = 56; 
                     var rows = Math.max(1, Math.floor((mainH - headers) / rowH));
                     var nextSi = si + rows;
                     if (nextSi >= lastSorted.length) break;
 
-                    // Cria um fake prevBody para a próxima iteração
                     var fakeBody = { _fakeStart: nextSi };
                     prevBody = fakeBody;
                 }
 
-                // Fecha painéis em excesso
                 while (chainPanels.length > needed) {
                     chainPanels[chainPanels.length - 1].el.remove();
                     chainPanels.pop();
                 }
 
-                // Abre painéis faltantes
                 while (chainPanels.length < needed) {
                     var cp = createChainPanel(chainPanels.length);
                     chainPanels.push(cp);
@@ -10312,7 +10029,6 @@
 
                 applyAllWidths();
 
-                // Agora renderiza cada painel com seu startIdx real (usando DOM real após posicionamento)
                 var realPrevBody = document.getElementById('tl-prod-body');
                 chainPanels.forEach(function (cp) {
                     var realSi = getFirstHiddenIdx(realPrevBody);
@@ -10328,24 +10044,11 @@
                 el.innerHTML =
                     '<div class="tl-cp-header">' +
                     '<span class="tl-cp-title">👥 Continuação</span>' +
-                    '<button type="button" class="tl-cp-close" title="Fechar">✕</button>' +
                     '</div>' +
                     '<div class="tl-cp-body"></div>';
 
                 el.addEventListener('click', function (e) { e.stopPropagation(); });
                 el.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-
-                el.querySelector('.tl-cp-close').addEventListener('click', function (e) {
-                    e.preventDefault(); e.stopPropagation();
-                    var myIdx = -1;
-                    for (var i = 0; i < chainPanels.length; i++) { if (chainPanels[i].el === el) { myIdx = i; break; } }
-                    if (myIdx < 0) return;
-                    for (var j = chainPanels.length - 1; j >= myIdx; j--) {
-                        chainPanels[j].el.remove();
-                        chainPanels.splice(j, 1);
-                    }
-                    if (chainPanels.length) { applyAllWidths(); } else { restorePopupWidth(); }
-                });
 
                 document.body.appendChild(el);
                 return { el: el, bodyEl: el.querySelector('.tl-cp-body'), open: true };
@@ -10369,18 +10072,15 @@
                 restorePopupWidth();
             }
 
-            // Scroll no painel principal → sync
             setTimeout(function () {
                 var mainBody = document.getElementById('tl-prod-body');
                 if (mainBody) mainBody.addEventListener('scroll', debounceSync);
             }, 500);
 
-            // ResizeObserver no popup principal → reposiciona e sync
             if (typeof ResizeObserver !== 'undefined') {
                 new ResizeObserver(function () { debounceSync(); }).observe(popup);
             }
 
-            // ── Open / Close ──────────────────────────────────────────────────────────
             function openPopup() {
                 popupOpen = true;
                 overlay.classList.add('open');
@@ -10398,7 +10098,6 @@
                 closeAllChainPanels();
             }
 
-            // ── Events ────────────────────────────────────────────────────────────────
             popup.addEventListener('click', function (e) { e.stopPropagation(); });
             popup.addEventListener('mousedown', function (e) { e.stopPropagation(); });
 
@@ -10411,15 +10110,14 @@
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && popupOpen) closePopup(); });
 
             setTimeout(function () {
-                // Fechar
+
                 var closeBtn = document.getElementById('tl-prod-close');
                 if (closeBtn) closeBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); closePopup(); });
 
-                // Atualizar manual
                 var refreshBtn = document.getElementById('tl-refresh-btn');
                 if (refreshBtn) refreshBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
-                    antiCsrfToken = '';
+                    _SUITE.antiCsrfToken = '';
                     fetchProductivity();
                     if (autoRefreshOn) {
                         stopAutoRefresh();
@@ -10427,13 +10125,12 @@
                     }
                 });
 
-                // Tabs de período
                 popup.querySelectorAll('.tl-tab').forEach(function (tab) {
                     tab.addEventListener('click', function (e) {
                         e.preventDefault(); e.stopPropagation();
                         var ms = parseInt(tab.dataset.ms);
                         if (ms === 0) {
-                            // Custom
+
                             customMode = true;
                             customRow.classList.remove('hidden');
                         } else {
@@ -10447,14 +10144,28 @@
                     });
                 });
 
-                // Aplicar custom
                 var applyBtn = document.getElementById('tl-apply-btn');
                 if (applyBtn) applyBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
                     fetchProductivity();
                 });
 
-                // Node input
+                function applyTimeMask(el) {
+                    if (!el) return;
+                    el.addEventListener('input', function () {
+                        var v = this.value.replace(/\D/g, '');
+                        if (v.length > 2) this.value = v.substring(0, 2) + ':' + v.substring(2, 4);
+                        else this.value = v;
+                    });
+                    el.addEventListener('blur', function () {
+                        if (!/^([0-1]\d|2[0-3]):([0-5]\d)$/.test(this.value)) {
+                            this.value = this.id === 'tl-time-start' ? '06:00' : '18:00';
+                        }
+                    });
+                }
+                applyTimeMask(document.getElementById('tl-time-start'));
+                applyTimeMask(document.getElementById('tl-time-end'));
+
                 var nodeInput = document.getElementById('tl-node-input');
                 if (nodeInput) {
                     nodeInput.addEventListener('change', function () {
@@ -10462,21 +10173,20 @@
                         if (v) {
                             CURRENT_NODE = v;
                             GM_setValue('tl_node', CURRENT_NODE);
-                            antiCsrfToken = '';
+                            _SUITE.antiCsrfToken = '';
                         }
                         nodeInput.value = CURRENT_NODE;
                     });
                 }
 
-                // Atualiza min/max do date picker diariamente
                 var datePick = document.getElementById('tl-date-pick');
-                if (datePick) {
+                var datePickEnd = document.getElementById('tl-date-pick-end');
+                if (datePick || datePickEnd) {
                     var dl2 = getDateLimits();
-                    datePick.min = dl2.min;
-                    datePick.max = dl2.max;
+                    if (datePick) { datePick.min = dl2.min; datePick.max = dl2.max; }
+                    if (datePickEnd) { datePickEnd.min = dl2.min; datePickEnd.max = dl2.max; }
                 }
 
-                // Salvar meta pkgs/h
                 var goalSaveBtn = document.getElementById('tl-goal-save');
                 if (goalSaveBtn) goalSaveBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
@@ -10491,7 +10201,6 @@
                     }
                 });
 
-                // Toggle auto-refresh
                 var toggle = document.getElementById('tl-auto-toggle');
                 if (toggle) toggle.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
@@ -10500,7 +10209,6 @@
                     applyAutoRefresh();
                 });
 
-                // Toggle blur erros
                 var blurBtn = document.getElementById('tl-blur-toggle');
                 if (blurBtn) blurBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
@@ -10509,7 +10217,23 @@
                     applyBlurErrors();
                 });
 
-                // Seletor de intervalo
+                function applyProdTimeMask(inputEl) {
+                    if (!inputEl) return;
+                    inputEl.addEventListener('input', function () {
+                        let v = this.value.replace(/\D/g, '');
+                        if (v.length > 2) this.value = v.substring(0, 2) + ':' + v.substring(2, 4);
+                        else this.value = v;
+                    });
+                    inputEl.addEventListener('blur', function () {
+                        if (this.value && !/^([0-1]\d|2[0-3]):([0-5]\d)$/.test(this.value)) {
+
+                            if (this.value.length > 5) this.value = "12:00";
+                        }
+                    });
+                }
+                applyProdTimeMask(document.getElementById('tl-time-start'));
+                applyProdTimeMask(document.getElementById('tl-time-end'));
+
                 var sel = document.getElementById('tl-auto-select');
                 if (sel) sel.addEventListener('change', function () {
                     autoRefreshInterval = parseInt(sel.value);
@@ -10524,19 +10248,15 @@
 
             popup.style.display = 'none';
 
-            // Aplica estado salvo do auto-refresh se já estava ligado
             if (autoRefreshOn) {
                 setTimeout(function () { applyAutoRefresh(); }, 100);
             }
 
-            // Aplica estado salvo do blur de erros
             if (blurErrors) applyBlurErrors();
 
         })();
     });
 
-    // ── Global Floating Buttons Sync ──────────────────────────────────────────
-    // Oculta os botões (FABs) quando qualquer painel está aberto
     setInterval(function () {
         const panels = [
             document.getElementById('tl-dock-view-panel'),
@@ -10547,32 +10267,71 @@
 
         const anyOpen = panels.some(function (p) {
             if (!p) return false;
-            // Verifica se o display não é 'none' e se o elemento está no DOM
             const style = window.getComputedStyle(p);
             return style.display !== 'none' && style.visibility !== 'hidden' && p.isConnected;
         });
 
-        const btns = [
-            document.getElementById('ob-dock-view-toggle'),
+        let fabLeft = document.getElementById('tl-fab-left');
+        if (!fabLeft) {
+            fabLeft = document.createElement('div');
+            fabLeft.id = 'tl-fab-left';
+            fabLeft.style.cssText = 'position:fixed; bottom:24px; left:24px; display:flex; gap:14px; align-items:center; z-index:2147483646; transition:opacity 0.3s ease, transform 0.3s ease; transform-origin:bottom left;';
+            document.body.appendChild(fabLeft);
+        }
+
+        let fabRight = document.getElementById('tl-fab-right');
+        if (!fabRight) {
+            fabRight = document.createElement('div');
+            fabRight.id = 'tl-fab-right';
+            fabRight.style.cssText = 'position:fixed; bottom:24px; right:24px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:flex-end; z-index:2147483646; transition:opacity 0.3s ease, transform 0.3s ease; transform-origin:bottom right;';
+            document.body.appendChild(fabRight);
+        }
+
+        const btnLeft = [
             document.getElementById('tl-v5-fab'),
-            document.getElementById('tl-prod-fab'),
-            document.getElementById('vl-toggle')
+            document.getElementById('tl-prod-fab')
         ];
 
-        btns.forEach(function (btn) {
-            if (btn) {
-                btn.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                if (anyOpen) {
-                    btn.style.opacity = '0';
-                    btn.style.pointerEvents = 'none';
-                    btn.style.transform = 'scale(0.8)';
-                } else {
-                    btn.style.opacity = '1';
-                    btn.style.pointerEvents = 'auto';
-                    btn.style.transform = 'scale(1)';
+        const btnRight = [
+            document.getElementById('vl-toggle'),
+            document.getElementById('ob-dock-view-toggle')
+        ];
+
+        function assignBtns(btns, container) {
+            btns.forEach(function (btn) {
+                if (btn && btn.parentElement !== container) {
+                    btn.style.position = 'static';
+                    btn.style.bottom = 'auto';
+                    btn.style.right = 'auto';
+                    btn.style.left = 'auto';
+                    btn.style.margin = '0';
+                    btn.style.transition = '';
+                    btn.style.transform = '';
+                    btn.style.opacity = '';
+                    btn.style.pointerEvents = '';
+                    container.appendChild(btn);
                 }
-            }
-        });
+            });
+        }
+
+        assignBtns(btnLeft, fabLeft);
+        assignBtns(btnRight, fabRight);
+
+        if (anyOpen) {
+            fabLeft.style.opacity = '0';
+            fabLeft.style.pointerEvents = 'none';
+            fabLeft.style.transform = 'scale(0.85) translateY(10px)';
+            fabRight.style.opacity = '0';
+            fabRight.style.pointerEvents = 'none';
+            fabRight.style.transform = 'scale(0.85) translateY(10px)';
+        } else {
+            fabLeft.style.opacity = '1';
+            fabLeft.style.pointerEvents = 'auto';
+            fabLeft.style.transform = 'scale(1) translateY(0)';
+            fabRight.style.opacity = '1';
+            fabRight.style.pointerEvents = 'auto';
+            fabRight.style.transform = 'scale(1) translateY(0)';
+        }
     }, 300);
 
 })();
