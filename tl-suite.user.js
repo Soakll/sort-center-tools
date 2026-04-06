@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/*
@@ -35,7 +35,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.0.0";
+    const VERSION = "1.0.2";
     const LAST_VER = GM_getValue("suite_last_version", "0.0.0");
 
     // Lógica de Changelog - Aparece apenas uma vez por atualização
@@ -10536,28 +10536,43 @@
     });
 
     // ── Global Floating Buttons Sync ──────────────────────────────────────────
+    // Oculta os botões (FABs) quando qualquer painel está aberto
     setInterval(function () {
-        var panels = [
+        const panels = [
             document.getElementById('tl-dock-view-panel'),
             document.getElementById('tl-v5-popup'),
-            document.getElementById('tl-prod-popup')
+            document.getElementById('tl-prod-popup'),
+            document.getElementById('vl-panel')
         ];
-        var anyOpen = panels.some(function (p) {
-            return p && (p.classList.contains('open') || p.style.display === 'flex' || p.style.display === 'block');
+
+        const anyOpen = panels.some(function (p) {
+            if (!p) return false;
+            // Verifica se o display não é 'none' e se o elemento está no DOM
+            const style = window.getComputedStyle(p);
+            return style.display !== 'none' && style.visibility !== 'hidden' && p.isConnected;
         });
 
-        var btns = [
+        const btns = [
             document.getElementById('ob-dock-view-toggle'),
             document.getElementById('tl-v5-fab'),
-            document.getElementById('tl-prod-fab')
+            document.getElementById('tl-prod-fab'),
+            document.getElementById('vl-toggle')
         ];
 
         btns.forEach(function (btn) {
             if (btn) {
-                btn.style.opacity = anyOpen ? '0' : '1';
-                btn.style.pointerEvents = anyOpen ? 'none' : 'auto';
+                btn.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                if (anyOpen) {
+                    btn.style.opacity = '0';
+                    btn.style.pointerEvents = 'none';
+                    btn.style.transform = 'scale(0.8)';
+                } else {
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                    btn.style.transform = 'scale(1)';
+                }
             }
         });
-    }, 200);
+    }, 300);
 
 })();
