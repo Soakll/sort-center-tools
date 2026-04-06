@@ -30,7 +30,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.0.5";
+    const VERSION = "1.0.6";
     const LAST_VER = GM_getValue("suite_last_version", "1.0.6");
 
     if (VERSION !== LAST_VER) {
