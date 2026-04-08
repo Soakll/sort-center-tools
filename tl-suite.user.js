@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.1
+// @version      1.1.2
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -25,13 +25,15 @@
 // @connect      *.amazonaws.com
 // @connect      stem-na.corp.amazon.com
 // @connect      api.github.com
+// @connect      raw.githubusercontent.com
+// @connect      githubusercontent.com
 // @updateURL    https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js
 // @downloadURL  https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js
 // ==/UserScript==
 (function () {
     'use strict';
 
-    const VERSION = "1.1.1";
+    const VERSION = "1.1.2";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
@@ -123,12 +125,18 @@
         const now = Date.now();
         GM_setValue("suite_last_check_ts", now);
 
+        const fail = () => {
+            if (manual) alert("TL-Suite: Falha ao verificar atualizações. Verifique sua conexão ou se há bloqueios de rede.");
+            if (cb) cb();
+        };
+
         GM_xmlhttpRequest({
             method: "GET",
             url: "https://api.github.com/repos/Soakll/sort-center-tools/commits/main",
+            timeout: 8000,
             onload: function (resp) {
                 let latestVer = VERSION;
-                let commitMsg = "Novas melhorias e correções.";
+                let commitMsg = "Novas melhorias e correções no TL-Suite.";
                 try {
                     const json = JSON.parse(resp.responseText);
                     commitMsg = json.commit.message || commitMsg;
@@ -137,6 +145,7 @@
                 GM_xmlhttpRequest({
                     method: "GET",
                     url: "https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js",
+                    timeout: 8000,
                     onload: function (resp2) {
                         const m = resp2.responseText.match(/\/\/\s*@version\s+([\d\.]+)/);
                         if (m && m[1]) {
@@ -146,14 +155,17 @@
                         if (latestVer !== VERSION) {
                             showUpdateModal(latestVer, commitMsg);
                         } else if (manual) {
-                            alert("TL-Suite: " + (typeof SETTINGS !== 'undefined' && SETTINGS.lang === 'pt' ? "Você já usa a versão mais recente! 😁" : "You are already up to date! 😁"));
+                            const isPt = GM_getValue('rd_lang', 'pt') === 'pt';
+                            alert("TL-Suite: " + (isPt ? "Você já usa a versão mais recente! 😁" : "You are already up to date! 😁"));
                         }
                         if (cb) cb();
                     },
-                    onerror: () => { if (cb) cb(); }
+                    onerror: fail,
+                    ontimeout: fail
                 });
             },
-            onerror: () => { if (cb) cb(); }
+            onerror: fail,
+            ontimeout: fail
         });
     };
 
@@ -10447,19 +10459,19 @@
     };
 
     // Replace 300ms interval with a MutationObserver to react only when it matters
-    var _tlFabObserver = new MutationObserver(function(mutations) {
+    var _tlFabObserver = new MutationObserver(function (mutations) {
         // Debounce slightly to avoid triggering 100 times during an animation
         if (_tlFabObserver._timer) clearTimeout(_tlFabObserver._timer);
         _tlFabObserver._timer = setTimeout(updateFabVisibility, 50);
     });
 
-    _tlFabObserver.observe(document.body, { 
-        childList: true, 
-        subtree: true, 
-        attributes: true, 
-        attributeFilter: ['style', 'class'] 
+    _tlFabObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
     });
-    
+
     // Initial evaluation
     setTimeout(updateFabVisibility, 500);
 
