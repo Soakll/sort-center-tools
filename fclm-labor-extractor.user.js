@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FCLM Labor Hours Extractor (Progress Bar & URL Fix Final)
 // @namespace    http://tampermonkey.net/
-// @version      0.21
+// @version      0.19
 // @description  Extract labor hours with nested subdivisions via parallel background chunking and simple progress bar
 // @author       emanunec
 // @match        https://fclm-portal.amazon.com/ppa/inspect/node*
@@ -32,8 +32,8 @@
         #fclm-panel-overlay.active { opacity: 1; pointer-events: auto; }
 
         #fclm-results-panel {
-            position: fixed; 
-            background: rgba(26, 26, 46, 0.75); 
+            position: fixed;
+            background: rgba(26, 26, 46, 0.75);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             color: #f0f0f5; width: 1400px; height: 85vh;
@@ -48,30 +48,29 @@
         }
         #fclm-panel-overlay.active #fclm-results-panel { transform: scale(1) translate(-50%, -50%); }
 
-        .fclm-header { 
-            padding: 15px 28px; background: rgba(255, 255, 255, 0.03); 
-            display: flex; justify-content: space-between; align-items: center; 
+        .fclm-header {
+            padding: 15px 28px; background: rgba(255, 255, 255, 0.03);
+            display: flex; justify-content: space-between; align-items: center;
             cursor: move; user-select: none; border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         .fclm-controls-bar {
-            padding: 10px 28px; background: rgba(255, 255, 255, 0.02); 
+            padding: 10px 28px; background: rgba(255, 255, 255, 0.02);
             display: flex; flex-wrap: wrap; gap: 15px; align-items: center;
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
-        .fclm-input { 
-            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1); 
-            color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; outline: none; 
-            transition: all 0.2s; appearance: none; -webkit-appearance: none;
+        .fclm-input {
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; outline: none;
+            transition: all 0.2s;
         }
-        select.fclm-input { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: calc(100% - 10px) center; }
-        select.fclm-input option { background: #1a1a2e; color: #fff; }
-        .fclm-input:focus { border-color: rgba(139, 92, 246, 0.5); background: rgba(255,255,255,0.08); }
+        .fclm-input:focus { border-color: rgba(139, 92, 246, 0.5); background: rgba(255,255,255,0.12); }
+        .fclm-input option { background: #1a1a2e; color: #fff; }
         .fclm-label { color: rgba(167, 139, 250, 0.8); font-weight: 700; font-size: 11px; letter-spacing: 0.5px; }
 
         #fclm-run-search-btn {
              padding: 10px 20px; background: rgba(139, 92, 246, 0.6); color: #fff;
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-weight: 800; 
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-weight: 800;
             cursor: pointer; transition: all 0.3s;
             min-width: 150px; text-align: center; backdrop-filter: blur(10px);
         }
@@ -79,14 +78,14 @@
         #fclm-run-search-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
         .fclm-content { padding: 25px 28px; flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
-        
-        .fclm-footer { 
-            padding: 15px 28px; display: flex; justify-content: flex-end; gap: 12px; 
+
+        .fclm-footer {
+            padding: 15px 28px; display: flex; justify-content: flex-end; gap: 12px;
             background: rgba(255,255,255,0.02); border-top: 1px solid rgba(255,255,255,0.05);
         }
 
-        .btn-panel { 
-            padding: 10px 22px; border-radius: 8px; font-weight: 700; cursor: pointer; 
+        .btn-panel {
+            padding: 10px 22px; border-radius: 8px; font-weight: 700; cursor: pointer;
             transition: all 0.2s; border: 1px solid rgba(255,255,255,0.08);
         }
         .btn-copy { background: rgba(139, 92, 246, 0.6); color: #fff; }
@@ -160,8 +159,8 @@
             from { clip-path: inset(0 100% 0 0); opacity: 0; transform: translateX(-10px); }
             to { clip-path: inset(0 0 0 0); opacity: 1; transform: translateX(0); }
         }
-        .fclm-animate-entry { 
-            animation: fclm-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        .fclm-animate-entry {
+            animation: fclm-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
     `);
 
@@ -373,6 +372,7 @@
         const tmTo = document.getElementById('fclm-tm-to').value;
         const btnSearch = document.getElementById('fclm-run-search-btn');
         const chartBody = document.getElementById('fclm-chart-body');
+        const summaryContainer = document.getElementById('fclm-induct-summary');
 
         if (!dtFrom || !dtTo) return alert('Selecione as datas.');
 
@@ -381,53 +381,85 @@
 
         if (startDate >= endDate) return alert('Data Final deve ser maior que a Inicial.');
 
+        // UI Reset
         btnSearch.disabled = true;
         btnSearch.innerText = '⏳ Processando...';
+        chartBody.innerHTML = `
+            <div class="fclm-loading-container" style="margin-bottom: 25px;">
+                <div style="text-align:center; font-weight:800; color:#a78bfa; margin-bottom:10px; font-size: 14px; letter-spacing: 0.5px;">EXTRAÇÃO EM CURSO</div>
+                <div class="progress-bar-bg"><div class="progress-bar-fill" id="fclm-progress-fill"></div></div>
+                <div id="fclm-progress-text" style="text-align:center; font-size:11px; font-family:'Roboto Mono', monospace; color:rgba(255,255,255,0.6); margin-top:10px; font-weight:700;">0% (0/0)</div>
+            </div>
+            ${generateSkeletons()}
+        `;
+        if (summaryContainer) summaryContainer.innerHTML = '';
+
+        // State Reset
+        let mainResultsMap = new Map();
+        globalResults = [];
+        lastInductStats = { pallets: 0, pacotes: 0 };
 
         const chunks = getChunks(startDate, endDate);
         const totalChunks = chunks.length;
-        let completedChunks = 0;
-        chartBody.innerHTML = generateSkeletons();
-
-        let mainResultsMap = new Map();
-        lastInductStats = { pallets: 0, pacotes: 0 };
-
-        const summaryContainer = document.getElementById('fclm-induct-summary');
-        if (summaryContainer) summaryContainer.innerHTML = '';
 
         try {
-            const fetchPromises = chunks.map(async (chunk) => {
-                let url = buildFclmUrl(chunk.start, chunk.end);
+            for (let i = 0; i < totalChunks; i++) {
+                const chunk = chunks[i];
+                const url = buildFclmUrl(chunk.start, chunk.end);
+                
+                // Update Progress UI
+                const progressPct = Math.round((i / totalChunks) * 100);
+                const fillEl = document.getElementById('fclm-progress-fill');
+                const textEl = document.getElementById('fclm-progress-text');
+                if (fillEl) fillEl.style.width = progressPct + '%';
+                if (textEl) textEl.innerText = `${progressPct}% (${i + 1}/${totalChunks})`;
 
-                let res = await fetch(url);
-                let html = await res.text();
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout per chunk
 
                 let iframe = document.createElement('iframe');
-                iframe.style.position = 'fixed';
-                iframe.style.top = '-10000px';
-                iframe.style.width = '1920px';
-                iframe.style.height = '1080px';
-                iframe.style.visibility = 'hidden';
-                document.body.appendChild(iframe);
+                try {
+                    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const html = await res.text();
 
-                iframe.contentDocument.open();
-                iframe.contentDocument.write(html);
-                iframe.contentDocument.close();
+                    iframe.style.position = 'fixed';
+                    iframe.style.top = '-10000px';
+                    iframe.style.width = '1920px';
+                    iframe.style.height = '1080px';
+                    iframe.style.visibility = 'hidden';
+                    document.body.appendChild(iframe);
 
-                await new Promise(r => setTimeout(r, 1000));
-                extractDataToMap(iframe.contentDocument, mainResultsMap, lastInductStats);
-                document.body.removeChild(iframe);
+                    iframe.contentDocument.open();
+                    iframe.contentDocument.write(html);
+                    iframe.contentDocument.close();
 
-                completedChunks++;
-            });
+                    // Wait for layout/rendering
+                    await new Promise(r => setTimeout(r, 1200)); 
+                    
+                    extractDataToMap(iframe.contentDocument, mainResultsMap, lastInductStats);
+                } catch (chunkErr) {
+                    console.error(`Erro no chunk ${i+1}:`, chunkErr);
+                } finally {
+                    clearTimeout(timeoutId);
+                    if (iframe && iframe.parentNode) {
+                        document.body.removeChild(iframe);
+                    }
+                }
+            }
 
-            await Promise.all(fetchPromises);
+            // Final Progress Update
+            const finalFill = document.getElementById('fclm-progress-fill');
+            const finalText = document.getElementById('fclm-progress-text');
+            if (finalFill) finalFill.style.width = '100%';
+            if (finalText) finalText.innerText = '100% - Concluído';
 
             globalResults = Array.from(mainResultsMap.values()).filter(r => r.totalHours > 0);
             lastUpdateTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
             renderResults(globalResults);
 
-            if (summaryContainer) {
+            if (summaryContainer && globalResults.length > 0) {
                 summaryContainer.innerHTML = `
                     <div style="font-size: 8px; color: #a78bfa; font-weight: 800; text-transform: uppercase;">Crossdocking</div>
                     <div class="fclm-summary-grid">
@@ -445,15 +477,15 @@
             }
 
         } catch (err) {
-            console.error(err);
+            console.error("Erro fatal na busca:", err);
             chartBody.innerHTML = `<div style="text-align:center; padding: 40px; color:#ef4444; font-weight:bold;">
-                Erro durante a extração: ${err.message}<br>
-                Tente um range de horário menor ou verifique se você está logado no FCLM.
+                Erro crítico durante a extração: ${err.message}<br>
+                Tente atualizar a página.
             </div>`;
+        } finally {
+            btnSearch.disabled = false;
+            btnSearch.innerText = '▶ Buscar';
         }
-
-        btnSearch.disabled = false;
-        btnSearch.innerText = '▶ Buscar';
     }
 
     function renderResults(results) {
@@ -522,7 +554,7 @@
             overlay.innerHTML = `
                 <div id="fclm-results-panel">
                     <div class="fclm-header">
-                        <div style="font-size:18px; font-weight:800; color:#FF9900">Análise de Horas FCLM v0.21</div>
+                        <div style="font-size:18px; font-weight:800; color:#FF9900">Análise de Horas FCLM v0.19</div>
                         <button style="background:none; border:none; color:#9090b0; font-size:24px; cursor:pointer" id="fclm-close-x">&times;</button>
                     </div>
 

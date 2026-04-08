@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.0.7
+// @version      1.0.8
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -30,8 +30,8 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.0.7";
-    const LAST_VER = GM_getValue("suite_last_version", "1.0.7");
+    const VERSION = "1.0.8";
+    const LAST_VER = GM_getValue("suite_last_version", "1.0.8");
 
     if (VERSION !== LAST_VER) {
         setTimeout(() => {
@@ -4642,25 +4642,25 @@
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "0"],
                 ["H-12", "H-11", "H-31", "H-31", "H-32", "H-32", "", "CC12", "CC11", "CC11", "CC13", "CC14", "-", "", "", "X-22", "X-22", "X-21", "X-21", "X-12", "X-12", "", "AA11", "AA11", "AA12", "AA12", "AA21", "AA21", "AA22"],
-                ["", "", "", "", "", "[B1]", "", "", "[B5]", "", "", "", "", "", "", "", "", "", "", "", "[B9]", "", "[B13]", "", "", "", "", "", ""],
+                ["", "", "", "", "", "[B1]", "", "[B5]", "", "", "", "", "", "", "", "", "", "", "", "", "[B9]", "", "[B13]", "", "", "", "", "", ""],
                 ["-", "H-11", "H-31", "H-32", "H-32", "H-32", "", "CC12", "CC12", "CC12", "CC13", "CC14", "-", "", "", "X-22", "X-22", "X-21", "X-21", "X-12", "X-12", "", "AA11", "AA11", "AA12", "AA12", "AA21", "AA21", "AA22"],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "0"],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
                 ["H-41", "H-41", "H-51", "H-61", "H-61", "H-61", "", "CC23", "CC23", "CC22", "CC22", "CC22", "CC21", "", "", "-", "X-41", "X-41", "X-32", "X-31", "X-31", "", "AA31", "AA31", "AA32", "AA42", "AA52", "-", ""],
-                ["", "", "", "", "", "[B2]", "", "", "[B6]", "", "", "", "", "", "", "", "", "", "", "", "[B10]", "", "[B14]", "", "", "", "", "", ""],
+                ["", "", "", "", "", "[B2]", "", "[B6]", "", "", "", "", "", "", "", "", "", "", "", "", "[B10]", "", "[B14]", "", "", "", "", "", ""],
                 ["H-41", "H-41", "H-41", "H-51", "H-61", "H-61", "", "CC23", "CC23", "CC23", "CC22", "CC22", "CC21", "", "", "-", "-", "X-41", "X-41", "X-31", "X-31", "", "AA31", "AA31", "AA32", "AA51", "AA53", "-", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
                 ["CD12", "CD12", "CD13", "CD13", "CD11", "CD11", "", "CC36", "CC35", "CC34", "CC34", "CC32", "CC31", "", "", "", "X-53", "X-52", "X-51", "X-51", "X-51", "", "AB31", "AB31", "AB32", "AB32", "AB41", "-", ""],
-                ["", "", "", "", "", "[B3]", "", "", "[B7]", "", "", "", "", "", "", "", "", "", "", "", "[B11]", "", "[B15]", "", "", "", "", "", ""],
+                ["", "", "", "", "", "[B3]", "", "[B7]", "", "", "", "", "", "", "", "", "", "", "", "", "[B11]", "", "[B15]", "", "", "", "", "", ""],
                 ["CD12", "CD12", "CD13", "CD13", "CD11", "CD11", "", "CC36", "CC35", "CC34", "CC34", "CC32", "CC31", "", "", "-", "-", "-", "-", "X-51", "X-51", "", "AB31", "AB32", "AB32", "AB41", "AB41", "AB42", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "0"],
                 ["CD23", "CD23", "CD31", "CD31", "CD32", "CD33", "", "CC61", "CC61", "CC61", "CC41", "CC41", "CC41", "", "", "", "", "", "X-61", "X-61", "X-61", "", "AB51", "AB52", "AB52", "AB53", "AB61", "AB61", "AIR"],
-                ["", "", "", "", "", "[B4]", "", "", "[B8]", "", "", "", "", "", "", "", "", "", "", "", "[B12]", "", "[B16]", "", "", "", "", "", ""],
+                ["", "", "", "", "", "[B4]", "", "[B8]", "", "", "", "", "", "", "", "", "", "", "", "", "[B12]", "", "[B16]", "", "", "", "", "", ""],
                 ["CD21", "CD23", "CD23", "CD31", "CD31", "CD32", "", "CC61", "CC61", "CC61", "CC41", "CC41", "CC41", "", "", "-", "-", "-", "X-62", "X-61", "X-61", "", "AB52", "AB52", "AB53", "AB61", "AB61", "AB61", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""]
             ];
@@ -9450,7 +9450,7 @@
                 '#tl-prod-body tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s ease}',
                 '#tl-prod-body tbody tr:hover td{background:rgba(255,255,255,0.05)!important}',
                 '#tl-prod-body tbody td{padding:9px 14px;font-size:13px;color:#e2e8f0}',
-                '#tl-prod-body tbody td.td-label{font-weight:600;color:#f1f5f9}',
+                '#tl-prod-body tbody td.td-label{font-weight:600;color:#fff!important}',
                 '#tl-prod-body tbody td.td-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}',
                 '#tl-prod-body tbody td.td-err{text-align:right;font-weight:700;color:#f87171}',
                 '#tl-prod-body tbody td.td-na{color:#64748b;font-style:italic;text-align:right}',
@@ -9466,12 +9466,12 @@
 
                 '.tl-chain-panel{position:fixed;z-index:100000;width:420px;max-width:96vw;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(10px);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;border:1px solid rgba(255,255,255,0.1);transition:width .25s,left .25s,top .15s,max-height .2s;color:#fff}',
                 '.tl-cp-header{background:rgba(255,255,255,0.03);padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0}',
-                '.tl-cp-title{flex:1;font-weight:700;font-size:13px;color:#fff}',
+                '.tl-cp-title{flex:1;font-weight:700;font-size:13px;color:#fff!important}',
                 '.tl-cp-close{background:none;border:none;color:#94a3b8;font-size:16px;cursor:pointer;padding:2px 4px;border-radius:4px;line-height:1}',
                 '.tl-cp-close:hover{background:rgba(255,255,255,0.1);color:#fff}',
                 '.tl-cp-body{overflow-y:auto;flex:1;min-height:0}',
                 '.tl-cp-body tbody td{padding:8px 12px;color:#e2e8f0;font-size:13px}',
-                '.tl-cp-body tbody td.td-label{font-weight:600;color:#fff}',
+                '.tl-cp-body tbody td.td-label{font-weight:600;color:#fff!important}',
                 '.tl-cp-body tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background .1s}',
                 '.tl-cp-body tbody tr:hover td{background:rgba(255,255,255,0.05)!important}',
 
@@ -9973,7 +9973,7 @@
                     : '<td class="tl-err-col" style="text-align:right;color:#9ca3af;padding:8px 10px">0</td>';
                 return '<tr class="' + tier + '" data-idx="' + absIdx + '">' +
                     '<td style="color:#9ca3af;text-align:center;width:28px;padding:8px 4px;font-size:11px">' + (absIdx + 1) + '</td>' +
-                    '<td style="font-weight:600;color:#374151;padding:8px 10px">' + name + '</td>' +
+                    '<td style="font-weight:600;color:#fff!important;padding:8px 10px">' + name + '</td>' +
                     '<td style="text-align:right;font-weight:600;padding:8px 10px">' + pkgs.toLocaleString('pt-BR') + '</td>' +
                     pphCell + errCell + '</tr>';
             }
