@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.0.8
+// @version      1.0.9
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -30,8 +30,8 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.0.8";
-    const LAST_VER = GM_getValue("suite_last_version", "1.0.8");
+    const VERSION = "1.0.9";
+    const LAST_VER = GM_getValue("suite_last_version", "1.0.9");
 
     if (VERSION !== LAST_VER) {
         setTimeout(() => {
@@ -9136,7 +9136,7 @@
                 const dataValues = timeBlocks.map(b => b.value);
                 const metaValues = Array(labels.length).fill(GOAL_5MIN);
 
-                let remVol = parseInt(inputs.vol.value) || 0;
+                const initialVol = parseInt(inputs.vol.value) || 0;
                 const pMin = getTotalPauseMinutes();
 
                 const startTimeMs = getMsFromInputs(inputs.dateStart, inputs.timeStart);
@@ -9145,32 +9145,51 @@
                     ? Math.max(0, (endTimeMs - startTimeMs) / 60000)
                     : 0;
 
-                let remBlocks = Math.floor((turnoTotalMin - pMin) / 5);
+                const totalNonPauseBlocks = Math.floor((turnoTotalMin - pMin) / 5);
+                const averageNeed = totalNonPauseBlocks > 0 ? Math.round(initialVol / totalNonPauseBlocks) : 0;
+
                 let needValues = [];
-                let currentNeedMetric = 0;
+                let currentNeedMetric = averageNeed;
                 const nowMs = Date.now();
+                const isShiftActive = (nowMs >= startTimeMs && nowMs <= endTimeMs);
+
+                let dynamicRemVol = initialVol;
+                let dynamicRemBlocks = totalNonPauseBlocks;
 
                 for (let i = 0; i < timeBlocks.length; i++) {
                     let block = timeBlocks[i];
                     let isP = isAnyPauseBlock(block.start);
 
-                    if (isP || remBlocks <= 0) {
+                    if (isP) {
                         needValues.push(0);
                     } else {
-                        let currentNeed = Math.round(remVol / remBlocks);
-                        if (currentNeed < 0) currentNeed = 0;
-                        needValues.push(currentNeed);
+                        if (isShiftActive) {
+                            // Se o turno está ativo, usa a lógica de rebalanceamento (catch-up) para a linha
+                            let currentNeed = dynamicRemBlocks > 0 ? Math.round(dynamicRemVol / dynamicRemBlocks) : averageNeed;
+                            if (currentNeed < 0) currentNeed = 0;
+                            needValues.push(currentNeed);
 
-                        if (block.start <= nowMs) {
-                            currentNeedMetric = currentNeed;
+                            if (block.start <= nowMs && block.end > nowMs) {
+                                currentNeedMetric = currentNeed;
+                            }
+                        } else {
+                            // Se o turno já encerrou (ou é futuro), usamos a média equilibrada fixa
+                            needValues.push(averageNeed);
                         }
 
                         if (block.end <= nowMs) {
-                            remVol -= dataValues[i];
-                            remBlocks -= 1;
+                            dynamicRemVol -= dataValues[i];
+                            dynamicRemBlocks -= 1;
                         }
                     }
                 }
+
+                // Se o período já encerrou, garante que o box mostre a média
+                if (endTimeMs < nowMs) {
+                    currentNeedMetric = averageNeed;
+                }
+
+
 
                 const totalPkgs = dataValues.reduce((a, b) => a + b, 0);
                 const validValues = dataValues.filter(v => v > 0);
@@ -9216,13 +9235,13 @@
                     }
                 ];
 
-                if (currentNeedMetric > 0 || remVol !== 0) {
+                if (currentNeedMetric > 0 || initialVol !== 0) {
                     datasets.splice(1, 0, {
                         label: 'Necessidade', data: needValues, borderColor: CONFIG.ui.needColor, borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false
                     });
                 }
 
-                const bottomPadding = (currentNeedMetric > 0 || remVol !== 0) ? 55 : 10;
+                const bottomPadding = (currentNeedMetric > 0 || initialVol !== 0) ? 55 : 10;
 
                 chartInstance = new Chart(ctx, {
                     type: 'line',
