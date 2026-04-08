@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FCLM Labor Hours Extractor (Progress Bar & URL Fix Final)
 // @namespace    http://tampermonkey.net/
-// @version      0.19
+// @version      0.21
 // @description  Extract labor hours with nested subdivisions via parallel background chunking and simple progress bar
 // @author       emanunec
 // @match        https://fclm-portal.amazon.com/ppa/inspect/node*
@@ -62,8 +62,10 @@
         .fclm-input { 
             background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1); 
             color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; outline: none; 
-            transition: all 0.2s;
+            transition: all 0.2s; appearance: none; -webkit-appearance: none;
         }
+        select.fclm-input { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: calc(100% - 10px) center; }
+        select.fclm-input option { background: #1a1a2e; color: #fff; }
         .fclm-input:focus { border-color: rgba(139, 92, 246, 0.5); background: rgba(255,255,255,0.08); }
         .fclm-label { color: rgba(167, 139, 250, 0.8); font-weight: 700; font-size: 11px; letter-spacing: 0.5px; }
 
@@ -520,7 +522,7 @@
             overlay.innerHTML = `
                 <div id="fclm-results-panel">
                     <div class="fclm-header">
-                        <div style="font-size:18px; font-weight:800; color:#FF9900">Análise de Horas FCLM v0.19</div>
+                        <div style="font-size:18px; font-weight:800; color:#FF9900">Análise de Horas FCLM v0.21</div>
                         <button style="background:none; border:none; color:#9090b0; font-size:24px; cursor:pointer" id="fclm-close-x">&times;</button>
                     </div>
 
