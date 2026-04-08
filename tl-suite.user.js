@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.0
+// @version      1.1.1
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -31,8 +31,93 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.0";
+    const VERSION = "1.1.1";
     var _SUITE = {};
+
+    // ═══════════════════════════════════════════════════════════════
+    // _SUITE.utils — Centralized utility functions (Phase 1 Refactor)
+    // ═══════════════════════════════════════════════════════════════
+    _SUITE.utils = {
+        /** Escape HTML to prevent XSS in innerHTML contexts */
+        esc: function (s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        },
+
+        /** Detect current Amazon node ID from DOM, URL, or cookie */
+        detectNode: function () {
+            var fns = [
+                function () { var el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
+                function () { var el = document.querySelector('select[name="nodeId"] option:checked'); return el ? el.value.trim() : null; },
+                function () { var el = document.querySelector('.node-selector, .nodeSelector, [class*="nodeId"]'); return el ? el.textContent.trim() : null; },
+                function () { var m = document.body ? document.body.innerHTML.match(/\bNode[:\s]+([A-Z]{2,4}\d[A-Z0-9]{0,4})\b/) : null; return m ? m[1] : null; },
+                function () { var m = location.href.match(/[?&]node=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
+                function () { var m = document.cookie.match(/currentNode=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
+            ];
+            for (var i = 0; i < fns.length; i++) {
+                try { var v = fns[i](); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
+            }
+            return GM_getValue('tl_node', 'CGH7');
+        },
+
+        /** Centralized anti-CSRF token fetcher — single implementation for all modules */
+        fetchAntiCsrfToken: function (callback) {
+            if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
+            GM_xmlhttpRequest({
+                method: 'GET', url: _SUITE.BASE + 'sortcenter/vista',
+                onload: function (response) {
+                    try {
+                        var div = document.createElement('div');
+                        div.innerHTML = response.responseText;
+                        var inputs = div.querySelectorAll('input');
+                        for (var i = 0; i < inputs.length; i++) {
+                            if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) {
+                                _SUITE.antiCsrfToken = inputs[i].value; break;
+                            }
+                        }
+                        if (!_SUITE.antiCsrfToken) {
+                            var m = response.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
+                            if (!m) m = response.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
+                            if (m) _SUITE.antiCsrfToken = m[1];
+                        }
+                    } catch (e) { }
+                    callback(_SUITE.antiCsrfToken || '');
+                },
+                onerror: function () { callback(''); }
+            });
+        },
+
+        /**
+         * Make an element draggable by a handle. Uses AbortController for cleanup.
+         * @returns {function} cleanup — call to remove all listeners
+         */
+        makeDraggable: function (handleEl, panelEl) {
+            var ac = new AbortController();
+            var dX = 0, dY = 0, dragging = false;
+            handleEl.addEventListener('mousedown', function (e) {
+                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+                dragging = true;
+                var r = panelEl.getBoundingClientRect();
+                panelEl.style.position = 'fixed';
+                panelEl.style.transform = 'none';
+                panelEl.style.left = r.left + 'px';
+                panelEl.style.top = r.top + 'px';
+                panelEl.style.width = r.width + 'px';
+                panelEl.style.height = r.height + 'px';
+                dX = e.clientX - r.left;
+                dY = e.clientY - r.top;
+                e.preventDefault();
+            }, { signal: ac.signal });
+            document.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+                panelEl.style.left = (e.clientX - dX) + 'px';
+                panelEl.style.top = (e.clientY - dY) + 'px';
+            }, { signal: ac.signal });
+            document.addEventListener('mouseup', function () {
+                dragging = false;
+            }, { signal: ac.signal });
+            return function cleanup() { ac.abort(); };
+        }
+    };
 
     _SUITE.checkForUpdates = function (manual, cb) {
         const now = Date.now();
@@ -80,10 +165,10 @@
         modal.innerHTML = `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
                 <span style="font-size:24px;">🚀</span>
-                <b style="font-size:16px;">Nova Versão Disponível: ${newVer}</b>
+                <b style="font-size:16px;">Nova Versão Disponível: ` + _SUITE.utils.esc(newVer) + `</b>
             </div>
             <div style="background:rgba(255,255,255,0.05);padding:10px;border-radius:6px;font-size:12px;margin-bottom:15px;max-height:150px;overflow-y:auto;line-height:1.4;color:#ccc;">
-                ${msg.replace(/\n/g, '<br>')}
+                ` + _SUITE.utils.esc(msg).replace(/\n/g, '<br>') + `
             </div>
             <div style="display:flex;gap:10px;">
                 <button id="update-now" style="flex:1;background:#FF9900;border:none;color:white;padding:10px;border-radius:6px;cursor:pointer;font-weight:700;">Atualizar Agora</button>
@@ -272,53 +357,14 @@
         }
         const isDock = isOutbound || isIB;
 
-        function detectCurrentNode() {
-            const selectors = [
-                () => { const el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
-                () => { const el = document.querySelector('select[name="nodeId"] option:checked'); return el ? el.value.trim() : null; },
-                () => { const el = document.querySelector('.node-selector, .nodeSelector, [class*="nodeId"]'); return el ? el.textContent.trim() : null; },
-                () => { const m = document.body ? document.body.innerHTML.match(/\bNode[:\s]+([A-Z]{2,4}\d[A-Z0-9]{0,4})\b/) : null; return m ? m[1] : null; },
-                () => { const m = href.match(/[?&]node=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
-            ];
-            for (const fn of selectors) {
-                try { const v = fn(); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
-            }
-            return GM_getValue('tl_node', 'CGH7');
-        }
+        const CURRENT_NODE = _SUITE.utils.detectNode();
 
-        const CURRENT_NODE = detectCurrentNode();
-
-        var BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
-            : location.hostname.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
-                : 'https://trans-logistics.amazon.com/';
+        var BASE = _SUITE.BASE;
 
         var MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
         var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-        function fetchTokenFallback(callback) {
-            if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: BASE + 'sortcenter/vista',
-                onload: function (resp) {
-                    try {
-                        var div = document.createElement('div');
-                        div.innerHTML = resp.responseText;
-                        div.querySelectorAll('input').forEach(function (inp) {
-                            if (!_SUITE.antiCsrfToken && /csrf|token|anti/i.test(inp.name || '') && inp.value)
-                                _SUITE.antiCsrfToken = inp.value;
-                        });
-                        if (!_SUITE.antiCsrfToken) {
-                            var m = resp.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
-                            if (!m) m = resp.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                            if (m) _SUITE.antiCsrfToken = m[1];
-                        }
-                    } catch (e) { }
-                    callback(_SUITE.antiCsrfToken);
-                },
-                onerror: function () { callback(''); }
-            });
-        }
+        var fetchTokenFallback = _SUITE.utils.fetchAntiCsrfToken;
 
         function getLocationTimestamps() {
             var locs = [], now = new Date();
@@ -801,14 +847,14 @@
         .rd-panel-scroll { overflow-y: auto; padding: 6px 12px 12px; flex: 1; }
         .rd-route-row {
             display: flex; align-items: center; gap: 6px;
-            padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 5px 0; border-bottom: 1px solid #f0f0f0;
         }
         .rd-route-row:last-child { border-bottom: none; }
-        .rd-route-name  { flex: 1; font-size: 11px; font-weight: 600; color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .rd-route-pkgs  { font-size: 11px; font-weight: 700; color: #aaa; white-space: nowrap; min-width: 44px; text-align: right; }
-        .rd-bar-wrap    { width: 80px; height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 5px; overflow: hidden; flex-shrink: 0; }
+        .rd-route-name  { flex: 1; font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rd-route-pkgs  { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; min-width: 44px; text-align: right; }
+        .rd-bar-wrap    { width: 80px; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; flex-shrink: 0; }
         .rd-bar-fill    { height: 100%; border-radius: 5px; transition: width 0.3s ease; }
-        .rd-pct-label   { font-size: 11px; font-weight: 700; color: #ddd; min-width: 38px; text-align: right; white-space: nowrap; }
+        .rd-pct-label   { font-size: 11px; font-weight: 700; color: #475569; min-width: 38px; text-align: right; white-space: nowrap; }
         .rd-cpt-list    { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 0 5px 8px; border-bottom: 1px solid #f0f0f0; }
         .rd-cpt-chip    { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 20px; background: #f0f4ff; border: 1px solid #c5cae9; font-size: 10px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; }
         .rd-cpt-name    { font-weight: 700; color: #283593; }
@@ -829,6 +875,7 @@
         .rd-dark .rd-route-name      { color: #d0d0e8 !important; }
         .rd-dark .rd-route-pkgs      { color: #b0b0cc !important; }
         .rd-dark .rd-bar-wrap        { background: #3a3a5e !important; }
+        .rd-dark .rd-pct-label       { color: #ddd !important; }
         .rd-dark .rd-cpt-list        { border-bottom-color: #2e2e45 !important; }
         .rd-dark .rd-cpt-chip        { background: #252545 !important; border-color: #4a4a8e !important; }
         .rd-dark .rd-cpt-name        { color: #90a0ff !important; }
@@ -4165,9 +4212,7 @@
             return '';
         }
 
-        function esc(s) {
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
+        var esc = _SUITE.utils.esc;
 
         function extractParamsFromRow(row, vrid) {
             var captured = _SUITE._capturedParams[vrid] || {};
@@ -4693,9 +4738,7 @@
             if (!_SUITE.isDock) return;
             'use strict';
 
-            const BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
-                : location.hostname.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
-                    : 'https://trans-logistics.amazon.com/';
+            const BASE = _SUITE.BASE;
 
             const CSRF_TTL = 15 * 60 * 1000;
             const FETCH_CONCURRENCY = 50;
@@ -4812,7 +4855,7 @@
                 const savedMap = GM_getValue('vsm_custom_map_matrix');
                 if (savedMap) {
                     try { activeMapMatrix = JSON.parse(savedMap); }
-                    catch (e) { activeMapMatrix = JSON.parse(JSON.stringify(DEFAULT_MAP_MATRIX)); }
+                    catch (e) { activeMapMatrix = structuredClone(DEFAULT_MAP_MATRIX); }
                 } else {
                     activeMapMatrix = JSON.parse(JSON.stringify(DEFAULT_MAP_MATRIX));
                 }
@@ -4976,36 +5019,20 @@
                 } catch (e) { }
             }
 
-            (function patchNetwork() {
-                const oOpen = XMLHttpRequest.prototype.open;
-                const oSet = XMLHttpRequest.prototype.setRequestHeader;
-                const oSend = XMLHttpRequest.prototype.send;
-                XMLHttpRequest.prototype.open = function (m, u) {
-                    this._url = u || '';
-                    return oOpen.apply(this, arguments);
-                };
-                XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-                    if (/anti-csrftoken-a2z/i.test(name) && value && value.length > 10) {
-                        _csrf = value;
-                        saveCsrf(value);
+            // Sync local _csrf with the central interceptor (avoiding redundant XHR prototype patch)
+            (function syncCsrfFromCentral() {
+                // Listen for CSRF changes from the central patchXHR via polling _SUITE.antiCsrfToken
+                setInterval(function () {
+                    if (_SUITE.antiCsrfToken && _SUITE.antiCsrfToken.length > 10 && _SUITE.antiCsrfToken !== _csrf) {
+                        _csrf = _SUITE.antiCsrfToken;
+                        saveCsrf(_SUITE.antiCsrfToken);
                     }
-                    return oSet.apply(this, arguments);
-                };
-                XMLHttpRequest.prototype.send = function (body) {
-                    if (!_csrf && body && typeof body === 'string' && body.includes('nti-csrftoken-a2z=')) {
-                        try {
-                            const ex = decodeURIComponent(body.split('nti-csrftoken-a2z=')[1].split('&')[0]);
-                            if (ex && ex.length > 10) {
-                                _csrf = ex;
-                                saveCsrf(ex);
-                            }
-                        } catch (e) { }
-                    }
-                    return oSend.apply(this, arguments);
-                };
+                }, 2000);
 
+                // Keep fetch interception (unique to VSM — no other module does this)
                 const originalFetch = window.fetch;
-                if (originalFetch) {
+                if (originalFetch && !window._tlFetchPatched) {
+                    window._tlFetchPatched = true;
                     window.fetch = async function () {
                         if (arguments[1] && arguments[1].headers) {
                             try {
@@ -5013,6 +5040,7 @@
                                 const token = headers.get('anti-csrftoken-a2z');
                                 if (token) {
                                     _csrf = token;
+                                    _SUITE.antiCsrfToken = token;
                                     saveCsrf(token);
                                 }
                             } catch (e) { }
@@ -5045,9 +5073,7 @@
                 return { start: String(s.getTime()), end: String(e.getTime()) };
             }
 
-            function esc(s) {
-                return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-            }
+            var esc = _SUITE.utils.esc;
 
             function getLoadObject(item) {
                 if (!item) return {};
@@ -7111,7 +7137,7 @@
 
                 document.getElementById('cfg-map-reset-btn').addEventListener('click', () => {
                     if (confirm("Tem certeza que deseja restaurar o layout visual do mapa para o padrão original?")) {
-                        activeMapMatrix = JSON.parse(JSON.stringify(DEFAULT_MAP_MATRIX));
+                        activeMapMatrix = structuredClone(DEFAULT_MAP_MATRIX);
                         GM_setValue('vsm_custom_map_matrix', JSON.stringify(activeMapMatrix));
                         if (lastExportData.length > 0) computeAndRenderAll(); else renderStaticVsmMap();
                         alert('Mapa restaurado para o padrão.');
@@ -7437,31 +7463,15 @@
         if (!_SUITE.isDock) return;
         'use strict';
 
-        var BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
-            : location.hostname.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
-                : 'https://trans-logistics.amazon.com/';
+        var BASE = _SUITE.BASE;
 
         var isStemPage = location.hostname === 'stem-na.corp.amazon.com';
 
+        // _csrfToken now reads from the central interceptor set by patchXHR()
         var _csrfToken = '';
-        if (!isStemPage) {
-            (function patchXhr() {
-                var oOpen = XMLHttpRequest.prototype.open;
-                var oSet = XMLHttpRequest.prototype.setRequestHeader;
-                var oSend = XMLHttpRequest.prototype.send;
-                XMLHttpRequest.prototype.open = function (m, u) { this._url = u || ''; return oOpen.apply(this, arguments); };
-                XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-                    if (/anti-csrftoken-a2z/i.test(name) && value && value.length > 10) _csrfToken = value;
-                    return oSet.apply(this, arguments);
-                };
-                XMLHttpRequest.prototype.send = function (body) {
-                    if (!_csrfToken && body && typeof body === 'string' && body.includes('nti-csrftoken-a2z=')) {
-                        try { var ex = decodeURIComponent(body.split('nti-csrftoken-a2z=')[1].split('&json')[0]); if (ex && ex.length > 10) _csrfToken = ex; } catch (e) { }
-                    }
-                    return oSend.apply(this, arguments);
-                };
-            })();
-        }
+        Object.defineProperty(window, '__tlCptCsrf__', {
+            get: function () { return _SUITE.antiCsrfToken || _csrfToken; }
+        });
 
         if (isStemPage) {
             var LSKEY_RESULT = 'obdv_vsm_result';
@@ -7812,7 +7822,8 @@
                         'trailerNumber='
                     ].join('&');
                     var hdrs = { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' };
-                    if (_csrfToken) hdrs['anti-csrftoken-a2z'] = _csrfToken;
+                    var _activeCsrf = _SUITE.antiCsrfToken || _csrfToken;
+                    if (_activeCsrf) hdrs['anti-csrftoken-a2z'] = _activeCsrf;
                     GM_xmlhttpRequest({
                         method: 'POST', url: BASE + 'ssp/dock/hrz/ob/fetchdata',
                         headers: hdrs, data: params, withCredentials: true, timeout: 15000,
@@ -8592,13 +8603,7 @@
             }, 5 * 60 * 1000);
         }
 
-        function detectNode() {
-            var m = location.href.match(/[?&]node=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i);
-            if (m) return m[1].toUpperCase();
-            var el = document.querySelector('#nodeId, select[name="nodeId"] option:checked');
-            if (el) return (el.value || el.textContent || '').trim().toUpperCase();
-            return GM_getValue('tl_node', 'CGH7');
-        }
+        var detectNode = _SUITE.utils.detectNode;
 
         function injectToggle() {
             if (document.getElementById('ob-dock-view-toggle')) return;
@@ -8645,11 +8650,9 @@
                 }
             };
 
-            const BASE = document.URL.includes('-fe.') ? CONFIG.baseUrls.fe
-                : document.URL.includes('-eu.') ? CONFIG.baseUrls.eu
-                    : CONFIG.baseUrls.us;
+            const BASE = _SUITE.BASE;
 
-            let CURRENT_NODE = GM_getValue('tl_v5_chart_node', detectCurrentNode());
+            let CURRENT_NODE = GM_getValue('tl_v5_chart_node', _SUITE.utils.detectNode());
             let GOAL_5MIN = GM_getValue('tl_v5_chart_goal', 800);
             let REFRESH_MS = GM_getValue('tl_v5_refresh_ms', 5 * 60 * 1000);
             let VOL_TOTAL = GM_getValue('tl_v5_vol_total', 60000);
@@ -8665,44 +8668,6 @@
             let isManualSearch = false;
             let countdownInterval = null;
             let nextRefreshTime = 0;
-
-            function detectCurrentNode() {
-                const fns = [
-                    () => { const el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
-                    () => { const el = document.querySelector('select[name="nodeId"] option:checked'); return el ? el.value.trim() : null; },
-                    () => { const m = document.body.innerHTML.match(/\bNode[:\s]+([A-Z]{2,4}\d[A-Z0-9]{0,4})\b/); return m ? m[1] : null; },
-                    () => { const m = location.href.match(/[?&]node=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
-                    () => { const m = document.cookie.match(/currentNode=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
-                ];
-                for (let fn of fns) {
-                    try { let v = fn(); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
-                }
-                return GM_getValue('tl_node', 'CGH7');
-            }
-
-            function fetchAntiCsrfToken(callback) {
-                if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
-                GM_xmlhttpRequest({
-                    method: 'GET', url: BASE + 'sortcenter/vista',
-                    onload: function (response) {
-                        try {
-                            var div = document.createElement('div');
-                            div.innerHTML = response.responseText;
-                            var inputs = div.querySelectorAll('input');
-                            for (var i = 0; i < inputs.length; i++) {
-                                if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) { _SUITE.antiCsrfToken = inputs[i].value; break; }
-                            }
-                            if (!_SUITE.antiCsrfToken) {
-                                var m = response.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
-                                if (!m) m = response.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                                if (m) _SUITE.antiCsrfToken = m[1];
-                            }
-                        } catch (e) { }
-                        callback(_SUITE.antiCsrfToken);
-                    },
-                    onerror: function () { callback(''); }
-                });
-            }
 
             function pad(n) { return n < 10 ? '0' + n : n; }
             function fmtDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -9091,7 +9056,7 @@
             }
 
             function showError(msg) {
-                ui.loaderMsg.innerHTML = `⚠️<br><br>${msg}`;
+                ui.loaderMsg.innerHTML = `⚠️<br><br>` + _SUITE.utils.esc(msg);
                 ui.loaderMsg.style.color = '#f87171';
                 ui.loaderBarWrap.style.display = 'none';
                 ui.loader.style.display = 'flex';
@@ -9122,7 +9087,7 @@
                 ui.loaderFill.style.width = '0%';
                 ui.loader.style.display = 'flex';
 
-                fetchAntiCsrfToken(async (token) => {
+                _SUITE.utils.fetchAntiCsrfToken(async (token) => {
                     if (!token) return showError('Falha ao obter Token. Recarregue a página.');
 
                     try {
@@ -9148,7 +9113,7 @@
                         renderChart();
                         startCountdownTimer();
                     } catch (error) {
-                        showError(`${error.message}<br>Faça login novamente.`);
+                        showError(_SUITE.utils.esc(error.message) + `<br>Faça login novamente.`);
                         isFetching = false;
                     }
                 });
@@ -9428,25 +9393,9 @@
 
             if (location.pathname.includes('/yms/')) return;
 
-            var BASE = document.URL.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
-                : document.URL.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
-                    : 'https://trans-logistics.amazon.com/';
+            var BASE = _SUITE.BASE;
 
-            function detectCurrentNode() {
-                var fns = [
-                    function () { var el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
-                    function () { var el = document.querySelector('select[name="nodeId"] option:checked'); return el ? el.value.trim() : null; },
-                    function () { var m = document.body.innerHTML.match(/\bNode[:\s]+([A-Z]{2,4}\d[A-Z0-9]{0,4})\b/); return m ? m[1] : null; },
-                    function () { var m = location.href.match(/[?&]node=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
-                    function () { var m = document.cookie.match(/currentNode=([A-Z]{2,4}\d[A-Z0-9]{0,4})/i); return m ? m[1].toUpperCase() : null; },
-                ];
-                for (var i = 0; i < fns.length; i++) {
-                    try { var v = fns[i](); if (v && /^[A-Z]{2,4}\d[A-Z0-9]{0,4}$/i.test(v)) return v.toUpperCase(); } catch (_) { }
-                }
-                return GM_getValue('tl_node', 'CGH7');
-            }
-
-            var CURRENT_NODE = GM_getValue('tl_node', detectCurrentNode()) || 'CGH7';
+            var CURRENT_NODE = GM_getValue('tl_node', _SUITE.utils.detectNode()) || 'CGH7';
 
             var AUTO_INTERVALS = [
                 { label: '1 min', ms: 1 * 60 * 1000 },
@@ -9467,31 +9416,7 @@
 
             var goalPph = GM_getValue('tl_goal_pph', 300);
 
-            function fetchAntiCsrfToken(callback) {
-                if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
-                GM_xmlhttpRequest({
-                    method: 'GET', url: BASE + 'sortcenter/vista',
-                    onload: function (response) {
-                        try {
-                            var div = document.createElement('div');
-                            div.innerHTML = response.responseText;
-                            var inputs = div.querySelectorAll('input');
-                            for (var i = 0; i < inputs.length; i++) {
-                                if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) {
-                                    _SUITE.antiCsrfToken = inputs[i].value; break;
-                                }
-                            }
-                            if (!_SUITE.antiCsrfToken) {
-                                var m = response.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
-                                if (!m) m = response.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                                if (m) _SUITE.antiCsrfToken = m[1];
-                            }
-                        } catch (e) { console.warn('[TL Prod] token error:', e); }
-                        callback(_SUITE.antiCsrfToken);
-                    },
-                    onerror: function () { callback(''); }
-                });
-            }
+            var fetchAntiCsrfToken = _SUITE.utils.fetchAntiCsrfToken;
 
             GM_addStyle([
 
@@ -10443,7 +10368,7 @@
         })();
     });
 
-    setInterval(function () {
+    var updateFabVisibility = function () {
         const panels = [
             document.getElementById('tl-dock-view-panel'),
             document.getElementById('tl-v5-popup'),
@@ -10453,8 +10378,9 @@
 
         const anyOpen = panels.some(function (p) {
             if (!p) return false;
-            const style = window.getComputedStyle(p);
-            return style.display !== 'none' && style.visibility !== 'hidden' && p.isConnected;
+            // Checagem universal e imune a CSS complexo: 
+            // se o elemento ou seu pai imediato estiver display:none, offsetWidth é 0.
+            return p.isConnected && p.offsetWidth > 0 && p.offsetHeight > 0;
         });
 
         let fabLeft = document.getElementById('tl-fab-left');
@@ -10518,6 +10444,23 @@
             fabRight.style.pointerEvents = 'auto';
             fabRight.style.transform = 'scale(1) translateY(0)';
         }
-    }, 300);
+    };
+
+    // Replace 300ms interval with a MutationObserver to react only when it matters
+    var _tlFabObserver = new MutationObserver(function(mutations) {
+        // Debounce slightly to avoid triggering 100 times during an animation
+        if (_tlFabObserver._timer) clearTimeout(_tlFabObserver._timer);
+        _tlFabObserver._timer = setTimeout(updateFabVisibility, 50);
+    });
+
+    _tlFabObserver.observe(document.body, { 
+        childList: true, 
+        subtree: true, 
+        attributes: true, 
+        attributeFilter: ['style', 'class'] 
+    });
+    
+    // Initial evaluation
+    setTimeout(updateFabVisibility, 500);
 
 })();
