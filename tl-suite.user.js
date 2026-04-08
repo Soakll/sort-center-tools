@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.0.9
+// @version      1.1.0
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -24,39 +24,96 @@
 // @connect      *.amazon.dev
 // @connect      *.amazonaws.com
 // @connect      stem-na.corp.amazon.com
+// @connect      api.github.com
 // @updateURL    https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js
 // @downloadURL  https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js
 // ==/UserScript==
 (function () {
     'use strict';
 
-    const VERSION = "1.0.9";
-    const LAST_VER = GM_getValue("suite_last_version", "1.0.9");
+    const VERSION = "1.1.0";
+    var _SUITE = {};
 
-    if (VERSION !== LAST_VER) {
-        setTimeout(() => {
-            const updates = [
-                "🚀 Central de Atualizações ativada!",
-                "📦 Agora o script verificará novidades automaticamente via GitHub.",
-                "🗺️ Seus mapas e configurações continuam salvos com segurança."
-            ];
+    _SUITE.checkForUpdates = function (manual, cb) {
+        const now = Date.now();
+        GM_setValue("suite_last_check_ts", now);
 
-            const modal = document.createElement('div');
-            modal.style = "position:fixed;top:20px;right:20px;background:#1a1a2e;color:white;padding:20px;border-radius:10px;z-index:100000;box-shadow:0 10px 30px rgba(0,0,0,0.5);border-left:5px solid #FF9900;font-family:sans-serif;max-width:350px;animation:slideIn 0.5s ease;";
-            modal.innerHTML = `
-                <h3 style="margin:0 0 10px 0;color:#FF9900;">TL-Suite Atualizada! (v${VERSION})</h3>
-                <ul style="padding-left:15px;margin:10px 0;font-size:13px;line-height:1.5;">
-                    ${updates.map(upd => `<li>${upd}</li>`).join('')}
-                </ul>
-                <button id="close-cl" style="background:#FF9900;border:none;color:white;padding:5px 15px;border-radius:5px;cursor:pointer;float:right;font-weight:bold;">Entendi</button>
-                <style>@keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }</style>
-            `;
-            document.body.appendChild(modal);
-            document.getElementById('close-cl').onclick = () => { modal.remove(); GM_setValue("suite_last_version", VERSION); };
-        }, 3000);
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: "https://api.github.com/repos/Soakll/sort-center-tools/commits/main",
+            onload: function (resp) {
+                let latestVer = VERSION;
+                let commitMsg = "Novas melhorias e correções.";
+                try {
+                    const json = JSON.parse(resp.responseText);
+                    commitMsg = json.commit.message || commitMsg;
+                } catch (e) { }
+
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: "https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js",
+                    onload: function (resp2) {
+                        const m = resp2.responseText.match(/\/\/\s*@version\s+([\d\.]+)/);
+                        if (m && m[1]) {
+                            latestVer = m[1];
+                        }
+
+                        if (latestVer !== VERSION) {
+                            showUpdateModal(latestVer, commitMsg);
+                        } else if (manual) {
+                            alert("TL-Suite: " + (typeof SETTINGS !== 'undefined' && SETTINGS.lang === 'pt' ? "Você já usa a versão mais recente! 😁" : "You are already up to date! 😁"));
+                        }
+                        if (cb) cb();
+                    },
+                    onerror: () => { if (cb) cb(); }
+                });
+            },
+            onerror: () => { if (cb) cb(); }
+        });
+    };
+
+    function showUpdateModal(newVer, msg) {
+        if (document.getElementById('tl-update-modal')) return;
+        const modal = document.createElement('div');
+        modal.id = 'tl-update-modal';
+        modal.style = "position:fixed;top:20px;right:20px;background:#1a1a2e;color:white;padding:20px;border-radius:10px;z-index:100000;box-shadow:0 10px 30px rgba(0,0,0,0.5);border-left:5px solid #FF9900;font-family:sans-serif;max-width:350px;animation:slideIn 0.5s ease;";
+        modal.innerHTML = `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-size:24px;">🚀</span>
+                <b style="font-size:16px;">Nova Versão Disponível: ${newVer}</b>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);padding:10px;border-radius:6px;font-size:12px;margin-bottom:15px;max-height:150px;overflow-y:auto;line-height:1.4;color:#ccc;">
+                ${msg.replace(/\n/g, '<br>')}
+            </div>
+            <div style="display:flex;gap:10px;">
+                <button id="update-now" style="flex:1;background:#FF9900;border:none;color:white;padding:10px;border-radius:6px;cursor:pointer;font-weight:700;">Atualizar Agora</button>
+                <button id="update-later" style="background:transparent;border:1px solid #444;color:#888;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;">Depois</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('update-now').onclick = () => {
+            GM_setValue("suite_last_version", newVer);
+            location.href = "https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js";
+        };
+        document.getElementById('update-later').onclick = () => {
+            modal.style.animation = "slideOut 0.5s ease forwards";
+            setTimeout(() => modal.remove(), 500);
+        };
     }
 
-    var _SUITE = {};
+    (function initUpdateScheduling() {
+        const lastSlot = GM_getValue("suite_last_check_slot", "");
+        const now = new Date();
+        const hour = now.getHours();
+        const todayStr = now.toISOString().split('T')[0];
+        const currentSlot = (hour < 12 ? "00_" : "12_") + todayStr;
+
+        if (lastSlot !== currentSlot) {
+            GM_setValue("suite_last_check_slot", currentSlot);
+            setTimeout(() => { if (_SUITE.checkForUpdates) _SUITE.checkForUpdates(false); }, 5000 * (Math.random() + 0.5));
+        }
+    })();
 
     _SUITE.BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
         : location.hostname.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
@@ -457,6 +514,10 @@
                 ibBarLabel: 'IB Routes:',
                 obBarLabel: 'OB:',
 
+                checkUpdates: 'Verificar atualizações',
+                versionLabel: 'Versão',
+                lastUpdateLabel: 'Última atualização',
+
                 vistaLoading: 'Carregando...',
                 vistaSearching: '⏳ Buscando dados...',
                 showExpired: '👁 Mostrar expirados',
@@ -545,6 +606,9 @@
                 docksWord: 'dock(s)',
                 ibBarLabel: 'IB Routes:',
                 obBarLabel: 'OB:',
+                checkUpdates: 'Check for updates',
+                versionLabel: 'Version',
+                lastUpdateLabel: 'Last update',
                 vistaLoading: 'Loading...',
                 vistaSearching: '⏳ Searching...',
                 showExpired: '👁 Show expired',
@@ -3297,11 +3361,32 @@
                     creditEl.style.cssText = 'margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,0.45);font-family:"Amazon Ember",Arial,sans-serif;white-space:nowrap;letter-spacing:0.3px;';
                     creditEl.textContent = 'By emanunec@';
 
+                    const updateStatus = () => {
+                        const lastCheck = GM_getValue("suite_last_check_ts", 0);
+                        statusEl.innerHTML = ` <span style="opacity:0.6;margin-left:8px;font-size:10px;">${L('versionLabel')} ${VERSION} · ${lastCheck ? L('lastUpdateLabel') + ': ' + new Date(lastCheck).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>`;
+                    };
+
+                    const checkUpdateBtn = document.createElement('button');
+                    checkUpdateBtn.className = 'tl-btn tl-btn-orange';
+                    checkUpdateBtn.style.marginLeft = '8px';
+                    checkUpdateBtn.innerHTML = `🔄 ${L('checkUpdates')}`;
+                    checkUpdateBtn.onclick = () => {
+                        checkUpdateBtn.disabled = true;
+                        checkUpdateBtn.innerHTML = '⏳...';
+                        _SUITE.checkForUpdates(true, () => {
+                            checkUpdateBtn.disabled = false;
+                            checkUpdateBtn.innerHTML = `🔄 ${L('checkUpdates')}`;
+                            updateStatus();
+                        });
+                    };
+
                     bar.appendChild(label);
                     bar.appendChild(settingsBtn);
+                    bar.appendChild(checkUpdateBtn);
                     bar.appendChild(statusEl);
                     bar.appendChild(creditEl);
                     document.body.appendChild(bar);
+                    updateStatus();
                 }
 
                 injectGlobalBar();
@@ -3604,12 +3689,33 @@
                     creditEl.style.cssText = 'margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,0.45);font-family:"Amazon Ember",Arial,sans-serif;white-space:nowrap;letter-spacing:0.3px;';
                     creditEl.textContent = 'By emanunec@';
 
+                    const updateStatus = () => {
+                        const lastCheck = GM_getValue("suite_last_check_ts", 0);
+                        statusEl.innerHTML = ` <span style="opacity:0.6;margin-left:8px;font-size:10px;">${L('versionLabel')} ${VERSION} · ${lastCheck ? L('lastUpdateLabel') + ': ' + new Date(lastCheck).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>`;
+                    };
+
+                    const checkUpdateBtn = document.createElement('button');
+                    checkUpdateBtn.className = 'tl-btn tl-btn-orange';
+                    checkUpdateBtn.style.marginLeft = '8px';
+                    checkUpdateBtn.innerHTML = `🔄 ${L('checkUpdates')}`;
+                    checkUpdateBtn.onclick = () => {
+                        checkUpdateBtn.disabled = true;
+                        checkUpdateBtn.innerHTML = '⏳...';
+                        _SUITE.checkForUpdates(true, () => {
+                            checkUpdateBtn.disabled = false;
+                            checkUpdateBtn.innerHTML = `🔄 ${L('checkUpdates')}`;
+                            updateStatus();
+                        });
+                    };
+
                     bar.appendChild(label);
                     bar.appendChild(fullExportBtn);
                     bar.appendChild(settingsBtn);
+                    bar.appendChild(checkUpdateBtn);
                     bar.appendChild(statusEl);
                     bar.appendChild(creditEl);
                     document.body.appendChild(bar);
+                    updateStatus();
                 }
 
                 injectOBBar();
