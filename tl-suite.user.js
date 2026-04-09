@@ -6747,11 +6747,10 @@
             <div id="vl-panel-head">
                 <h3>🔍 <span>VRID</span> Lookup — Mapa VSM</h3>
                 <div id="vl-head-actions">
-                    <button class="vl-head-btn" id="vl-fullscreen-btn" title="Tela cheia">⛶</button>
                     <button class="vl-head-btn" id="vl-close-btn" title="Minimizar">−</button>
                 </div>
             </div>
-            <div id="vl-panel-body">
+            <div id="vl-panel-body" class="tl-morph-target">
 
                 <div class="vl-controls-bar">
                     <div class="vl-ctrl-chip">
@@ -7195,9 +7194,7 @@
 
                 const panel = document.getElementById('vl-panel');
                 if (panel) {
-                    panel.classList.add('vl-fullscreen');
-                    const fsBtn = document.getElementById('vl-fullscreen-btn');
-                    if (fsBtn) fsBtn.textContent = '⊡';
+                    // Fullscreen disabled by request
                 }
 
                 const staticFingerRateInput = document.getElementById('static-finger-rate');
@@ -7263,13 +7260,7 @@
                     toggle.style.display = 'block';
                 };
 
-                const fsBtn = document.getElementById('vl-fullscreen-btn');
-                fsBtn.onclick = () => {
-                    const p = document.getElementById('vl-panel');
-                    p.classList.toggle('vl-fullscreen');
-                    fsBtn.textContent = p.classList.contains('vl-fullscreen') ? '⊡' : '⛶';
-                    fsBtn.title = p.classList.contains('vl-fullscreen') ? 'Sair da tela cheia' : 'Tela cheia';
-                };
+
 
                 const rangeStartDate = document.getElementById('range-start-date');
                 const rangeEndDate = document.getElementById('range-end-date');
@@ -7319,30 +7310,36 @@
                         checkDirtyConfig();
                     }
 
-                    tabs.forEach(tab => {
-                        if (tab.dataset.tab === tabId) {
-                            tab.classList.add('active');
-                        } else {
-                            tab.classList.remove('active');
+                    const body = document.getElementById('vl-panel-body');
+                    body.classList.add('updating');
+
+                    setTimeout(() => {
+                        tabs.forEach(tab => {
+                            if (tab.dataset.tab === tabId) {
+                                tab.classList.add('active');
+                            } else {
+                                tab.classList.remove('active');
+                            }
+                        });
+                        Object.keys(contents).forEach(id => {
+                            if (id === tabId) {
+                                contents[id].classList.add('active');
+                            } else {
+                                contents[id].classList.remove('active');
+                            }
+                        });
+                        if (resultDiv) {
+                            if (tabId === 'static' || tabId === 'config') {
+                                resultDiv.style.display = 'none';
+                            } else if (tabId === 'hourly') {
+                                resultDiv.style.display = '';
+                            }
                         }
-                    });
-                    Object.keys(contents).forEach(id => {
-                        if (id === tabId) {
-                            contents[id].classList.add('active');
-                        } else {
-                            contents[id].classList.remove('active');
+                        if (tabId === 'static') {
+                            renderStaticVsmMap(getStaticVsmTotals());
                         }
-                    });
-                    if (resultDiv) {
-                        if (tabId === 'static' || tabId === 'config') {
-                            resultDiv.style.display = 'none';
-                        } else if (tabId === 'hourly') {
-                            resultDiv.style.display = '';
-                        }
-                    }
-                    if (tabId === 'static') {
-                        renderStaticVsmMap(getStaticVsmTotals());
-                    }
+                        body.classList.remove('updating');
+                    }, 60);
                 }
 
                 tabs.forEach(tab => {
@@ -7394,7 +7391,13 @@
                     staticHourPills.querySelectorAll('.hour-pill').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     staticSelectedHour = parseInt(btn.dataset.hour, 10);
-                    renderStaticVsmMap(getStaticVsmTotals());
+                    
+                    const body = document.getElementById('vl-panel-body');
+                    body.classList.add('updating');
+                    setTimeout(() => {
+                        renderStaticVsmMap(getStaticVsmTotals());
+                        body.classList.remove('updating');
+                    }, 60);
                 });
 
                 const searchBtn = document.getElementById('vl-search-btn');
@@ -7406,7 +7409,10 @@
                         resultDiv.innerHTML = '<div class="vl-err">Digite um VRID.</div>';
                         return;
                     }
+                    const body = document.getElementById('vl-panel-body');
+                    body.classList.add('updating');
                     await doSingleSearch(vrid);
+                    body.classList.remove('updating');
                     if (autoRefreshToggle.checked && lastSearch) {
                         const intervalMinutes = parseInt(autoRefreshIntervalSelect.value, 10);
                         startAutoRefresh(intervalMinutes);
@@ -7447,7 +7453,10 @@
                         return;
                     }
 
+                    const body = document.getElementById('vl-panel-body');
+                    body.classList.add('updating');
                     await doRangeSearch(sd, ed, startHour, endHour);
+                    body.classList.remove('updating');
                     if (autoRefreshToggle.checked && lastSearch) {
                         const intervalMinutes = parseInt(autoRefreshIntervalSelect.value, 10);
                         startAutoRefresh(intervalMinutes);
@@ -8005,7 +8014,7 @@
             closeBtn.style.cssText = 'background:none;border:none;color:#6e7681;cursor:pointer;font-size:20px;padding:0 4px;line-height:1;transition:color 0.15s;';
             closeBtn.onmouseover = function () { closeBtn.style.color = '#f85149'; };
             closeBtn.onmouseout = function () { closeBtn.style.color = '#6e7681'; };
-            closeBtn.onclick = function () { _panel.style.display = 'none'; };
+            closeBtn.onclick = function () { _panel.style.display = 'none'; _panel.classList.remove('open'); };
             hdr.appendChild(closeBtn);
             var dX = 0, dY = 0, dragging = false;
             hdr.addEventListener('mousedown', function (e) { if (e.target.closest('button')) return; dragging = true; var r = _panel.getBoundingClientRect(); _panel.style.position = 'fixed'; _panel.style.top = r.top + 'px'; _panel.style.left = r.left + 'px'; _panel.style.width = r.width + 'px'; _panel.style.height = r.height + 'px'; dX = e.clientX - r.left; dY = e.clientY - r.top; e.preventDefault(); });
@@ -8357,8 +8366,13 @@
             statusBar.style.cssText = 'padding:5px 14px;font-size:10px;color:#6e7681;border-top:1px solid #21262d;background:#0d1117;flex-shrink:0;';
             statusBar.textContent = 'Pronto — clique em 🔄 Buscar';
 
+            _panel.style.cssText = 'position:fixed;inset:0;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(16px);z-index:2147483645;display:none;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Arial,sans-serif;color:#fff;';
+            _panel.classList.remove('open'); // Ensure it starts closed
             _panel.appendChild(hdr); _panel.appendChild(toolbar); _panel.appendChild(routePanel);
-            _panel.appendChild(calPanel); _panel.appendChild(gridWrap); _panel.appendChild(statusBar);
+            _panel.appendChild(calPanel); 
+            gridWrap.id = 'ob-dock-grid-wrap';
+            gridWrap.classList.add('tl-morph-target');
+            _panel.appendChild(gridWrap); _panel.appendChild(statusBar);
             document.body.appendChild(_panel);
             _panel.appendChild(_pop);
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _panel) _panel.style.display = 'none'; });
@@ -8485,7 +8499,7 @@
                 return card;
             }
 
-            function renderCards(term) {
+            function renderCards(term, skipMorph) {
                 var now = Date.now();
                 var rows = _routes.filter(function (r) {
                     if (_disabledRoutes[r.route]) return false;
@@ -8495,13 +8509,22 @@
                     var t = term.toLowerCase();
                     return r.route.toLowerCase().includes(t) || (_vsmMap[r.route] || '').toLowerCase().includes(t);
                 });
-                grid.innerHTML = '';
-                rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
+                if (skipMorph) {
+                    grid.innerHTML = '';
+                    rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
+                } else {
+                    gridWrap.classList.add('updating');
+                    setTimeout(function() {
+                        grid.innerHTML = '';
+                        rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
+                        gridWrap.classList.remove('updating');
+                    }, 60);
+                }
                 countEl.textContent = rows.length + ' / ' + _routes.length + ' rotas';
             }
 
             filterInput.addEventListener('input', function () { renderCards(filterInput.value.trim()); });
-            setInterval(function () { if (_routes.length) renderCards(filterInput.value.trim()); }, 30000);
+            setInterval(function () { if (_routes.length) renderCards(filterInput.value.trim(), true); }, 30000);
 
             function doFetch() {
                 fetchBtn.disabled = true; fetchBtn.textContent = '⏳ Buscando...';
@@ -8575,7 +8598,7 @@
                             return !_isCompleted(r.status) && (!r.cptMs || r.cptMs >= now0);
                         });
                         fetchContainersForRoutes(activeRoutes, node, function () {
-                            renderCards(filterInput.value.trim());
+                            renderCards(filterInput.value.trim(), true);
                         });
 
                         var ts = new Date().toLocaleTimeString('pt-BR', { hour12: false });
@@ -8593,7 +8616,7 @@
                             fetchVSM(node, function () {
                                 _vsmLoading = false;
                                 saveVsmCache(_vsmMap);
-                                renderCards(filterInput.value.trim());
+                                renderCards(filterInput.value.trim(), true);
                                 if (routePanel.classList.contains('open')) buildRoutePanel();
                                 var ts2 = new Date().toLocaleTimeString('pt-BR', { hour12: false });
                                 var vsmCount = Object.keys(_vsmMap).length;
@@ -8624,7 +8647,11 @@
             btn.style.cssText = ['position:fixed;bottom:130px;right:20px;z-index:2147483646', 'background:#1f6feb;color:#fff;border:none;border-radius:8px', 'padding:7px 16px;font-size:11px;font-weight:700;cursor:pointer', 'font-family:"Amazon Ember",Arial,sans-serif;box-shadow:0 4px 12px rgba(31,111,235,0.4)', 'transition:background 0.15s,transform 0.1s'].join(';');
             btn.onmouseover = function () { btn.style.background = '#388bfd'; btn.style.transform = 'translateY(-1px)'; };
             btn.onmouseout = function () { btn.style.background = '#1f6feb'; btn.style.transform = ''; };
-            btn.onclick = buildPanel;
+            btn.onclick = function () { 
+                buildPanel(); 
+                _panel.style.display = 'flex'; 
+                _panel.classList.add('open'); 
+            };
             document.body.appendChild(btn);
         }
 
@@ -8733,9 +8760,8 @@
         #tl-v5-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99998; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
         #tl-v5-overlay.open { display:block; opacity:1; }
 
-        #tl-v5-popup { position:fixed; top:10%; left:50%; transform:translate(-50%, 0); z-index:99999; width:1000px; height:600px; max-width:98vw; max-height:94vh; background:rgba(10, 22, 40, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.6); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:1px solid rgba(255,255,255,0.1); overflow:hidden; }
+        #tl-v5-popup { position:fixed; inset:0; z-index:99999; background:rgba(10, 22, 40, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:none; transition:none; color:#fff; overflow:hidden; }
         #tl-v5-popup.open { display:flex; }
-        #tl-v5-popup.fullscreen { top:2% !important; left:2% !important; width:96% !important; height:92% !important; transform:none !important; border-radius:12px; }
 
         .tl-v5-header { padding:12px 20px; cursor:grab; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02); user-select:none; }
         .tl-v5-header:active { cursor:grabbing; }
@@ -8780,7 +8806,8 @@
         .tl-v5-metric-label { font-size:0.65rem; color:rgba(255,255,255,0.4); margin-bottom:4px; text-transform:uppercase; display:block; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tl-v5-metric-val { font-size:1.6rem; font-weight:700; color:#fff; display:block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .tl-v5-canvas-container { position:relative; flex:1; width:100%; overflow-x:auto; overflow-y:hidden; min-height:250px; border-radius:8px; }
+        .tl-v5-canvas-container { position:relative; flex:1; width:100%; overflow-x:auto; overflow-y:hidden; min-height:250px; border-radius:8px; opacity:1; transition:opacity 0.2s, transform 0.2s; }
+        .tl-v5-canvas-container.updating { opacity:0; transform:translateY(4px); }
         .tl-v5-canvas-container::-webkit-scrollbar { height: 8px; }
         .tl-v5-canvas-container::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
         .tl-v5-canvas-container::-webkit-scrollbar-thumb { background: rgba(168,157,255,0.3); border-radius: 4px; }
@@ -8814,7 +8841,6 @@
         <div class="tl-v5-header" id="tl-v5-header">
             <div class="tl-v5-header-title">📈 Throughput · ${CONFIG.time.blockMs / 60000} Min Periods</div>
             <div class="tl-v5-header-actions">
-                <button class="tl-v5-btn-icon" id="tl-v5-btn-fs" title="Fullscreen">⛶</button>
                 <button class="tl-v5-btn-icon" id="tl-v5-btn-close" title="Fechar">✕</button>
             </div>
         </div>
@@ -8996,7 +9022,7 @@
                 isDragging = false; isResizing = false;
                 if (tphraf) { cancelAnimationFrame(tphraf); tphraf = null; }
             });
-            document.getElementById('tl-v5-btn-fs').addEventListener('click', () => popup.classList.toggle('fullscreen'));
+
 
             function startCountdownTimer() {
                 clearInterval(countdownInterval);
@@ -9215,6 +9241,14 @@
             };
 
             function renderChart() {
+                ui.container.classList.add('updating');
+                setTimeout(() => {
+                    executeChartRender();
+                    ui.container.classList.remove('updating');
+                }, 60);
+            }
+
+            function executeChartRender() {
                 const labels = timeBlocks.map(b => b.label);
                 const dataValues = timeBlocks.map(b => b.value);
                 const metaValues = Array(labels.length).fill(GOAL_5MIN);
@@ -9438,7 +9472,7 @@
                 '#tl-prod-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:none;backdrop-filter:blur(4px);opacity:0;transition:opacity .22s ease}',
                 '#tl-prod-overlay.open{display:block;opacity:1}',
 
-                '#tl-prod-popup{position:fixed;top:10%;left:50%;transform:translate(-50%,0);z-index:99999;width:640px;max-width:96vw;background:rgba(10, 22, 40, 0.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;min-height:320px;max-height:88vh;border:1px solid rgba(255,255,255,0.1);transition:width .25s cubic-bezier(.4,0,.2,1),left .25s cubic-bezier(.4,0,.2,1),top .15s ease;color:#fff}',
+                '#tl-prod-popup{position:fixed;inset:0;z-index:99999;width:100vw;height:100vh;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;border:none;transition:none;color:#fff}',
 
                 '.tl-rh{position:absolute;z-index:100000}',
                 '.tl-rh-n{top:-4px;left:8px;right:8px;height:8px;cursor:n-resize}',
@@ -9462,11 +9496,7 @@
                 '#tl-node-input{font-size:12px;font-weight:700;padding:3px 7px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);width:68px;text-align:center;text-transform:uppercase;cursor:text}',
                 '#tl-node-input:focus{outline:none;border-color:#1a56db;background:rgba(0,0,0,0.3)}',
 
-                '#tl-prod-tabs{display:flex;gap:0;border-bottom:0;margin:0 -1px}',
-                '.tl-tab{font-size:12px;font-weight:600;padding:7px 14px;border:none;background:none;cursor:pointer;color:#9ca3af;border-bottom:2px solid transparent;transition:color .18s ease,border-color .18s ease;display:flex;align-items:center;gap:5px;white-space:nowrap}',
-                '.tl-tab:hover{color:#3b82f6}',
-                '.tl-tab.active{color:#3b82f6;border-bottom:2px solid #3b82f6}',
-                '.tl-tab-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}',
+
 
                 '#tl-custom-row{display:flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
                 '#tl-custom-row.hidden{display:none}',
@@ -9487,67 +9517,72 @@
                 '#tl-auto-select{font-size:11px;padding:3px 6px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);cursor:pointer}',
                 '#tl-auto-select:focus{outline:none;border-color:#3b82f6}',
                 '#tl-auto-countdown{font-size:11px;font-family:monospace;color:#3b82f6;font-weight:700;min-width:48px}',
-                '#tl-refresh-btn{margin-left:auto;background:none;border:1.5px solid rgba(255,255,255,0.1);color:#9ca3af;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;font-weight:600;transition:border-color .15s,color .15s}',
-                '#tl-refresh-btn:hover{border-color:#3b82f6;color:#fff}',
-
-                '#tl-goal-bar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:transparent;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
-                '#tl-goal-label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
-                '#tl-goal-input{width:72px;font-size:12px;font-weight:700;padding:3px 7px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);text-align:center;-moz-appearance:textfield}',
+                '#tl-goal-bar{display:flex;align-items:center;gap:12px;padding:8px 20px;background:transparent;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
+                '#tl-goal-label{font-size:13px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
+                '#tl-goal-input{width:86px;font-size:16px;font-weight:800;padding:4px 8px;border:2px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;background:rgba(0,0,0,0.3);text-align:center;-moz-appearance:textfield}',
                 '#tl-goal-input::-webkit-outer-spin-button,#tl-goal-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
-                '#tl-goal-input:focus{outline:none;border-color:#3b82f6}',
-                '#tl-goal-unit{font-size:11px;color:#9ca3af;flex-shrink:0}',
-                '#tl-goal-save{font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;border:none;background:#2563eb;color:#fff;cursor:pointer}',
-                '#tl-goal-save:hover{background:#1d4ed8}',
-                '#tl-goal-legend{margin-left:8px;display:flex;gap:10px;align-items:center}',
-                '.tl-goal-chip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap}',
+                '#tl-goal-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 10px rgba(59,130,246,0.3)}',
+                '#tl-goal-unit{font-size:13px;color:#9ca3af;flex-shrink:0}',
+                '#tl-goal-legend{margin-left:12px;display:flex;gap:12px;align-items:center}',
+                '.tl-goal-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap}',
 
-                '#tl-prod-body{overflow-y:auto;flex:1;min-height:0;background:transparent}',
+                '#tl-prod-body{overflow:auto;flex:1;min-height:0;background:transparent}',
                 '#tl-prod-body table{width:100%;border-collapse:collapse}',
 
-                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.95);padding:8px 14px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid rgba(255,255,255,0.1);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
+                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid rgba(255,255,255,0.15);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
                 '#tl-prod-body thead th:hover{color:#fff;background:rgba(51, 65, 85, 0.95)}',
                 '#tl-prod-body thead th.sort-asc::after{content:" ▴"}',
                 '#tl-prod-body thead th.sort-desc::after{content:" ▾"}',
 
                 '#tl-prod-body tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s ease}',
                 '#tl-prod-body tbody tr:hover td{background:rgba(255,255,255,0.05)!important}',
-                '#tl-prod-body tbody td{padding:9px 14px;font-size:13px;color:#e2e8f0}',
-                '#tl-prod-body tbody td.td-label{font-weight:600;color:#fff!important}',
-                '#tl-prod-body tbody td.td-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}',
-                '#tl-prod-body tbody td.td-err{text-align:right;font-weight:700;color:#f87171}',
-                '#tl-prod-body tbody td.td-na{color:#64748b;font-style:italic;text-align:right}',
-                '#tl-prod-body tbody td.td-pph{text-align:right;font-weight:700}',
+                '#tl-prod-body tbody td{padding:8px 12px;font-size:13px;color:#f1f5f9;text-align:center}',
+                '#tl-prod-body tbody td.td-label{font-weight:700;color:#fff!important;white-space:nowrap;font-size:14px;text-align:left}',
+                '#tl-prod-body tbody td.td-num{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}',
+                '#tl-prod-body tbody td.td-err{font-weight:700;color:#f87171}',
+                '#tl-prod-body tbody td.td-na{color:#64748b;font-style:italic}',
+                '#tl-prod-body tbody td.td-pph{font-weight:800;border-radius:4px}',
 
-                'tr.tier-top td{background:rgba(30, 64, 175, 0.2)}',
-                'tr.tier-good td{background:rgba(21, 128, 61, 0.2)}',
-                'tr.tier-mid td{background:rgba(180, 83, 9, 0.2)}',
-                'tr.tier-low td{background:rgba(185, 28, 28, 0.2)}',
-                'tr.tier-none td{background:rgba(255, 255, 255, 0.02)}',
+                'td.tier-top{background:rgba(30, 64, 175, 0.45);color:#fff!important}',
+                'td.tier-good{background:rgba(21, 128, 61, 0.45);color:#fff!important}',
+                'td.tier-mid{background:rgba(180, 83, 9, 0.45);color:#fff!important}',
+                'td.tier-low{background:rgba(185, 28, 28, 0.45);color:#fff!important}',
+                'td.tier-none{background:transparent}',
 
-                '#tl-prod-footer{padding:8px 16px;font-size:11px;color:#94a3b8;border-top:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}',
+                '#tl-prod-footer{padding:12px 20px;font-size:14px;color:#94a3b8;border-top:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}',
 
-                '.tl-chain-panel{position:fixed;z-index:100000;width:420px;max-width:96vw;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(10px);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;border:1px solid rgba(255,255,255,0.1);transition:width .25s,left .25s,top .15s,max-height .2s;color:#fff}',
-                '.tl-cp-header{background:rgba(255,255,255,0.03);padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0}',
-                '.tl-cp-title{flex:1;font-weight:700;font-size:13px;color:#fff!important}',
-                '.tl-cp-close{background:none;border:none;color:#94a3b8;font-size:16px;cursor:pointer;padding:2px 4px;border-radius:4px;line-height:1}',
-                '.tl-cp-close:hover{background:rgba(255,255,255,0.1);color:#fff}',
-                '.tl-cp-body{overflow-y:auto;flex:1;min-height:0}',
-                '.tl-cp-body tbody td{padding:8px 12px;color:#e2e8f0;font-size:13px}',
-                '.tl-cp-body tbody td.td-label{font-weight:600;color:#fff!important}',
-                '.tl-cp-body tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background .1s}',
-                '.tl-cp-body tbody tr:hover td{background:rgba(255,255,255,0.05)!important}',
-
-                '.tl-prod-loading{padding:32px;text-align:center;color:#64748b;font-size:13px}',
-                '.tl-prod-error{padding:16px 20px;color:#f87171;font-size:12px;line-height:1.8}',
+                '.tl-prod-loading{padding:48px;text-align:center;color:#94a3b8;font-size:16px}',
+                '.tl-prod-error{padding:20px 24px;color:#f87171;font-size:14px;line-height:1.8}',
                 '.tl-prod-error a{color:#60a5fa;font-weight:700}',
 
-                'body.tl-blur-errors .tl-err-col{filter:blur(5px);color:#9ca3af!important;transition:filter .2s ease,color .2s ease;cursor:default;user-select:none}',
+                'body.tl-blur-errors .tl-err-col{filter:blur(6px);color:#64748b!important;transition:filter .2s ease,color .2s ease;cursor:default;user-select:none}',
                 'body.tl-blur-errors .tl-err-col:hover{filter:none;color:inherit!important}',
 
-                '#tl-blur-toggle{background:none;border:1.5px solid #d1d5db;color:#6b7280;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:3px;transition:border-color .15s,color .15s,background .15s}',
-                '#tl-blur-toggle:hover{border-color:#1a56db;color:#1a56db}',
+                '#tl-blur-toggle{background:none;border:1.5px solid #d1d5db;color:#d1d5db;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px;transition:all .15s}',
+                '#tl-blur-toggle:hover{border-color:#3b82f6;color:#3b82f6;background:rgba(59,130,246,0.1)}',
                 '#tl-blur-toggle.on{background:#fef3c7;border-color:#f59e0b;color:#92400e}',
-                '@keyframes tl-popup-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}',
+                
+                '#tl-hourly-summary{display:none}',
+                '.tl-matrix-col{text-align:center!important;font-family:monospace;font-size:14px;color:#cbd5e1;min-width:85px;border-left:1px solid rgba(255,255,255,0.08);padding:10px 8px!important}',
+                '.tl-matrix-col-header{display:inline-flex;flex-direction:column;align-items:center;padding:8px 16px!important;line-height:1.2;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);min-width:70px;margin:3px 0;position:relative;overflow:hidden}',
+                '.tl-matrix-col-header:hover{background:rgba(255,255,255,0.15);border-color:#3b82f6;transform:translateY(-1px)}',
+                '.tl-matrix-col-header.active{background:#2563eb;border-color:#3b82f6;box-shadow:0 0 15px rgba(37,99,235,0.5);transform:scale(1.05);z-index:10}',
+                '.tl-matrix-col-header::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,0.1),transparent);opacity:0;transition:opacity 0.3s}',
+                '.tl-matrix-col-header.active::after{opacity:1}',
+                '.tl-matrix-col-header span:first-child{font-size:11px;color:#9cadbd;text-transform:uppercase;font-weight:800;margin-bottom:2px;transition:color 0.3s}',
+                '.tl-matrix-col-header span:last-child{font-size:15px;color:#fff;font-weight:900;transition:transform 0.3s}',
+                '.tl-matrix-col-header.active span:first-child{color:rgba(255,255,255,0.9)}',
+                '.tl-matrix-cell{color:#f1f5f9;font-weight:700;border-radius:4px;transition:background 0.3s, color 0.3s}',
+                '.tl-matrix-cell.zero{color:rgba(255,255,255,0.03);font-weight:400}',
+                
+                '#tl-prod-body tr{opacity:1;transition:opacity 0.2s, transform 0.2s}',
+                '#tl-prod-body.updating tr{opacity:0;transform:translateY(4px)}',
+                '.tl-row-anim{animation:tl-row-fade-in 0.3s ease-out backwards}',
+                '@keyframes tl-row-fade-in{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}',
+                '@keyframes tl-popup-in{from{opacity:0;transform:scale(0.98)}to{opacity:1;transform:scale(1)}}',
+
+                '.tl-morph-target{opacity:1;transition:opacity 0.2s, transform 0.2s}',
+                '.tl-morph-target.updating{opacity:0;transform:translateY(4px)}',
             ].join(''));
 
             var fab = document.createElement('button');
@@ -9591,24 +9626,7 @@
             var header = document.createElement('div');
             header.id = 'tl-prod-header';
 
-            var PRESETS = [
-                { label: 'Custom', ms: 0, dot: '#94a3b8' },
-                { label: '30min', ms: 30 * 60 * 1000, dot: '#60a5fa' },
-                { label: '1h', ms: 60 * 60 * 1000, dot: '#34d399' },
-                { label: '2h', ms: 2 * 60 * 60 * 1000, dot: '#a78bfa' },
-                { label: '4h', ms: 4 * 60 * 60 * 1000, dot: '#f59e0b' },
-                { label: '8h', ms: 8 * 60 * 60 * 1000, dot: '#f87171' },
-                { label: '12h', ms: 12 * 60 * 60 * 1000, dot: '#fb923c' },
-            ];
-
-            var selectedPreset = 0;
             var customMode = true;
-
-            var tabsHTML = PRESETS.map(function (p) {
-                var active = p.ms === selectedPreset && !customMode ? ' active' : '';
-                return '<button type="button" class="tl-tab' + active + '" data-ms="' + p.ms + '">' +
-                    '<span class="tl-tab-dot" style="background:' + p.dot + '"></span>' + p.label + '</button>';
-            }).join('');
 
             header.innerHTML =
                 '<div id="tl-prod-header-row">' +
@@ -9617,8 +9635,7 @@
                 '<input type="text" id="tl-node-input" value="' + CURRENT_NODE + '" maxlength="10" title="Node ID">' +
                 '<span id="tl-prod-status"></span>' +
                 '<button id="tl-prod-close" type="button" title="Fechar">✕</button>' +
-                '</div>' +
-                '<div id="tl-prod-tabs">' + tabsHTML + '</div>';
+                '</div>';
 
             popup.appendChild(header);
 
@@ -9633,10 +9650,10 @@
                 e.preventDefault();
             });
             document.addEventListener('mousemove', function (e) {
-                if (!dragging) return;
-                popup.style.left = (e.clientX - dragX) + 'px';
-                popup.style.top = (e.clientY - dragY) + 'px';
-                if (chainPanels.length) applyAllWidths();
+                if (dragging) {
+                    popup.style.left = (e.clientX - dragX) + 'px';
+                    popup.style.top = (e.clientY - dragY) + 'px';
+                }
             });
             document.addEventListener('mouseup', function () { dragging = false; });
 
@@ -9679,24 +9696,30 @@
                 '</button>' +
                 '<select id="tl-auto-select">' + selectOpts + '</select>' +
                 '<span id="tl-auto-countdown"></span>' +
-                '<button type="button" id="tl-blur-toggle" class="' + (blurErrors ? 'on' : '') + '" title="Ocultar erros — passe o mouse para revelar">👁 Erros</button>' +
                 '<button type="button" id="tl-refresh-btn">↺ Atualizar</button>';
             popup.appendChild(autoBar);
 
             var goalBar = document.createElement('div');
             goalBar.id = 'tl-goal-bar';
             goalBar.innerHTML =
-                '<span id="tl-goal-label">Meta Pkgs/h</span>' +
-                '<input type="number" id="tl-goal-input" min="1" max="9999" value="' + goalPph + '">' +
+                '<span id="tl-goal-label">META PKGS/H</span>' +
+                '<input type="number" id="tl-goal-input" value="' + goalPph + '" min="1" step="5">' +
                 '<span id="tl-goal-unit">pkgs/h</span>' +
-                '<button type="button" id="tl-goal-save">Salvar</button>' +
+                '<div style="flex:1"></div>' +
+                '🔍 <input type="text" id="tl-prod-search" placeholder="Procurar associado..." style="width:200px;font-size:12px;padding:6px 10px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;outline:none;transition:border-color 0.2s">' +
                 '<div id="tl-goal-legend">' +
-                '<span class="tl-goal-chip" style="background:#dbeafe;color:#1d4ed8">≥95% Azul</span>' +
-                '<span class="tl-goal-chip" style="background:#d1fae5;color:#065f46">≥80% Verde</span>' +
-                '<span class="tl-goal-chip" style="background:#fef3c7;color:#92400e">≥50% Amarelo</span>' +
-                '<span class="tl-goal-chip" style="background:#fee2e2;color:#991b1b">&lt;50% Vermelho</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(30,64,175,0.3);border:1px solid #1e40af;color:#60a5fa">≥95%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(21,128,61,0.3);border:1px solid #15803d;color:#4ade80">≥80%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(180,83,9,0.3);border:1px solid #b45309;color:#fbbf24">≥50%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(185,28,28,0.3);border:1px solid #b91c1c;color:#f87171">&lt;50%</span>' +
                 '</div>';
             popup.appendChild(goalBar);
+
+            var hourlySummary = document.createElement('div');
+            hourlySummary.id = 'tl-hourly-summary';
+            hourlySummary.style.display = 'none';
+            popup.appendChild(hourlySummary);
+
             var body = document.createElement('div');
             body.id = 'tl-prod-body';
             body.innerHTML = '<div class="tl-prod-loading">Selecione um período e clique em ↺ Atualizar.</div>';
@@ -9713,12 +9736,18 @@
             var sortCol = 'successfulScans';
             var sortAsc = false;
             var lastData = [];
+            var hourlyData = {};
+            var currentSlots = [];
+            var selectedHour = 'total';
+            var searchQuery = '';
+
+            document.getElementById('tl-prod-search').addEventListener('input', function(e){
+                searchQuery = e.target.value.toLowerCase().trim();
+                renderTable();
+            });
 
             function getTimeRange() {
-                if (!customMode) {
-                    var now = Date.now();
-                    return { start: now - selectedPreset, end: now };
-                }
+
                 var startInput = document.getElementById('tl-time-start');
                 var endInput = document.getElementById('tl-time-end');
                 var datePick = document.getElementById('tl-date-pick');
@@ -9819,69 +9848,108 @@
                 showSkeleton();
                 var statusEl = document.getElementById('tl-prod-status');
                 var bodyEl = document.getElementById('tl-prod-body');
+                var summaryEl = document.getElementById('tl-hourly-summary');
                 if (statusEl) statusEl.textContent = '⏳ buscando...';
 
                 var range = getTimeRange();
+                var start = range.start, end = range.end;
 
-                fetchAntiCsrfToken(function (token) {
-                    var payload = {
+                var slots = [];
+                var cursor = new Date(start);
+                cursor.setMinutes(0, 0, 0);
+                if (cursor.getTime() < start) cursor.setTime(cursor.getTime() + 3600000);
+
+                if (start < cursor.getTime()) {
+                    slots.push({ s: start, e: Math.min(cursor.getTime(), end), label: 'Início' });
+                }
+
+                while (cursor.getTime() < end) {
+                    var next = new Date(cursor.getTime() + 3600000);
+                    slots.push({
+                        s: cursor.getTime(),
+                        e: Math.min(next.getTime(), end),
+                        label: cursor.getHours().toString().padStart(2, '0') + ':00'
+                    });
+                    cursor = next;
+                }
+                currentSlots = slots.map(function (s) { return s.label; });
+
+                _SUITE.utils.fetchAntiCsrfToken(function (token) {
+                    if (!token) return;
+
+                    var totalPayload = {
                         nodeId: CURRENT_NODE, nodeType: 'SC',
                         entity: 'getQualityMetricDetails',
                         metricType: 'PRODUCTIVITY_REPORT',
                         containerTypes: ['PACKAGE'],
-                        startTime: range.start, endTime: range.end,
-                        metricsData: {
-                            nodeId: CURRENT_NODE, pageType: 'OUTBOUND',
-                            refreshType: '', device: 'DESKTOP',
-                            nodeType: 'SC', userAction: 'FAILED_MOVES_SUBMIT_CLICK'
-                        }
+                        startTime: start, endTime: end,
+                        metricsData: { nodeId: CURRENT_NODE, pageType: 'OUTBOUND', refreshType: '', device: 'DESKTOP', nodeType: 'SC', userAction: 'FAILED_MOVES_SUBMIT_CLICK' }
                     };
 
-                    GM_xmlhttpRequest({
-                        method: 'POST',
-                        url: BASE + 'sortcenter/vista/controller/getQualityMetricDetails',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'anti-csrftoken-a2z': token,
-                        },
-                        data: 'jsonObj=' + encodeURIComponent(JSON.stringify(payload)),
-                        withCredentials: true,
-                        onload: function (response) {
-                            var finalUrl = response.finalUrl || '';
-                            if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/')) {
-                                _SUITE.antiCsrfToken = '';
-                                if (statusEl) statusEl.textContent = '⚠ sessão expirada';
-                                if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">🔐 <b>Sessão expirada.</b><br><a href="' + location.href + '">Recarregue a página</a> e tente novamente.</div>';
-                                return;
-                            }
-                            if (response.status === 403 || response.status === 401) {
-                                _SUITE.antiCsrfToken = '';
-                                if (statusEl) statusEl.textContent = '⚠ ' + response.status;
-                                if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">⛔ <b>Erro ' + response.status + '</b><br><a href="' + location.href + '">Recarregue a página</a>.</div>';
-                                return;
-                            }
-                            try {
-                                var json = typeof response.responseText === 'object'
-                                    ? response.responseText
-                                    : JSON.parse(response.responseText);
-                                lastData = (json && json.ret &&
-                                    json.ret.getQualityMetricDetailsOutput &&
-                                    json.ret.getQualityMetricDetailsOutput.qualityMetrics) || [];
-                                var fmt = function (ms) { return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false }); };
-                                var rangeEl = document.getElementById('tl-prod-range');
-                                if (rangeEl) rangeEl.textContent = fmt(range.start) + ' → ' + fmt(range.end);
-                                if (statusEl) statusEl.textContent = '';
-                                renderTable();
-                            } catch (e) {
-                                if (statusEl) statusEl.textContent = '⚠ erro';
-                                if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">❌ ' + e.message + '</div>';
-                            }
-                        },
-                        onerror: function () {
-                            if (statusEl) statusEl.textContent = '⚠ erro';
-                            if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">❌ Falha de rede.</div>';
-                        }
+                    var tasks = [];
+                    tasks.push(new Promise(function (resolve) {
+                        GM_xmlhttpRequest({
+                            method: 'POST',
+                            url: BASE + 'sortcenter/vista/controller/getQualityMetricDetails',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
+                            data: 'jsonObj=' + encodeURIComponent(JSON.stringify(totalPayload)),
+                            withCredentials: true,
+                            onload: function (r) {
+                                try {
+                                    var finalUrl = r.finalUrl || '';
+                                    if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || r.status === 401 || r.status === 403) {
+                                        _SUITE.antiCsrfToken = '';
+                                        if (statusEl) statusEl.textContent = '⚠ sessão expirada';
+                                        if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">🔐 <b>Sessão expirada.</b><br><a href="' + location.href + '">Recarregue a página</a> e tente novamente.</div>';
+                                        return;
+                                    }
+                                    var j = JSON.parse(r.responseText);
+                                    lastData = (j && j.ret && j.ret.getQualityMetricDetailsOutput && j.ret.getQualityMetricDetailsOutput.qualityMetrics) || [];
+                                    resolve();
+                                } catch (e) { resolve(); }
+                            },
+                            onerror: function () { resolve(); }
+                        });
+                    }));
+
+                    hourlyData = {};
+                    if (slots.length > 1) {
+                        slots.forEach(function (slot) {
+                            tasks.push(new Promise(function (resolve) {
+                                var p = {
+                                    nodeId: CURRENT_NODE, nodeType: 'SC',
+                                    entity: 'getQualityMetricDetails',
+                                    metricType: 'PRODUCTIVITY_REPORT',
+                                    containerTypes: ['PACKAGE'],
+                                    startTime: slot.s, endTime: slot.e,
+                                    metricsData: { nodeId: CURRENT_NODE, pageType: 'OUTBOUND', refreshType: '', device: 'DESKTOP', nodeType: 'SC', userAction: 'FAILED_MOVES_SUBMIT_CLICK' }
+                                };
+                                GM_xmlhttpRequest({
+                                    method: 'POST',
+                                    url: BASE + 'sortcenter/vista/controller/getQualityMetricDetails',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
+                                    data: 'jsonObj=' + encodeURIComponent(JSON.stringify(p)),
+                                    withCredentials: true,
+                                    onload: function (r) {
+                                        try {
+                                            var j = JSON.parse(r.responseText);
+                                            hourlyData[slot.label] = (j && j.ret && j.ret.getQualityMetricDetailsOutput && j.ret.getQualityMetricDetailsOutput.qualityMetrics) || [];
+                                        } catch (e) { }
+                                        resolve();
+                                    },
+                                    onerror: function () { resolve(); }
+                                });
+                            }));
+                        });
+                    }
+
+                    Promise.all(tasks).then(function () {
+                        if (statusEl) statusEl.textContent = '';
+                        var fmt = function (ms) { return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false }); };
+                        var rangeEl = document.getElementById('tl-prod-range');
+                        if (rangeEl) rangeEl.textContent = fmt(start) + ' → ' + fmt(end);
+                        selectedHour = 'total';
+                        renderTable();
                     });
                 });
             }
@@ -9912,305 +9980,166 @@
             function renderTable() {
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (!bodyEl) return;
-                if (!lastData.length) {
-                    bodyEl.innerHTML = '<div class="tl-prod-loading">Sem dados para o período selecionado.</div>';
-                    return;
+                bodyEl.classList.add('updating');
+                setTimeout(function(){
+                    executeRender(bodyEl);
+                    bodyEl.classList.remove('updating');
+                }, 60);
+            }
+
+            function executeRender(bodyEl) {
+                var pphTotal = 0, pkgTotal = 0, errTotal = 0, workTotal = 0;
+                lastData.forEach(function (d) {
+                    pkgTotal += (d.successfulScans || 0);
+                    errTotal += (d.errorScans || 0);
+                    workTotal += (d.workInSeconds || 0);
+                });
+
+                // Pre-index hourly data for Matrix lookup
+                var hourlyMaps = {};
+                currentSlots.forEach(function (h) {
+                    hourlyMaps[h] = {};
+                    (hourlyData[h] || []).forEach(function (r) {
+                        hourlyMaps[h][r.login || r.userLogin || r.userName] = r;
+                    });
+                });
+
+                var html = '<table><thead><tr>' +
+                    '<th style="width:34px">#</th>' +
+                    '<th style="text-align:left!important;min-width:360px">ASSOCIADO</th>' +
+                    '<th style="width:110px">' +
+                    '<div class="tl-matrix-col-header ' + (selectedHour === 'total' ? 'active' : '') + '" data-hour="total">' +
+                    '<span>TOTAL</span>' +
+                    '<span>' + pkgTotal.toLocaleString('pt-BR') + '</span>' +
+                    '</div>' +
+                    '</th>' +
+                    '<th style="width:100px">PKGS/H</th>';
+
+                if (selectedHour === 'total' && currentSlots.length > 0) {
+                    currentSlots.forEach(function (h) {
+                        var slotTotal = 0;
+                        Object.values(hourlyMaps[h]).forEach(function (r) { slotTotal += (r.successfulScans || 0); });
+                        html += '<th class="tl-matrix-col">' +
+                            '<div class="tl-matrix-col-header ' + (selectedHour === h ? 'active' : '') + '" data-hour="' + h + '">' +
+                            '<span>' + h + '</span>' +
+                            '<span>' + slotTotal.toLocaleString('pt-BR') + '</span>' +
+                            '</div>' +
+                            '</th>';
+                    });
                 }
 
-                var pphOf = function (r) { return r.workInSeconds > 0 ? r.successfulScans / (r.workInSeconds / 3600) : 0; };
+                html += '</tr></thead><tbody>';
 
-                var filtered = lastData.filter(function (r) { return (r.successfulScans || 0) > 0; });
-
-                if (!filtered.length) {
-                    bodyEl.innerHTML = '<div class="tl-prod-loading">Nenhum resultado para "' + searchTerm + '".</div>';
-                    return;
-                }
-
-                var sorted = filtered.slice().sort(function (a, b) {
-                    if (sortCol === 'userName') {
-                        var va = a.userName || '', vb = b.userName || '';
+                var sorted = lastData.slice().filter(function(d){
+                    if (!searchQuery) return true;
+                    var name = (d.userName || '').toLowerCase();
+                    var login = (d.login || d.userLogin || '').toLowerCase();
+                    return name.includes(searchQuery) || login.includes(searchQuery);
+                }).sort(function (a, b) {
+                    var ka = sortCol;
+                    if (ka === 'userName') {
+                        var va = (a.userName || '').toLowerCase(), vb = (b.userName || '').toLowerCase();
                         return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                     }
-                    if (sortCol === 'pkgsPerHour') return sortAsc ? pphOf(a) - pphOf(b) : pphOf(b) - pphOf(a);
-                    var va = Number(a[sortCol]) || 0, vb = Number(b[sortCol]) || 0;
+                    var va = Number(a[ka]) || 0, vb = Number(b[ka]) || 0;
                     return sortAsc ? va - vb : vb - va;
                 });
 
-                lastSorted = sorted;
+                sorted.forEach(function (d, i) {
+                    var login = d.login || d.userLogin || d.userName;
+                    var name = normalizeName(d.userName || login);
+                    
+                    var totalPkgs = d.successfulScans || 0;
+                    var totalErr = d.errorScans || 0;
+                    var totalWork = d.workInSeconds || 0;
 
-                var maxPph = sorted.reduce(function (m, r) { return Math.max(m, pphOf(r)); }, 0);
+                    var shownPkgs = totalPkgs;
+                    var shownErr = totalErr;
+                    var shownWork = totalWork;
+                    var isFilteredOut = false;
 
-                var totalPkgs = filtered.reduce(function (s, r) { return s + (r.successfulScans || 0); }, 0);
-                var totalEl = document.getElementById('tl-prod-total');
-                if (totalEl) totalEl.textContent = filtered.length + ' associados · ' + totalPkgs.toLocaleString('pt-BR') + ' pkgs';
+                    if (selectedHour !== 'total') {
+                        var hr = (hourlyMaps[selectedHour] && hourlyMaps[selectedHour][login]);
+                        if (!hr) {
+                            isFilteredOut = true;
+                        } else {
+                            shownPkgs = hr.successfulScans || 0;
+                            shownErr = hr.errorScans || 0;
+                            shownWork = hr.workInSeconds || 0;
+                        }
+                    }
 
-                var cols = [
-                    { key: null, label: '#' },
-                    { key: 'userName', label: 'Associado' },
-                    { key: 'successfulScans', label: 'Pacotes' },
-                    { key: 'pkgsPerHour', label: 'Pkgs/h' },
-                    { key: 'failedScans', label: 'Erros' },
-                ];
+                    if (!isFilteredOut) {
+                        var pph = shownWork > 0 ? Math.round(shownPkgs / (shownWork / 3600)) : (shownPkgs > 0 ? shownPkgs : null);
+                        var pphCell = pph !== null
+                            ? '<td class="td-pph ' + tierClass(pph) + '">' + pph.toLocaleString('pt-BR') + '</td>'
+                            : '<td class="td-na">—</td>';
+                            
+                        var errCell = shownErr > 0
+                            ? '<td class="td-err tl-err-col">' + shownErr + '</td>'
+                            : '<td class="td-num tl-err-col" style="color:#64748b">0</td>';
 
-                var html = '<table><thead><tr>';
-                cols.forEach(function (c) {
-                    if (!c.key) { html += '<th style="width:28px;text-align:center">#</th>'; return; }
-                    var cls = sortCol === c.key ? (sortAsc ? 'sort-asc' : 'sort-desc') : '';
-                    html += '<th class="' + cls + '" data-col="' + c.key + '">' + c.label + '</th>';
-                });
-                html += '</tr></thead><tbody>';
+                        var delay = Math.min(i * 12, 220);
+                        html += '<tr class="tl-row-anim" style="animation-delay:' + delay + 'ms">' +
+                            '<td style="color:#64748b;font-size:12px;width:34px">' + (i + 1) + '</td>' +
+                            '<td class="td-label">' +
+                                '<div style="display:flex;justify-content:space-between;align-items:center;min-width:340px;gap:15px">' +
+                                    '<span>' + name + '</span>' +
+                                    '<span style="font-family:monospace;font-size:13px;color:#9cadbd;font-weight:700">' + totalPkgs.toLocaleString('pt-BR') + '</span>' +
+                                '</div>' +
+                            '</td>' +
+                            '<td class="td-num">' + (selectedHour === 'total' ? '' : shownPkgs.toLocaleString('pt-BR')) + '</td>' +
+                            pphCell;
 
-                sorted.forEach(function (r, i) {
-                    var name = normalizeName(r.userName || r.userLogin || '—');
-                    var pkgs = r.successfulScans || 0;
-                    var errs = r.failedScans || 0;
-                    var workH = (r.workInSeconds || 0) / 3600;
-                    var pph = workH > 0 ? Math.round(pkgs / workH) : null;
-                    var tier = pph !== null ? tierClass(pph) : 'tier-none';
-
-                    var pphCell = pph !== null
-                        ? '<td class="td-pph">' + pph.toLocaleString('pt-BR') + '</td>'
-                        : '<td class="td-na">—</td>';
-                    var errCell = errs > 0
-                        ? '<td class="td-err tl-err-col">' + errs + '</td>'
-                        : '<td class="td-num tl-err-col" style="color:#9ca3af">0</td>';
-
-                    html += '<tr class="' + tier + '" data-idx="' + i + '">' +
-                        '<td style="color:#9ca3af;text-align:center;font-size:11px;width:28px">' + (i + 1) + '</td>' +
-                        '<td class="td-label">' + name + '</td>' +
-                        '<td class="td-num">' + pkgs.toLocaleString('pt-BR') + '</td>' +
-                        pphCell + errCell + '</tr>';
+                        if (selectedHour === 'total' && currentSlots.length > 0) {
+                            currentSlots.forEach(function (h) {
+                                var slotRec = hourlyMaps[h][login];
+                                var slotPkgs = slotRec ? (slotRec.successfulScans || 0) : 0;
+                                var slotSecs = slotRec ? (slotRec.workInSeconds || 0) : 0;
+                                var slotPph = slotSecs > 0 ? Math.round(slotPkgs / (slotSecs / 3600)) : (slotPkgs > 0 ? slotPkgs : null);
+                                
+                                var cellTier = slotPph !== null ? tierClass(slotPph) : 'tier-none';
+                                var cellCls = slotPkgs > 0 ? 'tl-matrix-cell ' + cellTier : 'tl-matrix-cell zero';
+                                html += '<td class="tl-matrix-col ' + cellCls + '">' + (slotPkgs > 0 ? slotPkgs.toLocaleString('pt-BR') : '0') + '</td>';
+                            });
+                        }
+                        html += '</tr>';
+                    }
                 });
 
                 html += '</tbody></table>';
                 bodyEl.innerHTML = html;
 
+                var totalEl = document.getElementById('tl-prod-total');
+                if (totalEl) totalEl.textContent = sorted.length + ' associados · ' + pkgTotal.toLocaleString('pt-BR') + ' pkgs';
+
                 bodyEl.querySelectorAll('thead th').forEach(function (th) {
-                    th.addEventListener('click', function () {
+                    th.addEventListener('click', function (e) {
+                        var badge = e.target.closest('.tl-matrix-col-header');
+                        if (badge) {
+                            e.stopPropagation();
+                            selectedHour = badge.dataset.hour;
+                            renderTable();
+                            return;
+                        }
                         var col = th.dataset.col;
-                        if (sortCol === col) sortAsc = !sortAsc;
-                        else { sortCol = col; sortAsc = col === 'userName'; }
-                        renderTable();
+                        if (col) {
+                            if (sortCol === col) sortAsc = !sortAsc;
+                            else { sortCol = col; sortAsc = (col === 'userName' || col === 'rank'); }
+                            renderTable();
+                        }
                     });
                 });
-
-                debounceSync();
             }
 
             var lastSorted = [];
-            var chainPanels = [];
-            var syncTimer = null;
-
-            function debounceSync() {
-                clearTimeout(syncTimer);
-                syncTimer = setTimeout(syncChain, 80);
-            }
-
-            function getFirstHiddenIdx(scrollBodyEl) {
-                if (!scrollBodyEl) return -1;
-                if (scrollBodyEl._fakeStart !== undefined) return scrollBodyEl._fakeStart;
-                var rect = scrollBodyEl.getBoundingClientRect();
-                var rows = scrollBodyEl.querySelectorAll('tbody tr');
-                for (var i = 0; i < rows.length; i++) {
-                    var r = rows[i].getBoundingClientRect();
-                    if (r.top >= rect.bottom - 2) {
-                        return parseInt(rows[i].getAttribute('data-idx') || String(i));
-                    }
-                }
-                return -1;
-            }
-
-            function buildChainRow(r, absIdx) {
-                var name = normalizeName(r.userName || r.userLogin || '—');
-                var pkgs = r.successfulScans || 0;
-                var errs = r.failedScans || 0;
-                var workH = (r.workInSeconds || 0) / 3600;
-                var pph = workH > 0 ? Math.round(pkgs / workH) : null;
-                var tier = pph !== null ? tierClass(pph) : 'tier-none';
-                var pphCell = pph !== null
-                    ? '<td style="text-align:right;font-weight:700;padding:8px 10px">' + pph.toLocaleString('pt-BR') + '</td>'
-                    : '<td style="text-align:right;color:#9ca3af;padding:8px 10px">—</td>';
-                var errCell = errs > 0
-                    ? '<td class="tl-chain-err tl-err-col" style="text-align:right;font-weight:700;color:#dc2626;padding:8px 10px">' + errs + '</td>'
-                    : '<td class="tl-err-col" style="text-align:right;color:#9ca3af;padding:8px 10px">0</td>';
-                return '<tr class="' + tier + '" data-idx="' + absIdx + '">' +
-                    '<td style="color:#9ca3af;text-align:center;width:28px;padding:8px 4px;font-size:11px">' + (absIdx + 1) + '</td>' +
-                    '<td style="font-weight:600;color:#fff!important;padding:8px 10px">' + name + '</td>' +
-                    '<td style="text-align:right;font-weight:600;padding:8px 10px">' + pkgs.toLocaleString('pt-BR') + '</td>' +
-                    pphCell + errCell + '</tr>';
-            }
-
-            function renderChainBody(cp, startIdx) {
-                if (startIdx < 0 || startIdx >= lastSorted.length) {
-                    cp.bodyEl.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af;font-size:12px">Nenhum associado oculto no painel anterior.</div>';
-                    cp.el.querySelector('.tl-cp-title').textContent = '👥 Continuação';
-                    return;
-                }
-                var slice = lastSorted.slice(startIdx);
-                cp.el.querySelector('.tl-cp-title').textContent = '👥 Continuação (' + slice.length + ')';
-
-                var html = '<table style="width:100%;border-collapse:collapse">' +
-                    '<thead><tr>' +
-                    '<th style="position:sticky;top:0;background:rgba(30, 41, 59, 0.95);padding:8px 4px;font-size:11px;font-weight:700;color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.1);text-align:center;width:28px">#</th>' +
-                    '<th style="position:sticky;top:0;background:rgba(30, 41, 59, 0.95);padding:8px 10px;font-size:11px;font-weight:700;color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.1);text-transform:uppercase;letter-spacing:.04em">Associado</th>' +
-                    '<th style="position:sticky;top:0;background:rgba(30, 41, 59, 0.95);padding:8px 10px;font-size:11px;font-weight:700;color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.1);text-transform:uppercase;text-align:right">Pacotes</th>' +
-                    '<th style="position:sticky;top:0;background:rgba(30, 41, 59, 0.95);padding:8px 10px;font-size:11px;font-weight:700;color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.1);text-transform:uppercase;text-align:right">Pkgs/h</th>' +
-                    '<th style="position:sticky;top:0;background:rgba(30, 41, 59, 0.95);padding:8px 10px;font-size:11px;font-weight:700;color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.1);text-transform:uppercase;text-align:right">Erros</th>' +
-                    '</tr></thead><tbody>';
-                slice.forEach(function (r, j) { html += buildChainRow(r, startIdx + j); });
-                html += '</tbody></table>';
-                cp.bodyEl.innerHTML = html;
-
-                cp.bodyEl.onscroll = debounceSync;
-            }
-
-            var popupBaseLeft = null;
-
-            function computeAllWidths() {
-
-                var chainCount = chainPanels.filter(function (cp) { return cp.open; }).length;
-                var total = 1 + chainCount;
-                var margin = 8;
-                var gap = 6;
-                var available = window.innerWidth - margin * 2 - gap * (total - 1);
-                var w = Math.max(260, Math.floor(available / total));
-                return { mainW: w, chainW: w, count: total };
-            }
-
-            function applyAllWidths() {
-                if (!chainPanels.length) return;
-                var ws = computeAllWidths();
-                var left = 8;
-
-                popup.style.transform = 'none';
-                popup.style.width = ws.mainW + 'px';
-                popup.style.left = left + 'px';
-
-                left += ws.mainW + 6;
-
-                var mainR = popup.getBoundingClientRect();
-                chainPanels.forEach(function (cp, i) {
-                    if (!cp.open) return;
-                    cp.el.style.top = mainR.top + 'px';
-                    cp.el.style.height = mainR.height + 'px';
-                    cp.el.style.maxHeight = mainR.height + 'px';
-                    cp.el.style.width = ws.chainW + 'px';
-                    cp.el.style.left = left + 'px';
-                    left += ws.chainW + 6;
-                });
-            }
-
-            function restorePopupWidth() {
-                if (!chainPanels.length) {
-                    popup.style.width = '640px';
-                    popup.style.left = '50%';
-                    popup.style.transform = 'translate(-50%,0)';
-                    popup.style.top = '10%';
-                }
-            }
-
-            function positionChainPanel(cp, chainIdx, widths) {
-
-                applyAllWidths();
-            }
-
-            function syncChain() {
-                if (!popupOpen) return;
-
-                var prevBody = document.getElementById('tl-prod-body');
-                var needed = 0;
-                var startIdxs = [];
-
-                for (var pass = 0; pass < 20; pass++) {
-                    var si = getFirstHiddenIdx(prevBody);
-                    if (si < 0 || si >= lastSorted.length) break;
-                    startIdxs.push(si);
-                    needed++;
-
-                    var rowH = 37;
-                    var mainH = popup.getBoundingClientRect().height;
-                    var headers = 56;
-                    var rows = Math.max(1, Math.floor((mainH - headers) / rowH));
-                    var nextSi = si + rows;
-                    if (nextSi >= lastSorted.length) break;
-
-                    var fakeBody = { _fakeStart: nextSi };
-                    prevBody = fakeBody;
-                }
-
-                while (chainPanels.length > needed) {
-                    chainPanels[chainPanels.length - 1].el.remove();
-                    chainPanels.pop();
-                }
-
-                while (chainPanels.length < needed) {
-                    var cp = createChainPanel(chainPanels.length);
-                    chainPanels.push(cp);
-                }
-
-                if (!chainPanels.length) { restorePopupWidth(); return; }
-
-                applyAllWidths();
-
-                var realPrevBody = document.getElementById('tl-prod-body');
-                chainPanels.forEach(function (cp) {
-                    var realSi = getFirstHiddenIdx(realPrevBody);
-                    if (realSi < 0 || realSi >= lastSorted.length) { renderChainBody(cp, -1); return; }
-                    renderChainBody(cp, realSi);
-                    realPrevBody = cp.bodyEl;
-                });
-            }
-
-            function createChainPanel(chainIdx) {
-                var el = document.createElement('div');
-                el.className = 'tl-chain-panel';
-                el.innerHTML =
-                    '<div class="tl-cp-header">' +
-                    '<span class="tl-cp-title">👥 Continuação</span>' +
-                    '</div>' +
-                    '<div class="tl-cp-body"></div>';
-
-                el.addEventListener('click', function (e) { e.stopPropagation(); });
-                el.addEventListener('mousedown', function (e) { e.stopPropagation(); });
-
-                document.body.appendChild(el);
-                return { el: el, bodyEl: el.querySelector('.tl-cp-body'), open: true };
-            }
-
-            function openNextPanel(fromIdx) {
-                var nextIdx = fromIdx + 1;
-                while (chainPanels.length > nextIdx) {
-                    chainPanels[chainPanels.length - 1].el.remove();
-                    chainPanels.pop();
-                }
-                var cp = createChainPanel(nextIdx);
-                chainPanels.push(cp);
-                applyAllWidths();
-                syncChain();
-            }
-
-            function closeAllChainPanels() {
-                chainPanels.forEach(function (cp) { cp.el.remove(); });
-                chainPanels = [];
-                restorePopupWidth();
-            }
-
-            setTimeout(function () {
-                var mainBody = document.getElementById('tl-prod-body');
-                if (mainBody) mainBody.addEventListener('scroll', debounceSync);
-            }, 500);
-
-            if (typeof ResizeObserver !== 'undefined') {
-                new ResizeObserver(function () { debounceSync(); }).observe(popup);
-            }
 
             function openPopup() {
                 popupOpen = true;
                 overlay.classList.add('open');
                 popup.style.display = 'flex';
-                popup.style.animation = 'tl-popup-in .22s cubic-bezier(.4,0,.2,1)';
+                popup.style.animation = 'tl-popup-in .2s ease-out';
                 if (!lastData.length) fetchProductivity();
-                else debounceSync();
                 applyAutoRefresh();
             }
 
@@ -10218,7 +10147,6 @@
                 popupOpen = false;
                 overlay.classList.remove('open');
                 popup.style.display = 'none';
-                closeAllChainPanels();
             }
 
             popup.addEventListener('click', function (e) { e.stopPropagation(); });
@@ -10248,24 +10176,7 @@
                     }
                 });
 
-                popup.querySelectorAll('.tl-tab').forEach(function (tab) {
-                    tab.addEventListener('click', function (e) {
-                        e.preventDefault(); e.stopPropagation();
-                        var ms = parseInt(tab.dataset.ms);
-                        if (ms === 0) {
 
-                            customMode = true;
-                            customRow.classList.remove('hidden');
-                        } else {
-                            customMode = false;
-                            selectedPreset = ms;
-                            customRow.classList.add('hidden');
-                            fetchProductivity();
-                        }
-                        popup.querySelectorAll('.tl-tab').forEach(function (b) { b.classList.remove('active'); });
-                        tab.classList.add('active');
-                    });
-                });
 
                 var applyBtn = document.getElementById('tl-apply-btn');
                 if (applyBtn) applyBtn.addEventListener('click', function (e) {
@@ -10310,17 +10221,17 @@
                     if (datePickEnd) { datePickEnd.min = dl2.min; datePickEnd.max = dl2.max; }
                 }
 
-                var goalSaveBtn = document.getElementById('tl-goal-save');
-                if (goalSaveBtn) goalSaveBtn.addEventListener('click', function (e) {
-                    e.preventDefault(); e.stopPropagation();
-                    var inp = document.getElementById('tl-goal-input');
-                    var v = parseInt(inp && inp.value);
+                var goalInp = document.getElementById('tl-goal-input');
+                if (goalInp) goalInp.addEventListener('input', function () {
+                    var v = parseInt(this.value);
                     if (v > 0) {
                         goalPph = v;
                         GM_setValue('tl_goal_pph', goalPph);
-                        if (lastData.length) renderTable();
-                        goalSaveBtn.textContent = '✓ Salvo';
-                        setTimeout(function () { goalSaveBtn.textContent = 'Salvar'; }, 1500);
+                        // Debounce renderTable to avoid flicker while typing
+                        if (this._timer) clearTimeout(this._timer);
+                        this._timer = setTimeout(function () {
+                            if (lastData.length) renderTable();
+                        }, 500);
                     }
                 });
 
