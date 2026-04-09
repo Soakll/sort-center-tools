@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.2
+// @version      1.1.3
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.2";
+    const VERSION = "1.1.3";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
@@ -7391,7 +7391,7 @@
                     staticHourPills.querySelectorAll('.hour-pill').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     staticSelectedHour = parseInt(btn.dataset.hour, 10);
-                    
+
                     const body = document.getElementById('vl-panel-body');
                     body.classList.add('updating');
                     setTimeout(() => {
@@ -8369,7 +8369,7 @@
             _panel.style.cssText = 'position:fixed;inset:0;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(16px);z-index:2147483645;display:none;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Arial,sans-serif;color:#fff;';
             _panel.classList.remove('open'); // Ensure it starts closed
             _panel.appendChild(hdr); _panel.appendChild(toolbar); _panel.appendChild(routePanel);
-            _panel.appendChild(calPanel); 
+            _panel.appendChild(calPanel);
             gridWrap.id = 'ob-dock-grid-wrap';
             gridWrap.classList.add('tl-morph-target');
             _panel.appendChild(gridWrap); _panel.appendChild(statusBar);
@@ -8514,7 +8514,7 @@
                     rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
                 } else {
                     gridWrap.classList.add('updating');
-                    setTimeout(function() {
+                    setTimeout(function () {
                         grid.innerHTML = '';
                         rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
                         gridWrap.classList.remove('updating');
@@ -8647,10 +8647,10 @@
             btn.style.cssText = ['position:fixed;bottom:130px;right:20px;z-index:2147483646', 'background:#1f6feb;color:#fff;border:none;border-radius:8px', 'padding:7px 16px;font-size:11px;font-weight:700;cursor:pointer', 'font-family:"Amazon Ember",Arial,sans-serif;box-shadow:0 4px 12px rgba(31,111,235,0.4)', 'transition:background 0.15s,transform 0.1s'].join(';');
             btn.onmouseover = function () { btn.style.background = '#388bfd'; btn.style.transform = 'translateY(-1px)'; };
             btn.onmouseout = function () { btn.style.background = '#1f6feb'; btn.style.transform = ''; };
-            btn.onclick = function () { 
-                buildPanel(); 
-                _panel.style.display = 'flex'; 
-                _panel.classList.add('open'); 
+            btn.onclick = function () {
+                buildPanel();
+                _panel.style.display = 'flex';
+                _panel.classList.add('open');
             };
             document.body.appendChild(btn);
         }
@@ -9561,7 +9561,7 @@
                 '#tl-blur-toggle{background:none;border:1.5px solid #d1d5db;color:#d1d5db;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px;transition:all .15s}',
                 '#tl-blur-toggle:hover{border-color:#3b82f6;color:#3b82f6;background:rgba(59,130,246,0.1)}',
                 '#tl-blur-toggle.on{background:#fef3c7;border-color:#f59e0b;color:#92400e}',
-                
+
                 '#tl-hourly-summary{display:none}',
                 '.tl-matrix-col{text-align:center!important;font-family:monospace;font-size:14px;color:#cbd5e1;min-width:85px;border-left:1px solid rgba(255,255,255,0.08);padding:10px 8px!important}',
                 '.tl-matrix-col-header{display:inline-flex;flex-direction:column;align-items:center;padding:8px 16px!important;line-height:1.2;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);min-width:70px;margin:3px 0;position:relative;overflow:hidden}',
@@ -9574,7 +9574,7 @@
                 '.tl-matrix-col-header.active span:first-child{color:rgba(255,255,255,0.9)}',
                 '.tl-matrix-cell{color:#f1f5f9;font-weight:700;border-radius:4px;transition:background 0.3s, color 0.3s}',
                 '.tl-matrix-cell.zero{color:rgba(255,255,255,0.03);font-weight:400}',
-                
+
                 '#tl-prod-body tr{opacity:1;transition:opacity 0.2s, transform 0.2s}',
                 '#tl-prod-body.updating tr{opacity:0;transform:translateY(4px)}',
                 '.tl-row-anim{animation:tl-row-fade-in 0.3s ease-out backwards}',
@@ -9741,7 +9741,7 @@
             var selectedHour = 'total';
             var searchQuery = '';
 
-            document.getElementById('tl-prod-search').addEventListener('input', function(e){
+            document.getElementById('tl-prod-search').addEventListener('input', function (e) {
                 searchQuery = e.target.value.toLowerCase().trim();
                 renderTable();
             });
@@ -9981,7 +9981,7 @@
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (!bodyEl) return;
                 bodyEl.classList.add('updating');
-                setTimeout(function(){
+                setTimeout(function () {
                     executeRender(bodyEl);
                     bodyEl.classList.remove('updating');
                 }, 60);
@@ -10030,7 +10030,7 @@
 
                 html += '</tr></thead><tbody>';
 
-                var sorted = lastData.slice().filter(function(d){
+                var sorted = lastData.slice().filter(function (d) {
                     if (!searchQuery) return true;
                     var name = (d.userName || '').toLowerCase();
                     var login = (d.login || d.userLogin || '').toLowerCase();
@@ -10048,7 +10048,7 @@
                 sorted.forEach(function (d, i) {
                     var login = d.login || d.userLogin || d.userName;
                     var name = normalizeName(d.userName || login);
-                    
+
                     var totalPkgs = d.successfulScans || 0;
                     var totalErr = d.errorScans || 0;
                     var totalWork = d.workInSeconds || 0;
@@ -10074,7 +10074,7 @@
                         var pphCell = pph !== null
                             ? '<td class="td-pph ' + tierClass(pph) + '">' + pph.toLocaleString('pt-BR') + '</td>'
                             : '<td class="td-na">—</td>';
-                            
+
                         var errCell = shownErr > 0
                             ? '<td class="td-err tl-err-col">' + shownErr + '</td>'
                             : '<td class="td-num tl-err-col" style="color:#64748b">0</td>';
@@ -10083,10 +10083,10 @@
                         html += '<tr class="tl-row-anim" style="animation-delay:' + delay + 'ms">' +
                             '<td style="color:#64748b;font-size:12px;width:34px">' + (i + 1) + '</td>' +
                             '<td class="td-label">' +
-                                '<div style="display:flex;justify-content:space-between;align-items:center;min-width:340px;gap:15px">' +
-                                    '<span>' + name + '</span>' +
-                                    '<span style="font-family:monospace;font-size:13px;color:#9cadbd;font-weight:700">' + totalPkgs.toLocaleString('pt-BR') + '</span>' +
-                                '</div>' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;min-width:340px;gap:15px">' +
+                            '<span>' + name + '</span>' +
+                            '<span style="font-family:monospace;font-size:13px;color:#9cadbd;font-weight:700">' + totalPkgs.toLocaleString('pt-BR') + '</span>' +
+                            '</div>' +
                             '</td>' +
                             '<td class="td-num">' + (selectedHour === 'total' ? '' : shownPkgs.toLocaleString('pt-BR')) + '</td>' +
                             pphCell;
@@ -10097,7 +10097,7 @@
                                 var slotPkgs = slotRec ? (slotRec.successfulScans || 0) : 0;
                                 var slotSecs = slotRec ? (slotRec.workInSeconds || 0) : 0;
                                 var slotPph = slotSecs > 0 ? Math.round(slotPkgs / (slotSecs / 3600)) : (slotPkgs > 0 ? slotPkgs : null);
-                                
+
                                 var cellTier = slotPph !== null ? tierClass(slotPph) : 'tier-none';
                                 var cellCls = slotPkgs > 0 ? 'tl-matrix-cell ' + cellTier : 'tl-matrix-cell zero';
                                 html += '<td class="tl-matrix-col ' + cellCls + '">' + (slotPkgs > 0 ? slotPkgs.toLocaleString('pt-BR') : '0') + '</td>';
