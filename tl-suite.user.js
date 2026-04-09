@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.7
+// @version      1.1.9
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -15,6 +15,8 @@
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_listValues
+// @grant        GM_deleteValue
 // @connect      ii51s3lexd.execute-api.us-east-1.amazonaws.com
 // @connect      trans-logistics.amazon.com
 // @connect      trans-logistics-fe.amazon.com
@@ -33,7 +35,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.7";
+    const VERSION = "1.1.9";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
@@ -1120,25 +1122,19 @@
                 body.innerHTML = '<div class="vp-loading">' + L('vistaSearching') + '</div>';
                 vpOpen();
 
-                fetchTokenFallback(function (token) {
-                    if (!token) {
-                        body.innerHTML = '<div class="vp-loading" style="color:#c62828">' + L('tokenNotFound') + '</div>';
-                        if (status) status.textContent = '\u26A0 sem token';
+                if (!_SUITE.vsm) { 
+                    body.innerHTML = '<div class="vp-loading" style="color:#c62828">⚠ VSM Module not loaded</div>'; 
+                    return; 
+                }
+                _SUITE.vsm.fetchByRoute(destination, function (containers) {
+                    if (!containers || containers.length === 0) {
+                        body.innerHTML = '<div class="vp-loading">' + L('noContainersLane') + '</div>';
+                        if (status) status.textContent = '';
                         return;
                     }
-                    fetchContainerIds(token, lane, destination, function (ids) {
-                        if (!ids.length) {
-                            body.innerHTML = '<div class="vp-loading">' + L('noContainersLane') + '</div>';
-                            if (status) status.textContent = '';
-                            return;
-                        }
-                        if (status) status.textContent = '\u23F3 detalhes (' + ids.length + ' IDs)...';
-                        fetchContainerDetails(token, ids, function (detailMap) {
-                            vpRenderTable(Object.values(detailMap), lane);
-                            if (status) status.textContent = '';
-                            if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString('pt-BR', { hour12: false });
-                        });
-                    });
+                    vpRenderTable(containers, lane);
+                    if (status) status.textContent = '';
+                    if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString('pt-BR', { hour12: false });
                 });
             }
 
@@ -1218,24 +1214,19 @@
                 wrapper.innerHTML = '';
                 wrapper.appendChild(makeBtn('⏳ ' + dock, 'tl-btn-gray tl-loading', true));
                 var destination = laneToDestination(lane);
-                fetchTokenFallback(function (token) {
-                    if (!token) { renderError(dock, lane, wrapper); return; }
-                    fetchContainerIds(token, lane, destination, function (ids) {
-                        if (!ids.length) { renderError(dock, lane, wrapper); return; }
-                        fetchContainerDetails(token, ids, function (detailMap) {
-                            var totalVol = 0;
-                            Object.values(detailMap).forEach(function (c) {
-                                if (c.locationLabel && c.locationLabel.toUpperCase() === dock.toUpperCase())
-                                    totalVol += c.packageVolume || 0;
-                            });
-                            var cuft = cm3ToFt3(totalVol);
-                            if (parseFloat(cuft) <= 0) {
-                                renderError(dock, lane, wrapper);
-                            } else {
-                                renderResult(dock, lane, wrapper, cuft);
-                            }
-                        });
+                _SUITE.vsm.fetchByRoute(destination, function (containers) {
+                    if (!containers || containers.length === 0) { renderError(dock, lane, wrapper); return; }
+                    var totalVol = 0;
+                    containers.forEach(function (c) {
+                        if (c.locationLabel && c.locationLabel.toUpperCase() === dock.toUpperCase())
+                            totalVol += c.packageVolume || 0;
                     });
+                    var cuft = cm3ToFt3(totalVol);
+                    if (parseFloat(cuft) <= 0) {
+                        renderError(dock, lane, wrapper);
+                    } else {
+                        renderResult(dock, lane, wrapper, cuft);
+                    }
                 });
             }
 
@@ -1343,12 +1334,12 @@
                 let dockStartedFormatted = null, checkOutFormatted = null;
                 if (dockStarted) {
                     const d2 = new Date(dockStarted - 3 * 3600000);
-                    dockStartedFormatted = String(d2.getUTCDate()).padStart(2, '0') + '-' + mo[d2.getUTCMonth()] + '-' +
+                    dockStartedFormatted = String(d2.getUTCDate()).padStart(2, '0') + '-' + MONTH_ABBR[d2.getUTCMonth()] + '-' +
                         String(d2.getUTCFullYear()).slice(2) + ' ' + String(d2.getUTCHours()).padStart(2, '0') + ':' + String(d2.getUTCMinutes()).padStart(2, '0');
                 }
                 if (checkOut) {
                     const d3 = new Date(checkOut - 3 * 3600000);
-                    checkOutFormatted = String(d3.getUTCDate()).padStart(2, '0') + '-' + mo[d3.getUTCMonth()] + '-' +
+                    checkOutFormatted = String(d3.getUTCDate()).padStart(2, '0') + '-' + MONTH_ABBR[d3.getUTCMonth()] + '-' +
                         String(d3.getUTCFullYear()).slice(2) + ' ' + String(d3.getUTCHours()).padStart(2, '0') + ':' + String(d3.getUTCMinutes()).padStart(2, '0');
                 }
                 const now = Date.now();
@@ -3961,34 +3952,67 @@
                     function loadCuft() {
                         paneCuft.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px 16px;" class="tl-loading">' + L('fetchingContainers') + '</div>';
                         var destination = laneToDestination(lane);
-                        fetchTokenFallback(function (token) {
-                            if (!token) { paneCuft.innerHTML = '<div style="font-size:12px;color:#c62828;padding:14px;">⚠ ' + L('tokenNotFound') + '</div>'; return; }
-                            fetchContainerIds(token, lane, destination, function (ids) {
-                                if (!ids.length) { paneCuft.innerHTML = '<div style="font-size:12px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px;">' + L('noContainersFound') + '</div>'; return; }
-                                fetchContainerDetails(token, ids, function (detailMap) {
-                                    var dockContainers = Object.values(detailMap).filter(function (c) { return c.locationLabel && c.locationLabel.toUpperCase() === dock.toUpperCase(); });
-                                    var allVol = dockContainers.reduce(function (s, c) { return s + (c.packageVolume || 0); }, 0);
-                                    var allPkgs = dockContainers.reduce(function (s, c) { return s + ((c.contentCountMap && c.contentCountMap.PACKAGE) || 0); }, 0);
-                                    paneCuft.innerHTML = '';
-                                    if (!dockContainers.length) { paneCuft.innerHTML = '<div style="font-size:12px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px;">' + L('noContainersDock') + '</div>'; return; }
-                                    var hdrCuft = document.createElement('div'); hdrCuft.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#e65100;color:#fff;flex-shrink:0;';
-                                    var refreshBtn = document.createElement('button'); refreshBtn.textContent = '↺'; refreshBtn.title = 'Atualizar'; refreshBtn.style.cssText = 'margin-left:auto;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:6px;cursor:pointer;font-size:14px;padding:2px 8px;font-weight:700;flex-shrink:0;'; refreshBtn.addEventListener('click', loadCuft);
-                                    hdrCuft.innerHTML = '<span style="font-size:13px;font-weight:800;">🚛 Loaded — ' + esc(lane) + '</span><span style="font-size:12px;font-weight:600;opacity:.85;">' + cm3ToFt3(allVol) + ' ft³ · ' + allPkgs + ' pkgs · ' + dockContainers.length + ' containers</span>';
-                                    hdrCuft.appendChild(refreshBtn);
-                                    paneCuft.appendChild(hdrCuft);
-                                    var dHdr = document.createElement('div'); dHdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 16px;background:' + (isDark ? '#2b1200' : '#fff3e0') + ';border-bottom:1px solid ' + (isDark ? '#5a2800' : '#ffe0b2') + ';flex-shrink:0;'; dHdr.innerHTML = '<span style="font-size:12px;font-weight:800;color:#e65100;">🔶 ' + esc(dock) + ' — ' + dockContainers.length + ' container(s)</span><span style="font-size:12px;font-weight:700;color:' + (isDark ? '#d0d0e8' : '#333') + ';">' + cm3ToFt3(allVol) + ' ft³ · ' + allPkgs + ' pkgs</span>'; paneCuft.appendChild(dHdr);
-                                    var tblWrap = document.createElement('div'); tblWrap.style.cssText = 'overflow-y:auto;flex:1;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
-                                    var tbl = document.createElement('table'); tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:11px;';
-                                    var thBg = isDark ? '#1e0e00' : '#fbe9e7', thBorder = isDark ? '#5a2800' : '#ffccbc';
-                                    tbl.innerHTML = '<thead><tr style="background:' + thBg + ';"><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Doca</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Rota</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Scannable ID</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">CPT</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Pacotes</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Volume (ft³)</th></tr></thead><tbody></tbody>';
-                                    var tbody = tbl.querySelector('tbody');
-                                    var rowBase = isDark ? 'color:#d0d0e8;border-bottom:1px solid #2e2e45;' : 'border-bottom:1px solid #e0e0e0;';
-                                    var rowAlt = isDark ? 'background:#1e0e00;' : 'background:#fff8f5;';
-                                    dockContainers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); }).forEach(function (c, ci) { var cptFmt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'; var pkgs2 = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0; var vol2 = c.packageVolume ? cm3ToFt3(c.packageVolume) : '—'; var tr = document.createElement('tr'); tr.style.cssText = rowBase + (ci % 2 ? rowAlt : ''); tr.innerHTML = '<td style="padding:6px 10px;">' + esc(dock) + '</td><td style="padding:6px 10px;">' + esc(c.sfName || '—') + '</td><td style="padding:6px 10px;font-weight:700;">' + esc(c.scannableId || '—') + '</td><td style="padding:6px 10px;">' + esc(cptFmt) + '</td><td style="padding:6px 10px;text-align:right;">' + pkgs2 + '</td><td style="padding:6px 10px;text-align:right;">' + esc(vol2) + '</td>'; tbody.appendChild(tr); });
-                                    tblWrap.appendChild(tbl); paneCuft.appendChild(tblWrap);
-                                    var footer = document.createElement('div'); footer.style.cssText = 'padding:6px 14px;font-size:11px;color:' + (isDark ? '#8080a0' : '#757575') + ';border-top:1px solid ' + (isDark ? '#2e2e45' : '#e0e0e0') + ';background:' + (isDark ? '#16213e' : '#fafafa') + ';display:flex;justify-content:space-between;flex-shrink:0;'; footer.innerHTML = '<span>Atualizado: ' + new Date().toLocaleTimeString('pt-BR', { hour12: false }) + '</span><span>' + dockContainers.length + ' ' + L('containerIn') + ' ' + esc(dock) + '</span>'; paneCuft.appendChild(footer);
-                                });
+                        if (!_SUITE.vsm) {
+                            paneCuft.innerHTML = '<div style="font-size:12px;color:#c62828;padding:14px;">⚠ VSM Module not loaded</div>';
+                            return;
+                        }
+                        _SUITE.vsm.fetchByRoute(destination, function (containers) {
+                            if (!containers || !containers.length) {
+                                paneCuft.innerHTML = '<div style="font-size:12px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px;">' + L('noContainersFound') + '</div>';
+                                return;
+                            }
+                            var dockContainers = containers.filter(function (c) {
+                                return c.locationLabel && c.locationLabel.toUpperCase() === dock.toUpperCase();
                             });
+                            var allVol = dockContainers.reduce(function (s, c) { return s + (c.packageVolume || 0); }, 0);
+                            var allPkgs = dockContainers.reduce(function (s, c) { return s + ((c.contentCountMap && c.contentCountMap.PACKAGE) || 0); }, 0);
+                            paneCuft.innerHTML = '';
+
+                            if (!dockContainers.length) {
+                                paneCuft.innerHTML = '<div style="font-size:12px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px;">' + L('noContainersDock') + '</div>';
+                                return;
+                            }
+
+                            var hdrCuft = document.createElement('div');
+                            hdrCuft.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#e65100;color:#fff;flex-shrink:0;';
+                            var refreshBtn = document.createElement('button');
+                            refreshBtn.textContent = '↺';
+                            refreshBtn.title = 'Atualizar';
+                            refreshBtn.style.cssText = 'margin-left:auto;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:6px;cursor:pointer;font-size:14px;padding:2px 8px;font-weight:700;flex-shrink:0;';
+                            refreshBtn.addEventListener('click', loadCuft);
+                            hdrCuft.innerHTML = '<span style="font-size:13px;font-weight:800;">🚛 Loaded — ' + esc(lane) + '</span><span style="font-size:12px;font-weight:600;opacity:.85;">' + cm3ToFt3(allVol) + ' ft³ · ' + allPkgs + ' pkgs · ' + dockContainers.length + ' containers</span>';
+                            hdrCuft.appendChild(refreshBtn);
+                            paneCuft.appendChild(hdrCuft);
+
+                            var dHdr = document.createElement('div');
+                            dHdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 16px;background:' + (isDark ? '#2b1200' : '#fff3e0') + ';border-bottom:1px solid ' + (isDark ? '#5a2800' : '#ffe0b2') + ';flex-shrink:0;';
+                            dHdr.innerHTML = '<span style="font-size:12px;font-weight:800;color:#e65100;">🔶 ' + esc(dock) + ' — ' + dockContainers.length + ' container(s)</span><span style="font-size:12px;font-weight:700;color:' + (isDark ? '#d0d0e8' : '#333') + ';">' + cm3ToFt3(allVol) + ' ft³ · ' + allPkgs + ' pkgs</span>';
+                            paneCuft.appendChild(dHdr);
+
+                            var tblWrap = document.createElement('div');
+                            tblWrap.style.cssText = 'overflow-y:auto;flex:1;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
+                            var tbl = document.createElement('table');
+                            tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:11px;';
+                            var thBg = isDark ? '#1e0e00' : '#fbe9e7', thBorder = isDark ? '#5a2800' : '#ffccbc';
+                            tbl.innerHTML = '<thead><tr style="background:' + thBg + ';"><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Doca</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Rota</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Scannable ID</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">CPT</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Pacotes</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Volume (ft³)</th></tr></thead><tbody></tbody>';
+                            var tbody = tbl.querySelector('tbody');
+                            var rowBase = isDark ? 'color:#d0d0e8;border-bottom:1px solid #2e2e45;' : 'border-bottom:1px solid #e0e0e0;';
+                            var rowAlt = isDark ? 'background:#1e0e00;' : 'background:#fff8f5;';
+                            dockContainers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); }).forEach(function (c, ci) {
+                                var cptFmt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+                                var pkgs2 = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
+                                var vol2 = c.packageVolume ? cm3ToFt3(c.packageVolume) : '—';
+                                var tr = document.createElement('tr');
+                                tr.style.cssText = rowBase + (ci % 2 ? rowAlt : '');
+                                tr.innerHTML = '<td style="padding:6px 10px;">' + esc(dock) + '</td><td style="padding:6px 10px;">' + esc(c.sfName || '—') + '</td><td style="padding:6px 10px;font-weight:700;">' + esc(c.scannableId || '—') + '</td><td style="padding:6px 10px;">' + esc(cptFmt) + '</td><td style="padding:6px 10px;text-align:right;">' + pkgs2 + '</td><td style="padding:6px 10px;text-align:right;">' + esc(vol2) + '</td>';
+                                tbody.appendChild(tr);
+                            });
+                            tblWrap.appendChild(tbl);
+                            paneCuft.appendChild(tblWrap);
+                            var footer = document.createElement('div');
+                            footer.style.cssText = 'padding:6px 14px;font-size:11px;color:' + (isDark ? '#8080a0' : '#757575') + ';border-top:1px solid ' + (isDark ? '#2e2e45' : '#e0e0e0') + ';background:' + (isDark ? '#16213e' : '#fafafa') + ';display:flex;justify-content:space-between;flex-shrink:0;';
+                            footer.innerHTML = '<span>Atualizado: ' + new Date().toLocaleTimeString('pt-BR', { hour12: false }) + '</span><span>' + dockContainers.length + ' ' + L('containerIn') + ' ' + esc(dock) + '</span>';
+                            paneCuft.appendChild(footer);
                         });
                     }
                     loadCuft();
@@ -4027,6 +4051,7 @@
                 }
             }
         }
+
 
         var _logLines = [];
 
@@ -4743,11 +4768,12 @@
             });
         }
 
+
     })();
 
-    if (_SUITE.isIB) {
+    if (_SUITE.isDock || _SUITE.isVista) {
         (function loadModuleMapaVSM() {
-            if (!_SUITE.isDock) return;
+            if (!_SUITE.isDock && !_SUITE.isVista) return;
             'use strict';
 
             const BASE = _SUITE.BASE;
@@ -4831,7 +4857,6 @@
                 { id: 2, name: "Finger 2", belts: [9, 10, 11, 12, 13, 14, 15, 16] }
             ];
 
-            let activeNodeId = GM_getValue('tl_node', 'Node não selecionado');
             let ALL_VSMS = [];
             let VSM_SEGMENT_MAP = {};
             let BELT_GROUPS = [];
@@ -4849,7 +4874,62 @@
             let staticSelectedHour = -1;
             let cbRate = 500;
             let poRate = 1000;
+            let activeNodeId = _SUITE.utils.detectNode() || 'CGH7';
             let lastExportData = [];
+            // Expose VSM module to the suite for external data retrieval
+            _SUITE.vsm = {
+                getCache: () => lastExportData,
+                fetchByRoute: function (routes, callback) {
+                    if (!routes || routes.length === 0) { callback([]); return; }
+                    let routeArr = [];
+                    if (Array.isArray(routes)) {
+                        routes.forEach(r => { routeArr = routeArr.concat(String(r).split('-')); });
+                    } else {
+                        routeArr = String(routes).split('-');
+                    }
+                    routeArr = routeArr.map(r => r.trim()).filter(r => r);
+
+                    // 1. Try Cache First
+                    const cached = lastExportData.filter(v => routeArr.includes(v.route) || routeArr.includes(v.vrid));
+                    if (cached.length > 0) {
+                        const allContainers = [].concat(...cached.map(v => v.containers || []));
+                        if (allContainers.length > 0) {
+                            callback(allContainers);
+                            return;
+                        }
+                    }
+
+                    // 2. Headless Fetch (Reliable VSM style)
+                    const ts = getLocalDayTs(new Date());
+                    fetchVRIData(ts.start, ts.end, (err, res) => {
+                        if (err || !res) { callback([]); return; }
+                        const src = res?.ret?.aaData ?? {};
+                        const arr = Array.isArray(src) ? src : Object.values(src);
+                        const vridList = arr.map(item => {
+                            const l = getLoadObject(item);
+                            return {
+                                vrid: l.vrid || l.vrId || l.vId || '',
+                                planId: l.planId || l.planForOrderId || '',
+                                route: l.route || ''
+                            };
+                        }).filter(v => v.vrid && (routeArr.includes(v.route) || routeArr.includes(v.vrid)));
+
+                        if (!vridList.length) { callback([]); return; }
+
+                        const planIds = vridList.map(v => v.planId).filter(id => id);
+                        fetchContainers(planIds, (errC, resC) => {
+                            if (errC || !resC) { callback([]); return; }
+                            const countMap = resC?.ret?.inboundCDTContainerCount ?? {};
+                            let allResult = [];
+                            planIds.forEach(pid => {
+                                const conts = countMap[pid] || [];
+                                allResult = allResult.concat(conts);
+                            });
+                            callback(allResult);
+                        });
+                    });
+                }
+            };
 
             let autoRefreshTimer = null;
             let autoRefreshCountdownInterval = null;
@@ -6227,6 +6307,7 @@
 
                 selectedVrids = newSelectedVrids;
                 lastExportData = allExportData;
+                if (_SUITE.vsm) _SUITE.vsm.lastUpdate = Date.now();
 
                 computeAndRenderAll();
                 renderVridList();
@@ -7491,10 +7572,12 @@
                 rangeBtn.addEventListener('click', doRangeSearchHandler);
             }
 
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', init);
-            } else {
-                init();
+            if (_SUITE.isDock) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', init);
+                } else {
+                    init();
+                }
             }
         })();
     }
