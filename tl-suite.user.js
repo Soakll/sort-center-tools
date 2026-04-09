@@ -9546,26 +9546,26 @@
                 '.tl-goal-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap}',
 
                 '#tl-prod-body{overflow:auto;flex:1;min-height:0;background:transparent}',
-                '#tl-prod-body table{width:100%;border-collapse:collapse}',
+                '#tl-prod-body table{width:100%;border-collapse:collapse;border-spacing:0}',
 
-                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid rgba(255,255,255,0.15);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
+                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(255,255,255,0.2);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
                 '#tl-prod-body thead th:hover{color:#fff;background:rgba(51, 65, 85, 0.95)}',
                 '#tl-prod-body thead th.sort-asc::after{content:" ▴"}',
                 '#tl-prod-body thead th.sort-desc::after{content:" ▾"}',
 
-                '#tl-prod-body tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s ease}',
+                '#tl-prod-body tbody tr{border-bottom:1.5px solid rgba(255,255,255,0.2);transition:background .15s ease}',
                 '#tl-prod-body tbody tr:hover td{background:rgba(255,255,255,0.05)!important}',
-                '#tl-prod-body tbody td{padding:8px 12px;font-size:13px;color:#f1f5f9;text-align:center}',
-                '#tl-prod-body tbody td.td-label{font-weight:700;color:#fff!important;white-space:nowrap;font-size:14px;text-align:left}',
+                '#tl-prod-body tbody td{padding:8px 12px;font-size:13px;color:#f1f5f9;text-align:center;border:1.5px solid rgba(255,255,255,0.2)}',
+                '#tl-prod-body tbody td.td-label{font-weight:700;color:#fff!important;white-space:nowrap;font-size:14px;text-align:left;border-right:2px solid rgba(255,255,255,0.3)}',
                 '#tl-prod-body tbody td.td-num{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}',
                 '#tl-prod-body tbody td.td-err{font-weight:700;color:#f87171}',
                 '#tl-prod-body tbody td.td-na{color:#64748b;font-style:italic}',
-                '#tl-prod-body tbody td.td-pph{font-weight:800;border-radius:4px}',
+                '#tl-prod-body tbody td.td-pph{font-weight:800;border-radius:0}',
 
-                'td.tier-top{background:rgba(30, 64, 175, 0.45);color:#fff!important}',
-                'td.tier-good{background:rgba(21, 128, 61, 0.45);color:#fff!important}',
-                'td.tier-mid{background:rgba(180, 83, 9, 0.45);color:#fff!important}',
-                'td.tier-low{background:rgba(185, 28, 28, 0.45);color:#fff!important}',
+                'td.tier-top{background:rgba(21, 128, 61, 0.45);color:#fff!important}',
+                'td.tier-good{background:rgba(234, 179, 8, 0.45);color:#000!important}',
+                'td.tier-mid{background:rgba(220, 38, 38, 0.45);color:#fff!important}',
+                'td.tier-low{background:rgba(0, 0, 0, 0.85);color:#fff!important}',
                 'td.tier-none{background:transparent}',
 
                 '#tl-prod-footer{padding:12px 20px;font-size:14px;color:#94a3b8;border-top:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}',
@@ -9727,10 +9727,10 @@
                 '<div style="flex:1"></div>' +
                 '🔍 <input type="text" id="tl-prod-search" placeholder="Procurar associado..." style="width:200px;font-size:12px;padding:6px 10px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;outline:none;transition:border-color 0.2s">' +
                 '<div id="tl-goal-legend">' +
-                '<span class="tl-goal-chip" style="background:rgba(30,64,175,0.3);border:1px solid #1e40af;color:#60a5fa">≥95%</span>' +
-                '<span class="tl-goal-chip" style="background:rgba(21,128,61,0.3);border:1px solid #15803d;color:#4ade80">≥80%</span>' +
-                '<span class="tl-goal-chip" style="background:rgba(180,83,9,0.3);border:1px solid #b45309;color:#fbbf24">≥50%</span>' +
-                '<span class="tl-goal-chip" style="background:rgba(185,28,28,0.3);border:1px solid #b91c1c;color:#f87171">&lt;50%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(21, 128, 61, 0.2);border:1px solid #15803d;color:#4ade80">≥90%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(234, 179, 8, 0.2);border:1px solid #ca8a04;color:#facc15">≥75%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(220, 38, 38, 0.2);border:1px solid #b91c1c;color:#f87171">≥40%</span>' +
+                '<span class="tl-goal-chip" style="background:rgba(0, 0, 0, 0.4);border:1px solid #333;color:#999">&lt;40%</span>' +
                 '</div>';
             popup.appendChild(goalBar);
 
@@ -9985,9 +9985,9 @@
             function tierClass(pph) {
                 if (!pph || !goalPph) return 'tier-none';
                 var ratio = pph / goalPph;
-                if (ratio >= 0.95) return 'tier-top';
-                if (ratio >= 0.80) return 'tier-good';
-                if (ratio >= 0.50) return 'tier-mid';
+                if (ratio >= 0.90) return 'tier-top';
+                if (ratio >= 0.75) return 'tier-good';
+                if (ratio >= 0.40) return 'tier-mid';
                 return 'tier-low';
             }
 
@@ -10041,11 +10041,10 @@
                 function getTierColor(pph) {
                     if (!pph || !goalPph) return 'transparent';
                     var ratio = pph / goalPph;
-                    // Cores "antigas" mas com saturação e brilho reforçados (Premium)
-                    if (ratio >= 1.05) return 'hsla(217, 91%, 50%, 1)'; // Top Tier (Azul intenso)
-                    if (ratio >= 0.85) return 'hsla(142, 76%, 36%, 1)'; // Good Tier (Verde vivo)
-                    if (ratio >= 0.60) return 'hsla(32, 95%, 44%, 1)';  // Mid Tier (Laranja vibrante)
-                    return 'hsla(0, 84%, 45%, 1)';                      // Low Tier (Vermelho forte)
+                    if (ratio >= 0.90) return 'hsla(142, 69%, 36%, 1)'; // Verde (Ex-Azul)
+                    if (ratio >= 0.75) return 'hsla(48, 96%, 43%, 1)';  // Amarelo (Ex-Verde)
+                    if (ratio >= 0.40) return 'hsla(0, 72%, 41%, 1)';   // Vermelho (Ex-Amarelo)
+                    return 'hsla(0, 0%, 10%, 1)';                      // Preto (Ex-Vermelho)
                 }
 
                 var html = '<table><thead><tr>' +
@@ -10057,7 +10056,7 @@
                     '<span style="font-size:17px;font-weight:900;color:#fff;text-shadow:none">' + pkgTotal.toLocaleString('pt-BR') + '</span>' +
                     '</div>' +
                     '</th>' +
-                    '<th style="width:100px">PKGS/H</th>';
+                    '<th style="width:100px">Rating</th>';
 
                 if (selectedHour === 'total' && currentSlots.length > 0) {
                     currentSlots.forEach(function (h) {
@@ -10143,6 +10142,9 @@
                             : '<td class="td-num tl-err-col" style="color:#64748b">0</td>';
 
                         var delay = Math.min(i * 12, 220);
+                        var totalPct = winners.total > 0 ? (shownPkgs / winners.total) * 100 : 0;
+                        var totalStyle = 'font-weight:900;color:#fff;font-size:15px;position:relative;background:linear-gradient(90deg, rgba(59, 130, 246, 0.25) ' + totalPct + '%, transparent ' + totalPct + '%)';
+
                         html += '<tr class="tl-row-anim" style="animation-delay:' + delay + 'ms">' +
                             '<td style="color:#64748b;font-size:12px;width:34px">' + (i + 1) + '</td>' +
                             '<td class="td-label">' +
@@ -10150,7 +10152,7 @@
                             '<span>' + name + '</span>' +
                             '</div>' +
                             '</td>' +
-                            '<td class="td-num" style="font-weight:800;color:#f1f5f9;font-size:15px">' +
+                            '<td class="td-num" style="' + totalStyle + '">' +
                             shownPkgs.toLocaleString('pt-BR') + (shownPkgs > 0 && shownPkgs === winners.total ? ' <span title="Melhor Total" style="filter:drop-shadow(0 0 2px gold)">🥇</span>' : '') +
                             '</td>' +
                             pphCell;
