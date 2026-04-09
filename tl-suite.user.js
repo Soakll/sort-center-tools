@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.6
+// @version      1.1.7
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.6";
+    const VERSION = "1.1.7";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
@@ -10066,7 +10066,7 @@
                         var startH = h.split(':')[0];
                         var endH = (parseInt(startH, 10) + 1).toString().padStart(2, '0');
                         var label = startH + 'h->' + endH + 'h';
-                        
+
                         html += '<th class="tl-matrix-col">' +
                             '<div class="tl-hour-label">' + label + '</div>' +
                             '<div class="tl-matrix-col-header ' + (selectedHour === h ? 'active' : '') + '" data-hour="' + h + '" style="background:' + bg + ';border-color:rgba(255,255,255,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1)">' +
