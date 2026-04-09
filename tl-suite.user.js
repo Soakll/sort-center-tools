@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.5
+// @version      1.1.6
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.5";
+    const VERSION = "1.1.6";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
@@ -6436,34 +6436,25 @@
         .skel-bar { height: 10px; border-radius: 4px; }
 
         #vl-panel {
-            position: fixed;
-            top: 2%;
-            right: 2%;
-            width: 96%;
-            height: 92%;
-            max-width: 98vw;
-            max-height: 94vh;
-            background: rgba(10, 22, 40, 0.75);
+            position: fixed !important;
+            inset: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            max-width: 100vw !important; max-height: 100vh !important;
+            background: rgba(10, 22, 40, 0.85);
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+            border: none;
             overflow: hidden;
             box-shadow: 0 20px 60px rgba(0,0,0,.6);
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             font-size: 13px;
             color: #e8eaed;
-            z-index: 99999;
+            z-index: 2147483647;
             display: none;
-            resize: both;
-            border: 1px solid #2a3a4a;
             transition: all .2s ease;
         }
-        #vl-panel.vl-fullscreen {
-            top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
-            width: 100vw !important; height: 100vh !important; max-width: 100vw !important;
-            max-height: 100vh !important; border-radius: 0 !important; resize: none !important;
-        }
+
         #vl-panel-head {
             background: rgba(255, 255, 255, 0.03);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #e8eaed; padding: 0 16px;
@@ -7391,7 +7382,7 @@
                     staticHourPills.querySelectorAll('.hour-pill').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     staticSelectedHour = parseInt(btn.dataset.hour, 10);
-                    
+
                     const body = document.getElementById('vl-panel-body');
                     body.classList.add('updating');
                     setTimeout(() => {
@@ -8120,7 +8111,7 @@
             setTimeout(function () { buildRoutePanel(); }, 0);
 
             var calPanel = document.createElement('div');
-            calPanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:visible;max-height:0;transition:max-height 0.3s ease;';
+            calPanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.3s ease;';
             var calInner = document.createElement('div');
             calInner.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:8px;';
             calPanel.appendChild(calInner);
@@ -8369,7 +8360,7 @@
             _panel.style.cssText = 'position:fixed;inset:0;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(16px);z-index:2147483645;display:none;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Arial,sans-serif;color:#fff;';
             _panel.classList.remove('open'); // Ensure it starts closed
             _panel.appendChild(hdr); _panel.appendChild(toolbar); _panel.appendChild(routePanel);
-            _panel.appendChild(calPanel); 
+            _panel.appendChild(calPanel);
             gridWrap.id = 'ob-dock-grid-wrap';
             gridWrap.classList.add('tl-morph-target');
             _panel.appendChild(gridWrap); _panel.appendChild(statusBar);
@@ -8514,7 +8505,7 @@
                     rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
                 } else {
                     gridWrap.classList.add('updating');
-                    setTimeout(function() {
+                    setTimeout(function () {
                         grid.innerHTML = '';
                         rows.forEach(function (r) { grid.appendChild(makeCard(r)); });
                         gridWrap.classList.remove('updating');
@@ -8647,10 +8638,10 @@
             btn.style.cssText = ['position:fixed;bottom:130px;right:20px;z-index:2147483646', 'background:#1f6feb;color:#fff;border:none;border-radius:8px', 'padding:7px 16px;font-size:11px;font-weight:700;cursor:pointer', 'font-family:"Amazon Ember",Arial,sans-serif;box-shadow:0 4px 12px rgba(31,111,235,0.4)', 'transition:background 0.15s,transform 0.1s'].join(';');
             btn.onmouseover = function () { btn.style.background = '#388bfd'; btn.style.transform = 'translateY(-1px)'; };
             btn.onmouseout = function () { btn.style.background = '#1f6feb'; btn.style.transform = ''; };
-            btn.onclick = function () { 
-                buildPanel(); 
-                _panel.style.display = 'flex'; 
-                _panel.classList.add('open'); 
+            btn.onclick = function () {
+                buildPanel();
+                _panel.style.display = 'flex';
+                _panel.classList.add('open');
             };
             document.body.appendChild(btn);
         }
@@ -9528,8 +9519,6 @@
 
                 '#tl-prod-body{overflow:auto;flex:1;min-height:0;background:transparent}',
                 '#tl-prod-body table{width:100%;border-collapse:collapse}',
-                '#tl-prod-body tbody tr{animation:tl-row-in 0.3s ease backwards;border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s ease}',
-                '@keyframes tl-row-in{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}',
 
                 '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid rgba(255,255,255,0.15);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
                 '#tl-prod-body thead th:hover{color:#fff;background:rgba(51, 65, 85, 0.95)}',
@@ -9563,7 +9552,7 @@
                 '#tl-blur-toggle{background:none;border:1.5px solid #d1d5db;color:#d1d5db;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px;transition:all .15s}',
                 '#tl-blur-toggle:hover{border-color:#3b82f6;color:#3b82f6;background:rgba(59,130,246,0.1)}',
                 '#tl-blur-toggle.on{background:#fef3c7;border-color:#f59e0b;color:#92400e}',
-                
+
                 '#tl-hourly-summary{display:none}',
                 '.tl-matrix-col{text-align:center!important;font-family:monospace;font-size:14px;color:#cbd5e1;min-width:85px;border-left:1px solid rgba(255,255,255,0.08);padding:10px 8px!important}',
                 '.tl-matrix-col-header{display:inline-flex;flex-direction:column;align-items:center;padding:8px 16px!important;line-height:1.2;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);min-width:70px;margin:3px 0;position:relative;overflow:hidden}',
@@ -9576,7 +9565,7 @@
                 '.tl-matrix-col-header.active span:first-child{color:rgba(255,255,255,0.9)}',
                 '.tl-matrix-cell{color:#f1f5f9;font-weight:700;border-radius:4px;transition:background 0.3s, color 0.3s}',
                 '.tl-matrix-cell.zero{color:rgba(255,255,255,0.03);font-weight:400}',
-                
+
                 '#tl-prod-body tr{opacity:1;transition:opacity 0.2s, transform 0.2s}',
                 '#tl-prod-body.updating tr{opacity:0;transform:translateY(4px)}',
                 '.tl-row-anim{animation:tl-row-fade-in 0.3s ease-out backwards}',
@@ -9743,7 +9732,7 @@
             var selectedHour = 'total';
             var searchQuery = '';
 
-            document.getElementById('tl-prod-search').addEventListener('input', function(e){
+            document.getElementById('tl-prod-search').addEventListener('input', function (e) {
                 searchQuery = e.target.value.toLowerCase().trim();
                 renderTable();
             });
@@ -9818,25 +9807,20 @@
             function showSkeleton() {
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (!bodyEl) return;
-                var tiers = ['#dbeafe', '#d1fae5', '#d1fae5', '#fef3c7', '#fef3c7', '#fef3c7', '#fee2e2', '#fee2e2', '#fee2e2', '#fee2e2'];
-                var nameLens = [140, 120, 160, 110, 150, 130, 145, 125, 135, 115];
-                var html = '<table style="width:100%;border-collapse:collapse">' +
+                var html = '<table style="width:100%;border-collapse:collapse;table-layout:fixed">' +
                     '<thead><tr>' +
-                    '<th style="background:rgba(30,30,50,0.4);padding:8px 6px;width:28px;border-bottom:1px solid rgba(255,255,255,0.1)"></th>' +
-                    '<th style="background:rgba(30,30,50,0.4);padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.1)"><div class="tl-sk" style="width:70px;height:10px"></div></th>' +
-                    '<th style="background:rgba(30,30,50,0.4);padding:8px 14px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.1)"><div class="tl-sk" style="width:48px;height:10px;margin-left:auto"></div></th>' +
-                    '<th style="background:rgba(30,30,50,0.4);padding:8px 14px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.1)"><div class="tl-sk" style="width:36px;height:10px;margin-left:auto"></div></th>' +
-                    '<th style="background:rgba(30,30,50,0.4);padding:8px 14px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.1)"><div class="tl-sk" style="width:30px;height:10px;margin-left:auto"></div></th>' +
+                    '<th style="width:34px;padding:12px 6px"></th>' +
+                    '<th style="text-align:left!important;min-width:360px;padding:12px 14px"><div class="tl-sk" style="width:100px;height:12px"></div></th>' +
+                    '<th style="width:110px;padding:12px 14px"><div class="tl-sk" style="width:70px;height:35px;border-radius:8px;margin:0 auto"></div></th>' +
+                    '<th style="width:100px;padding:12px 14px"><div class="tl-sk" style="width:60px;height:12px;margin:0 auto"></div></th>' +
                     '</tr></thead><tbody>';
-                for (var i = 0; i < 10; i++) {
-                    var bg = tiers[i] || '#f9fafb';
-                    var nw = nameLens[i] || 120;
-                    html += '<tr style="border-bottom:1px solid #f3f4f6;background:' + bg + '">' +
-                        '<td style="padding:9px 6px;text-align:center;font-size:11px;color:#9ca3af;width:28px">' + (i + 1) + '</td>' +
-                        '<td style="padding:9px 14px"><div class="tl-sk" style="width:' + nw + 'px;height:13px"></div></td>' +
-                        '<td style="padding:9px 14px;text-align:right"><div class="tl-sk" style="width:38px;height:13px;margin-left:auto"></div></td>' +
-                        '<td style="padding:9px 14px;text-align:right"><div class="tl-sk" style="width:30px;height:13px;margin-left:auto"></div></td>' +
-                        '<td style="padding:9px 14px;text-align:right"><div class="tl-sk" style="width:22px;height:13px;margin-left:auto"></div></td>' +
+                for (var i = 0; i < 12; i++) {
+                    var nw = 140 + Math.random() * 100;
+                    html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.03)">' +
+                        '<td style="padding:14px 6px;text-align:center;width:34px"><div class="tl-sk" style="width:14px;height:10px;margin:0 auto"></div></td>' +
+                        '<td style="padding:14px 14px"><div class="tl-sk" style="width:' + nw + 'px;height:14px"></div></td>' +
+                        '<td style="padding:14px 14px;text-align:center"><div class="tl-sk" style="width:50px;height:14px;margin:0 auto"></div></td>' +
+                        '<td style="padding:14px 14px;text-align:center"><div class="tl-sk" style="width:40px;height:14px;margin:0 auto"></div></td>' +
                         '</tr>';
                 }
                 html += '</tbody></table>';
@@ -9983,7 +9967,7 @@
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (!bodyEl) return;
                 bodyEl.classList.add('updating');
-                setTimeout(function(){
+                setTimeout(function () {
                     executeRender(bodyEl);
                     bodyEl.classList.remove('updating');
                 }, 60);
@@ -10006,33 +9990,78 @@
                     });
                 });
 
+                var totalsPerSlot = {};
+                var maxSlotVol = 0;
+                var minSlotVol = Infinity;
+
+                currentSlots.forEach(function (h) {
+                    var vol = 0;
+                    Object.values(hourlyMaps[h]).forEach(function (r) { vol += (r.successfulScans || 0); });
+                    totalsPerSlot[h] = vol;
+                    if (vol > maxSlotVol) maxSlotVol = vol;
+                    if (vol < minSlotVol) minSlotVol = vol;
+                });
+
+                function getHeatColor(val) {
+                    if (maxSlotVol === minSlotVol) return 'rgba(56, 189, 248, 0.4)';
+                    // Usar escala não-linear para maior distinção entre picos
+                    var ratio = Math.pow((val - minSlotVol) / (maxSlotVol - minSlotVol), 1.2);
+                    var hue = ratio * 125;
+                    return 'hsla(' + hue + ', 90%, 38%, 1)';
+                }
+
+                function getTierColor(pph) {
+                    if (!pph || !goalPph) return 'transparent';
+                    var ratio = pph / goalPph;
+                    // Cores "antigas" mas com saturação e brilho reforçados (Premium)
+                    if (ratio >= 1.05) return 'hsla(217, 91%, 50%, 1)'; // Top Tier (Azul intenso)
+                    if (ratio >= 0.85) return 'hsla(142, 76%, 36%, 1)'; // Good Tier (Verde vivo)
+                    if (ratio >= 0.60) return 'hsla(32, 95%, 44%, 1)';  // Mid Tier (Laranja vibrante)
+                    return 'hsla(0, 84%, 45%, 1)';                      // Low Tier (Vermelho forte)
+                }
+
                 var html = '<table><thead><tr>' +
                     '<th style="width:34px">#</th>' +
                     '<th style="text-align:left!important;min-width:360px">ASSOCIADO</th>' +
-                    '<th style="width:110px">' +
-                    '<div class="tl-matrix-col-header ' + (selectedHour === 'total' ? 'active' : '') + '" data-hour="total">' +
-                    '<span>TOTAL</span>' +
-                    '<span>' + pkgTotal.toLocaleString('pt-BR') + '</span>' +
+                    '<th style="width:110px;vertical-align:bottom;padding-bottom:12px">' +
+                    '<div class="tl-matrix-col-header ' + (selectedHour === 'total' ? 'active' : '') + '" data-hour="total" style="height:58px;justify-content:center;background:#1e40af;border-color:#3b82f6">' +
+                    '<span style="font-size:10px;opacity:0.9;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,0.3)">TOTAL</span>' +
+                    '<span style="font-size:19px;margin-top:2px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.3)">' + pkgTotal.toLocaleString('pt-BR') + '</span>' +
                     '</div>' +
                     '</th>' +
                     '<th style="width:100px">PKGS/H</th>';
 
                 if (selectedHour === 'total' && currentSlots.length > 0) {
                     currentSlots.forEach(function (h) {
-                        var slotTotal = 0;
-                        Object.values(hourlyMaps[h]).forEach(function (r) { slotTotal += (r.successfulScans || 0); });
+                        var vol = totalsPerSlot[h];
+                        var bg = getHeatColor(vol);
                         html += '<th class="tl-matrix-col">' +
-                            '<div class="tl-matrix-col-header ' + (selectedHour === h ? 'active' : '') + '" data-hour="' + h + '">' +
-                            '<span>' + h + '</span>' +
-                            '<span>' + slotTotal.toLocaleString('pt-BR') + '</span>' +
+                            '<div class="tl-matrix-col-header ' + (selectedHour === h ? 'active' : '') + '" data-hour="' + h + '" style="background:' + bg + ';border-color:rgba(255,255,255,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1)">' +
+                            '<span style="color:rgba(255,255,255,0.8);font-size:9px;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,0.4)">' + h + '</span>' +
+                            '<span style="color:#fff;font-size:15px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.4)">' + vol.toLocaleString('pt-BR') + '</span>' +
                             '</div>' +
                             '</th>';
                     });
                 }
 
+                var winners = { total: 0 };
+                currentSlots.forEach(function (h) { winners[h] = 0; });
+
+                lastData.forEach(function (d) {
+                    var login = d.login || d.userLogin || d.userName;
+                    var total = d.successfulScans || 0;
+                    if (total > winners.total) winners.total = total;
+
+                    currentSlots.forEach(function (h) {
+                        var hr = hourlyMaps[h][login];
+                        var pkgs = hr ? (hr.successfulScans || 0) : 0;
+                        if (pkgs > winners[h]) winners[h] = pkgs;
+                    });
+                });
+
                 html += '</tr></thead><tbody>';
 
-                var sorted = lastData.slice().filter(function(d){
+                var sorted = lastData.slice().filter(function (d) {
                     if (!searchQuery) return true;
                     var name = (d.userName || '').toLowerCase();
                     var login = (d.login || d.userLogin || '').toLowerCase();
@@ -10050,7 +10079,7 @@
                 sorted.forEach(function (d, i) {
                     var login = d.login || d.userLogin || d.userName;
                     var name = normalizeName(d.userName || login);
-                    
+
                     var totalPkgs = d.successfulScans || 0;
                     var totalErr = d.errorScans || 0;
                     var totalWork = d.workInSeconds || 0;
@@ -10074,9 +10103,9 @@
                     if (!isFilteredOut) {
                         var pph = shownWork > 0 ? Math.round(shownPkgs / (shownWork / 3600)) : (shownPkgs > 0 ? shownPkgs : null);
                         var pphCell = pph !== null
-                            ? '<td class="td-pph ' + tierClass(pph) + '">' + pph.toLocaleString('pt-BR') + '</td>'
+                            ? '<td class="td-pph" style="background:' + getTierColor(pph) + ';color:#fff;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.5)">' + pph.toLocaleString('pt-BR') + '</td>'
                             : '<td class="td-na">—</td>';
-                            
+
                         var errCell = shownErr > 0
                             ? '<td class="td-err tl-err-col">' + shownErr + '</td>'
                             : '<td class="td-num tl-err-col" style="color:#64748b">0</td>';
@@ -10085,12 +10114,13 @@
                         html += '<tr class="tl-row-anim" style="animation-delay:' + delay + 'ms">' +
                             '<td style="color:#64748b;font-size:12px;width:34px">' + (i + 1) + '</td>' +
                             '<td class="td-label">' +
-                                '<div style="display:flex;justify-content:space-between;align-items:center;min-width:340px;gap:15px">' +
-                                    '<span>' + name + '</span>' +
-                                    '<span style="font-family:monospace;font-size:13px;color:#9cadbd;font-weight:700">' + totalPkgs.toLocaleString('pt-BR') + '</span>' +
-                                '</div>' +
+                            '<div style="display:flex;align-items:center;min-width:340px;gap:15px">' +
+                            '<span>' + name + '</span>' +
+                            '</div>' +
                             '</td>' +
-                            '<td class="td-num">' + (selectedHour === 'total' ? '' : shownPkgs.toLocaleString('pt-BR')) + '</td>' +
+                            '<td class="td-num" style="font-weight:800;color:#f1f5f9;font-size:15px">' +
+                            shownPkgs.toLocaleString('pt-BR') + (shownPkgs > 0 && shownPkgs === winners.total ? ' <span title="Melhor Total" style="filter:drop-shadow(0 0 2px gold)">🥇</span>' : '') +
+                            '</td>' +
                             pphCell;
 
                         if (selectedHour === 'total' && currentSlots.length > 0) {
@@ -10099,10 +10129,12 @@
                                 var slotPkgs = slotRec ? (slotRec.successfulScans || 0) : 0;
                                 var slotSecs = slotRec ? (slotRec.workInSeconds || 0) : 0;
                                 var slotPph = slotSecs > 0 ? Math.round(slotPkgs / (slotSecs / 3600)) : (slotPkgs > 0 ? slotPkgs : null);
-                                
-                                var cellTier = slotPph !== null ? tierClass(slotPph) : 'tier-none';
-                                var cellCls = slotPkgs > 0 ? 'tl-matrix-cell ' + cellTier : 'tl-matrix-cell zero';
-                                html += '<td class="tl-matrix-col ' + cellCls + '">' + (slotPkgs > 0 ? slotPkgs.toLocaleString('pt-BR') : '0') + '</td>';
+
+                                var cellBg = slotPkgs > 0 ? getTierColor(slotPph) : 'transparent';
+                                var isWinner = slotPkgs > 0 && slotPkgs === winners[h];
+                                var cellShadow = slotPkgs > 0 ? 'text-shadow:0 1px 2px rgba(0,0,0,0.5);font-weight:800;color:#fff' : 'color:rgba(255,255,255,0.05)';
+                                var winnerEmoji = isWinner ? '<span style="display:inline-block;margin-left:2px;filter:drop-shadow(0 0 2px gold)">🥇</span>' : '';
+                                html += '<td class="tl-matrix-col tl-matrix-cell" style="background:' + cellBg + ';' + cellShadow + '">' + (slotPkgs > 0 ? slotPkgs.toLocaleString('pt-BR') + winnerEmoji : '0') + '</td>';
                             });
                         }
                         html += '</tr>';
