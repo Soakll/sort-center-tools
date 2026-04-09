@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.9
+// @version      1.1.10
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -35,7 +35,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.9";
+    const VERSION = "1.1.10";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
