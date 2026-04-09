@@ -5095,67 +5095,91 @@
             }
 
             function fetchVRIData(startTimestamp, endTimestamp, callback) {
-                const params = new URLSearchParams({
-                    entity: 'getInboundDockView',
-                    nodeId: activeNodeId,
-                    startDate: startTimestamp,
-                    endDate: endTimestamp,
-                    loadCategories: 'inboundScheduled,inboundArrived,inboundCompleted',
-                    shippingPurposeType: 'TRANSSHIPMENT,NON-TRANSSHIPMENT,SHIP_WITH_AMAZON'
-                });
-                GM_xmlhttpRequest({
-                    method: 'POST',
-                    url: BASE + 'ssp/dock/hrz/ib/fetchdata',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'anti-csrftoken-a2z': _csrf
-                    },
-                    data: params.toString(),
-                    withCredentials: true,
-                    timeout: 20000,
-                    onload: function (response) {
-                        try {
-                            const data = JSON.parse(response.responseText.replace(/^\uFEFF/, ''));
-                            callback(null, data);
-                        } catch (e) {
-                            callback(e, null);
-                        }
-                    },
-                    onerror: function (error) { callback(error, null); },
-                    ontimeout: function () { callback('Timeout', null); }
+                if (!activeNodeId || activeNodeId.includes('selecionado')) {
+                    activeNodeId = _SUITE.utils.detectNode() || 'CGH7';
+                }
+
+                _SUITE.utils.fetchAntiCsrfToken(function (token) {
+                    const finalToken = token || _csrf;
+                    if (!finalToken) {
+                        callback('Erro: Token de segurança não encontrado. Recarregue a página.', null);
+                        return;
+                    }
+
+                    const params = new URLSearchParams({
+                        entity: 'getInboundDockView',
+                        nodeId: activeNodeId,
+                        startDate: startTimestamp,
+                        endDate: endTimestamp,
+                        loadCategories: 'inboundScheduled,inboundArrived,inboundCompleted',
+                        shippingPurposeType: 'TRANSSHIPMENT,NON-TRANSSHIPMENT,SHIP_WITH_AMAZON'
+                    });
+                    GM_xmlhttpRequest({
+                        method: 'POST',
+                        url: BASE + 'ssp/dock/hrz/ib/fetchdata',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'anti-csrftoken-a2z': finalToken
+                        },
+                        data: params.toString(),
+                        withCredentials: true,
+                        timeout: 20000,
+                        onload: function (response) {
+                            if (response.finalUrl && (response.finalUrl.includes('midway-auth') || response.finalUrl.includes('/SSO/'))) {
+                                callback('SESSAO_EXPIRADA', null);
+                                return;
+                            }
+                            try {
+                                const data = JSON.parse(response.responseText.replace(/^\uFEFF/, ''));
+                                callback(null, data);
+                            } catch (e) {
+                                callback(e, null);
+                            }
+                        },
+                        onerror: function (error) { callback(error, null); },
+                        ontimeout: function () { callback('Timeout', null); }
+                    });
                 });
             }
 
             function fetchContainers(planIds, callback) {
                 if (!planIds || planIds.length === 0) { callback(null, {}); return; }
                 const idsParam = planIds.join(',');
-                const params = new URLSearchParams({
-                    entity: 'getCDTBasedContainerCount',
-                    inboundLoadIds: idsParam,
-                    nodeId: activeNodeId
-                });
-                GM_xmlhttpRequest({
-                    method: 'POST',
-                    url: BASE + 'ssp/dock/hrz/ib/fetchdata',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'anti-csrftoken-a2z': _csrf
-                    },
-                    data: params.toString(),
-                    withCredentials: true,
-                    timeout: 20000,
-                    onload: function (response) {
-                        try {
-                            const data = JSON.parse(response.responseText.replace(/^\uFEFF/, ''));
-                            callback(null, data);
-                        } catch (e) {
-                            callback(e, null);
-                        }
-                    },
-                    onerror: function (error) { callback(error, null); },
-                    ontimeout: function () { callback('Timeout', null); }
+
+                _SUITE.utils.fetchAntiCsrfToken(function (token) {
+                    const finalToken = token || _csrf;
+                    const params = new URLSearchParams({
+                        entity: 'getCDTBasedContainerCount',
+                        inboundLoadIds: idsParam,
+                        nodeId: activeNodeId
+                    });
+                    GM_xmlhttpRequest({
+                        method: 'POST',
+                        url: BASE + 'ssp/dock/hrz/ib/fetchdata',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'anti-csrftoken-a2z': finalToken
+                        },
+                        data: params.toString(),
+                        withCredentials: true,
+                        timeout: 20000,
+                        onload: function (response) {
+                            if (response.finalUrl && (response.finalUrl.includes('midway-auth') || response.finalUrl.includes('/SSO/'))) {
+                                callback('SESSAO_EXPIRADA', null);
+                                return;
+                            }
+                            try {
+                                const data = JSON.parse(response.responseText.replace(/^\uFEFF/, ''));
+                                callback(null, data);
+                            } catch (e) {
+                                callback(e, null);
+                            }
+                        },
+                        onerror: function (error) { callback(error, null); },
+                        ontimeout: function () { callback('Timeout', null); }
+                    });
                 });
             }
 
@@ -6262,7 +6286,9 @@
                         });
                     });
                 } catch (e) {
-                    resultDiv.innerHTML = `<div class="vl-err">Erro ao buscar VRIDs: ${esc(String(e))}</div>`;
+                    let msg = esc(String(e));
+                    if (e === 'SESSAO_EXPIRADA') msg = '🔐 Sessão expirada. <a href="' + location.href + '" style="color:#388bfd">Recarregue a página</a>.';
+                    resultDiv.innerHTML = `<div class="vl-err">Erro ao buscar VRIDs: ${msg}</div>`;
                     progDiv.style.display = 'none';
                     return;
                 }
@@ -6317,7 +6343,9 @@
                         });
                     });
                 } catch (e) {
-                    resultDiv.innerHTML = `<div class="vl-err">Erro ao buscar VRIDs: ${esc(String(e))}</div>`;
+                    let msg = esc(String(e));
+                    if (e === 'SESSAO_EXPIRADA') msg = '🔐 Sessão expirada. <a href="' + location.href + '" style="color:#388bfd">Recarregue a página</a>.';
+                    resultDiv.innerHTML = `<div class="vl-err">Erro ao buscar VRIDs: ${msg}</div>`;
                     progDiv.style.display = 'none';
                     return;
                 }
@@ -9554,15 +9582,15 @@
                 '#tl-blur-toggle.on{background:#fef3c7;border-color:#f59e0b;color:#92400e}',
 
                 '#tl-hourly-summary{display:none}',
-                '.tl-matrix-col{text-align:center!important;font-family:monospace;font-size:14px;color:#cbd5e1;min-width:85px;border-left:1px solid rgba(255,255,255,0.08);padding:10px 8px!important}',
-                '.tl-matrix-col-header{display:inline-flex;flex-direction:column;align-items:center;padding:8px 16px!important;line-height:1.2;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);min-width:70px;margin:3px 0;position:relative;overflow:hidden}',
-                '.tl-matrix-col-header:hover{background:rgba(255,255,255,0.15);border-color:#3b82f6;transform:translateY(-1px)}',
-                '.tl-matrix-col-header.active{background:#2563eb;border-color:#3b82f6;box-shadow:0 0 15px rgba(37,99,235,0.5);transform:scale(1.05);z-index:10}',
+                '.tl-matrix-col{text-align:center!important;font-family:monospace;font-size:13px;color:#cbd5e1;min-width:64px!important;border-left:1px solid rgba(255,255,255,0.08);padding:6px 2px!important}',
+                '.tl-hour-label{font-size:13px;font-weight:900;color:#fff!important;margin-bottom:6px;white-space:nowrap;letter-spacing:-0.4px;text-shadow:0 1px 2px rgba(0,0,0,0.8)}',
+                '.tl-matrix-col-header{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 2px!important;line-height:1.1;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer;transition:all 0.2s ease;min-width:60px!important;margin:0;position:relative;overflow:hidden;height:32px}',
+                '.tl-matrix-col-header span{font-size:14px;color:#000!important;font-weight:900;text-shadow:none!important}',
+                '.tl-matrix-col-header.active span{color:#fff!important}',
+                '.tl-matrix-col-header:hover{background:rgba(255,255,255,0.15);border-color:#3b82f6}',
+                '.tl-matrix-col-header.active{background:#2563eb;border-color:#3b82f6;box-shadow:0 0 12px rgba(37,99,235,0.5)}',
                 '.tl-matrix-col-header::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,0.1),transparent);opacity:0;transition:opacity 0.3s}',
                 '.tl-matrix-col-header.active::after{opacity:1}',
-                '.tl-matrix-col-header span:first-child{font-size:11px;color:#9cadbd;text-transform:uppercase;font-weight:800;margin-bottom:2px;transition:color 0.3s}',
-                '.tl-matrix-col-header span:last-child{font-size:15px;color:#fff;font-weight:900;transition:transform 0.3s}',
-                '.tl-matrix-col-header.active span:first-child{color:rgba(255,255,255,0.9)}',
                 '.tl-matrix-cell{color:#f1f5f9;font-weight:700;border-radius:4px;transition:background 0.3s, color 0.3s}',
                 '.tl-matrix-cell.zero{color:rgba(255,255,255,0.03);font-weight:400}',
 
@@ -10023,10 +10051,10 @@
                 var html = '<table><thead><tr>' +
                     '<th style="width:34px">#</th>' +
                     '<th style="text-align:left!important;min-width:360px">ASSOCIADO</th>' +
-                    '<th style="width:110px;vertical-align:bottom;padding-bottom:12px">' +
-                    '<div class="tl-matrix-col-header ' + (selectedHour === 'total' ? 'active' : '') + '" data-hour="total" style="height:58px;justify-content:center;background:#1e40af;border-color:#3b82f6">' +
-                    '<span style="font-size:10px;opacity:0.9;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,0.3)">TOTAL</span>' +
-                    '<span style="font-size:19px;margin-top:2px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.3)">' + pkgTotal.toLocaleString('pt-BR') + '</span>' +
+                    '<th style="width:70px;vertical-align:bottom;padding-bottom:12px">' +
+                    '<div class="tl-matrix-col-header ' + (selectedHour === 'total' ? 'active' : '') + '" data-hour="total" style="height:54px;justify-content:center;background:#1e40af;border-color:#3b82f6">' +
+                    '<span style="font-size:10px;opacity:0.9;font-weight:800;color:rgba(255,255,255,0.8);text-shadow:none">TOTAL</span>' +
+                    '<span style="font-size:17px;font-weight:900;color:#fff;text-shadow:none">' + pkgTotal.toLocaleString('pt-BR') + '</span>' +
                     '</div>' +
                     '</th>' +
                     '<th style="width:100px">PKGS/H</th>';
@@ -10035,10 +10063,14 @@
                     currentSlots.forEach(function (h) {
                         var vol = totalsPerSlot[h];
                         var bg = getHeatColor(vol);
+                        var startH = h.split(':')[0];
+                        var endH = (parseInt(startH, 10) + 1).toString().padStart(2, '0');
+                        var label = startH + 'h->' + endH + 'h';
+                        
                         html += '<th class="tl-matrix-col">' +
+                            '<div class="tl-hour-label">' + label + '</div>' +
                             '<div class="tl-matrix-col-header ' + (selectedHour === h ? 'active' : '') + '" data-hour="' + h + '" style="background:' + bg + ';border-color:rgba(255,255,255,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1)">' +
-                            '<span style="color:rgba(255,255,255,0.8);font-size:9px;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,0.4)">' + h + '</span>' +
-                            '<span style="color:#fff;font-size:15px;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.4)">' + vol.toLocaleString('pt-BR') + '</span>' +
+                            '<span>' + vol.toLocaleString('pt-BR') + '</span>' +
                             '</div>' +
                             '</th>';
                     });
