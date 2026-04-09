@@ -1122,9 +1122,9 @@
                 body.innerHTML = '<div class="vp-loading">' + L('vistaSearching') + '</div>';
                 vpOpen();
 
-                if (!_SUITE.vsm) { 
-                    body.innerHTML = '<div class="vp-loading" style="color:#c62828">⚠ VSM Module not loaded</div>'; 
-                    return; 
+                if (!_SUITE.vsm) {
+                    body.innerHTML = '<div class="vp-loading" style="color:#c62828">⚠ VSM Module not loaded</div>';
+                    return;
                 }
                 _SUITE.vsm.fetchByRoute(destination, function (containers) {
                     if (!containers || containers.length === 0) {
