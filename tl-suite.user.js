@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.10
+// @version      1.1.12
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -35,7 +35,7 @@
 (function () {
     'use strict';
 
-    const VERSION = "1.1.10";
+    const VERSION = "1.1.12";
     var _SUITE = {};
 
     // ═══════════════════════════════════════════════════════════════
@@ -9556,6 +9556,8 @@
             ];
             var autoRefreshOn = GM_getValue('tl_auto_on', false);
             var autoRefreshInterval = GM_getValue('tl_auto_ms', 5 * 60 * 1000);
+            var autoScrollLimit = GM_getValue('tl_as_limit', 25);
+            var autoScrollSpeed = GM_getValue('tl_as_speed', 1.0);
             var autoRefreshTimer = null;
             var countdownTimer = null;
             var nextRefreshAt = 0;
@@ -9684,6 +9686,12 @@
 
                 '.tl-morph-target{opacity:1;transition:opacity 0.2s, transform 0.2s}',
                 '.tl-morph-target.updating{opacity:0;transform:translateY(4px)}',
+
+                '.tl-as-group{display:flex;align-items:center;gap:6px;margin-left:15px;border-left:1.5px solid rgba(255,255,255,0.1);padding-left:15px}',
+                '.tl-as-inp{width:42px;height:22px;background:rgba(0,0,0,0.2);border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;text-align:center;font-size:11px;font-weight:700}',
+                '.tl-as-slider{width:70px;accent-color:#3b82f6;cursor:pointer;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.1);border-radius:2px}',
+                '.tl-as-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#3b82f6;border-radius:50%;cursor:pointer;box-shadow:0 0 5px rgba(0,0,0,0.5)}',
+                '.tl-as-label{font-size:10px;color:#9ca3af;text-transform:uppercase;font-weight:800;letter-spacing:0.02em}',
             ].join(''));
 
             var fab = document.createElement('button');
@@ -9791,12 +9799,20 @@
             }).join('');
 
             autoBar.innerHTML =
-                '<span id="tl-auto-label">Auto</span>' +
+                '<span id="tl-auto-label">Auto Refresh</span>' +
                 '<button type="button" id="tl-auto-toggle" class="' + (autoRefreshOn ? 'on' : '') + '" title="Ligar/desligar atualização automática">' +
                 '<span class="track"></span><span class="thumb"></span>' +
                 '</button>' +
                 '<select id="tl-auto-select">' + selectOpts + '</select>' +
                 '<span id="tl-auto-countdown"></span>' +
+                '<div class="tl-as-group">' +
+                '<span class="tl-as-label">Até pos:</span>' +
+                '<input type="number" id="tl-as-limit" class="tl-as-inp" value="' + autoScrollLimit + '" min="1" max="500">' +
+                '<span class="tl-as-label" style="margin-left:8px">Velocidade:</span>' +
+                '<span style="font-size:12px;opacity:0.6">🐢</span>' +
+                '<input type="range" id="tl-as-speed" class="tl-as-slider" min="0" max="2" step="1" value="' + (autoScrollSpeed >= 1.4 ? 2 : (autoScrollSpeed <= 0.7 ? 0 : 1)) + '">' +
+                '<span style="font-size:12px;opacity:0.6">🏃</span>' +
+                '</div>' +
                 '<button type="button" id="tl-refresh-btn">↺ Atualizar</button>';
             popup.appendChild(autoBar);
 
@@ -9869,12 +9885,12 @@
 
                     var maxScroll = bodyEl.scrollHeight - bodyEl.clientHeight;
 
-                    // Limit scroll to the 25th row if it exists
+                    // Limit scroll to the defined row if it exists
                     var rows = bodyEl.querySelectorAll('tbody tr');
-                    if (rows.length >= 25) {
-                        var row25 = rows[24];
-                        // Calculate scroll position to keep the 25th row visible at the bottom
-                        var limit = row25.offsetTop + row25.offsetHeight - bodyEl.clientHeight + 10; // +10 for a bit of padding
+                    if (rows.length >= autoScrollLimit) {
+                        var targetRow = rows[autoScrollLimit - 1];
+                        // Calculate scroll position to keep the target row visible at the bottom
+                        var limit = targetRow.offsetTop + targetRow.offsetHeight - bodyEl.clientHeight + 10;
                         if (limit < maxScroll) maxScroll = limit;
                     }
 
@@ -9890,7 +9906,7 @@
                     } else if (bodyEl.scrollTop <= 0) {
                         scrollDirection = 1;
                     }
-                }, 35);
+                }, Math.round(35 / autoScrollSpeed));
             }
 
             function resetAutoScrollTimer(delay) {
@@ -10497,6 +10513,28 @@
                     if (autoRefreshOn) {
                         stopAutoRefresh();
                         startAutoRefresh();
+                    }
+                });
+
+                var asLimit = document.getElementById('tl-as-limit');
+                if (asLimit) asLimit.addEventListener('change', function () {
+                    var v = parseInt(this.value);
+                    if (v > 0) {
+                        autoScrollLimit = v;
+                        GM_setValue('tl_as_limit', autoScrollLimit);
+                        if (popupOpen) stopAutoScroll(); resetAutoScrollTimer(5000);
+                    }
+                });
+
+                var asSpeed = document.getElementById('tl-as-speed');
+                if (asSpeed) asSpeed.addEventListener('input', function () {
+                    var v = parseInt(this.value);
+                    // 0 = Slow (0.66x), 1 = Normal (1.0x), 2 = Fast (1.5x)
+                    autoScrollSpeed = v === 0 ? 0.66 : (v === 2 ? 1.5 : 1.0);
+                    GM_setValue('tl_as_speed', autoScrollSpeed);
+                    if (popupOpen) {
+                        stopAutoScroll();
+                        startAutoScroll();
                     }
                 });
 
