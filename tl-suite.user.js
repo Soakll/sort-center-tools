@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.12
+// @version      1.1.13
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -25,7 +25,6 @@
 // @connect      *.amazon.com
 // @connect      *.amazon.dev
 // @connect      *.amazonaws.com
-// @connect      stem-na.corp.amazon.com
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @connect      githubusercontent.com
@@ -34,20 +33,30 @@
 // ==/UserScript==
 (function () {
     'use strict';
-
-    const VERSION = "1.1.12";
-    var _SUITE = {};
-
-    // ═══════════════════════════════════════════════════════════════
-    // _SUITE.utils — Centralized utility functions (Phase 1 Refactor)
-    // ═══════════════════════════════════════════════════════════════
+    const VERSION = "1.1.13";
+    var _SUITE = {
+        DEFAULT_VSM_SEGMENT_MAP: {
+            'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
+            'SBP9': ['AA32'],
+            'SUA9': ['AA42'], 'SVA9': ['AA51'], 'SSD9': ['AA52'], 'SBT9': ['AA53'], 'XSP2': ['AB31'], 'SPC9': ['AB32'], 'SSP9': ['AB41'], 'SBZ1_C2': ['AB42'],
+            'SSO9': ['AB51'], 'SSC9': ['AB52'], 'SRG9': ['AB53'], 'DSA8': ['AB61'],
+            'SDI9_C2': ['CC11'], 'DSP4': ['CC12'], 'DBR9_EF': ['CC13'], 'SLI9_C2': ['CC21'], 'SCG9': ['CC22'],
+            'DBR9': ['CC23'], 'SCZ9': ['CC31'], 'SDA9': ['CC32'], 'SBZ1': ['CC34'],
+            'SDI9': ['CC35'], 'SLI9': ['CC36'], 'SLO9': ['CC41'],
+            'SBZ2': ['CC61'], 'DSP2': ['CD11'], 'SQA9': ['CD12'], 'SFC9': ['CD13'], 'SFI9': ['CD21'],
+            'DFR2': ['CD23'], 'SRP9': ['CD31'], 'SAE9': ['CD32'], 'SCB9': ['CD33'], 'DBS5_EF': ['CD41'],
+            'SBL9': ['CD51'], 'SFM9': ['CD52'], 'DRS5': ['CD53'], 'SPM9': ['CD61'], 'TBAV': ['H-11'],
+            'STJ9': ['H-31'], 'SSJ9': ['H-32'], 'SUB9': ['H-41'], 'DSP5': ['H-51'],
+            'GIG7': ['H-61'], 'CNF7': ['X-12'], 'DGO2': ['X-21'], 'SSV9': ['X-22'],
+            'REC9': ['X-31'], 'DPR2': ['X-41'], 'SBU9': ['X-51'], 'DSP2_EF': ['X-53'], 'DRS5_EF': ['X-61'],
+            'DSP4_EF': ['X-62']
+        }
+    };
     _SUITE.utils = {
-        /** Escape HTML to prevent XSS in innerHTML contexts */
         esc: function (s) {
             return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         },
 
-        /** Detect current Amazon node ID from DOM, URL, or cookie */
         detectNode: function () {
             var fns = [
                 function () { var el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
@@ -63,7 +72,6 @@
             return GM_getValue('tl_node', 'CGH7');
         },
 
-        /** Centralized anti-CSRF token fetcher — single implementation for all modules */
         fetchAntiCsrfToken: function (callback) {
             if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
             GM_xmlhttpRequest({
@@ -89,11 +97,6 @@
                 onerror: function () { callback(''); }
             });
         },
-
-        /**
-         * Make an element draggable by a handle. Uses AbortController for cleanup.
-         * @returns {function} cleanup — call to remove all listeners
-         */
         makeDraggable: function (handleEl, panelEl) {
             var ac = new AbortController();
             var dX = 0, dY = 0, dragging = false;
@@ -122,16 +125,13 @@
             return function cleanup() { ac.abort(); };
         }
     };
-
     _SUITE.checkForUpdates = function (manual, cb) {
         const now = Date.now();
         GM_setValue("suite_last_check_ts", now);
-
         const fail = () => {
             if (manual) alert("TL-Suite: Falha ao verificar atualizações. Verifique sua conexão ou se há bloqueios de rede.");
             if (cb) cb();
         };
-
         GM_xmlhttpRequest({
             method: "GET",
             url: "https://api.github.com/repos/Soakll/sort-center-tools/commits/main",
@@ -143,7 +143,6 @@
                     const json = JSON.parse(resp.responseText);
                     commitMsg = json.commit.message || commitMsg;
                 } catch (e) { }
-
                 GM_xmlhttpRequest({
                     method: "GET",
                     url: "https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js",
@@ -153,7 +152,6 @@
                         if (m && m[1]) {
                             latestVer = m[1];
                         }
-
                         if (latestVer !== VERSION) {
                             showUpdateModal(latestVer, commitMsg);
                         } else if (manual) {
@@ -170,7 +168,6 @@
             ontimeout: fail
         });
     };
-
     function showUpdateModal(newVer, msg) {
         if (document.getElementById('tl-update-modal')) return;
         const modal = document.createElement('div');
@@ -190,7 +187,6 @@
             </div>
         `;
         document.body.appendChild(modal);
-
         document.getElementById('update-now').onclick = () => {
             GM_setValue("suite_last_version", newVer);
             location.href = "https://raw.githubusercontent.com/Soakll/sort-center-tools/main/tl-suite.user.js";
@@ -200,26 +196,21 @@
             setTimeout(() => modal.remove(), 500);
         };
     }
-
     (function initUpdateScheduling() {
         const lastSlot = GM_getValue("suite_last_check_slot", "");
         const now = new Date();
         const hour = now.getHours();
         const todayStr = now.toISOString().split('T')[0];
         const currentSlot = (hour < 12 ? "00_" : "12_") + todayStr;
-
         if (lastSlot !== currentSlot) {
             GM_setValue("suite_last_check_slot", currentSlot);
             setTimeout(() => { if (_SUITE.checkForUpdates) _SUITE.checkForUpdates(false); }, 5000 * (Math.random() + 0.5));
         }
     })();
-
     _SUITE.BASE = location.hostname.includes('-fe.') ? 'https://trans-logistics-fe.amazon.com/'
         : location.hostname.includes('-eu.') ? 'https://trans-logistics-eu.amazon.com/'
             : 'https://trans-logistics.amazon.com/';
-
     _SUITE.href = location.href;
-    _SUITE.isStemPage = location.hostname === 'stem-na.corp.amazon.com';
     _SUITE.isRTT = location.hostname === 'track.relay.amazon.dev';
     _SUITE.isYMS = location.hostname === 'trans-logistics.amazon.com' && location.pathname.includes('/yms/');
     _SUITE.isVista = _SUITE.href.includes('/sortcenter/flowrate');
@@ -227,7 +218,6 @@
     _SUITE.isIB = _SUITE.href.includes('/ssp/dock/hrz/ib');
     _SUITE.isDock = _SUITE.isOutbound || _SUITE.isIB;
     _SUITE.isSortCenter = _SUITE.href.includes('/sortcenter/');
-
     _SUITE.antiCsrfToken = '';
     _SUITE.ymsToken = '';
     _SUITE._capturedParams = {};
@@ -285,9 +275,7 @@
             return accum;
         }
     };
-
     (function patchXHR() {
-        if (_SUITE.isStemPage) return;
         var oOpen = XMLHttpRequest.prototype.open;
         var oSet = XMLHttpRequest.prototype.setRequestHeader;
         var oSend = XMLHttpRequest.prototype.send;
@@ -334,27 +322,21 @@
             return oSend.apply(this, arguments);
         };
     })();
-
     function _onReady(fn) {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
         else fn();
     }
-
     (function loadModuleVridInfo() {
         if (!_SUITE.isDock && !_SUITE.isYMS && !_SUITE.isRTT && !_SUITE.isVista) return;
         'use strict';
-
         var _openObPanel = null;
-
         var _openIbPanel = null;
-
         const href = location.href;
         const isVista = href.includes('/sortcenter/flowrate');
         const isOutbound = href.includes('/ssp/dock/hrz/ob');
         const isIB = href.includes('/ssp/dock/hrz/ib');
         const isYMS = location.hostname === 'trans-logistics.amazon.com' && location.pathname.includes('/yms/');
         const isRTT = location.hostname === 'track.relay.amazon.dev';
-
         if (isYMS) {
             try {
                 let t = window.ymsSecurityToken || (typeof ymsSecurityToken !== 'undefined' ? ymsSecurityToken : '');
@@ -370,27 +352,20 @@
             } catch (e) { }
         }
         const isDock = isOutbound || isIB;
-
         const CURRENT_NODE = _SUITE.utils.detectNode();
-
         var BASE = _SUITE.BASE;
-
         var MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
         var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
         var fetchTokenFallback = _SUITE.utils.fetchAntiCsrfToken;
-
         function getLocationTimestamps() {
             var locs = [], now = new Date();
             var today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
             for (var i = -4; i <= 4; i++) locs.push((today.getTime() + i * 86400000) + ':LOADED');
             return locs;
         }
-
         function fetchContainerIds(token, lane, destination, callback) {
             var containerTypes = ['BAG', 'GAYLORD', 'PALLET'];
             var businessTypes = ['EMPTY', 'TRANSSHIPMENT'];
-
             var stackingFilters = /^[A-Z0-9]+-(B|BUS)$/i.test(destination)
                 ? [destination]
                 : destination.split('-').filter(function (p) { return p.length > 0; });
@@ -430,7 +405,6 @@
                 onerror: function () { callback([]); }
             });
         }
-
         function fetchContainerDetails(token, ids, callback) {
             var chunks = [], allDetails = {};
             for (var i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
@@ -455,54 +429,44 @@
                 });
             });
         }
-
         function cm3ToFt3(cm3) {
             return (cm3 * 0.0000353147).toFixed(2);
         }
-
         var BUS_WHITELIST = ['DRJ3', 'SRP9', 'SFC9', 'STJ9', 'SJO9'];
-
         function normalizeDestination(dest) {
             var m = dest.match(/^([A-Z0-9]+)-BUS$/i);
             if (!m) return dest;
             return BUS_WHITELIST.indexOf(m[1].toUpperCase()) !== -1 ? dest : m[1] + '-B';
         }
-
         function laneToDestination(lane) {
             var parts = lane.split('->');
             return normalizeDestination((parts[1] || lane).trim());
         }
-
         const SETTINGS = {
             theme: GM_getValue('rd_theme', 'light'),
             lang: GM_getValue('rd_lang', 'pt'),
         };
         function saveSetting(key, val) { SETTINGS[key] = val; GM_setValue('rd_' + key, val); }
-
         const LANG_STRINGS = {
             pt: {
-
                 total: '📦 Total',
                 tabRemaining: '🔄 Restante',
                 xdock: '🔀 X-Dock',
                 cptPriority: '📅 Prioridade CPT',
                 byPallet: '📦 Por Pallet',
                 byCpt: '📅 Por CPT',
-
                 settingsTitle: '⚙️ Configurações',
                 themeLabel: 'Tema',
                 themeLight: '☀️ Claro',
                 themeDark: '🌙 Escuro',
                 langLabel: 'Idioma',
                 saveClose: '✓ Salvar e Fechar',
-
                 pkgs: 'pkgs',
                 restantes: 'restantes',
                 xdockRemain: 'X-Dock restante',
                 routes: 'rotas',
                 trucks: 'caminhões',
                 packages: 'pacotes',
-
                 cuft: '📦',
                 arrival: 'Chegada',
                 delay: '⚠ Atraso',
@@ -515,12 +479,10 @@
                 checkout: 'Liberação',
                 late: '🚨 Atrasado',
                 sat: 'SAT',
-
                 getInfo: 'Info',
                 routesBtn: '📊 Rotas',
                 routesDone: '📊 Rotas',
                 concluded: '✓ Concluído',
-
                 checkInLabel: 'Chegada (Check-In)',
                 arrivalDelayLabel: 'Atraso na Chegada',
                 tdrDockLabel: 'Docagem (TDR-Dock)',
@@ -532,7 +494,6 @@
                 checkoutLabel: 'Liberação (Check-Out)',
                 lateDepartureLabel: 'Atraso na Saída',
                 cubeLabel: 'Cube (ft³/pkg)',
-
                 fetchingYms: '⏳ Buscando dados YMS...',
                 fetchingContainers: '⏳ Buscando containers...',
                 fetchingRoutes: '⏳ Lendo distribuição de rotas...',
@@ -541,7 +502,6 @@
                 runningExport: 'Executando Rotas + Busca de Info...',
                 generatingXlsx: 'Gerando XLSX...',
                 fetchingAllInfo: 'Buscando info de todos os VRIDs...',
-
                 noYmsData: '⚠ Nenhum dado YMS encontrado.',
                 noData: 'Sem dados disponíveis.',
                 noContainersFound: 'Nenhum container encontrado.',
@@ -554,7 +514,6 @@
                 networkError: '⚠ Erro de rede',
                 tokenNotFound: '❌ Token não encontrado. Interaja com a página primeiro.',
                 parseError: '⚠ Parse error',
-
                 cptExpired: 'CPT Expirado 🚨',
                 onTime: '✓ On time',
                 lastHour: '⏰ Última hora',
@@ -567,17 +526,14 @@
                 earlyTitle: 'Pacotes cujo CPT é mais de 24h após a chegada do caminhão — clique para expandir',
                 noCptFound: 'Nenhum CPT encontrado.',
                 noPalletFound: 'Nenhum pallet encontrado.',
-
                 updatedAt: 'Atualizado',
                 containerIn: 'container(s) em',
                 docksWord: 'doca(s)',
                 ibBarLabel: 'IB Routes:',
                 obBarLabel: 'OB:',
-
                 checkUpdates: 'Verificar atualizações',
                 versionLabel: 'Versão',
                 lastUpdateLabel: 'Última atualização',
-
                 vistaLoading: 'Carregando...',
                 vistaSearching: '⏳ Buscando dados...',
                 showExpired: '👁 Mostrar expirados',
@@ -676,7 +632,6 @@
             },
         };
         function L(key) { return (LANG_STRINGS[SETTINGS.lang] || LANG_STRINGS.pt)[key] || key; }
-
         const styleEl = document.createElement('style');
         styleEl.textContent = `
         .tl-btn {
@@ -781,7 +736,6 @@
         .tl-chip-late    { background: #B71C1C; color: #fff; }
         @keyframes tl-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
         .tl-loading { animation: tl-pulse 1.2s ease-in-out infinite; }
-
         #rd-global-bar {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -804,7 +758,6 @@
             font-family: 'Amazon Ember', Arial, sans-serif;
         }
         body { padding-top: 36px !important; }
-
         .rd-popup-overlay {
             position: fixed; inset: 0;
             background: rgba(0,0,0,0.45);
@@ -874,7 +827,6 @@
         .rd-cpt-name    { font-weight: 700; color: #283593; }
         .rd-cpt-pkgs    { font-weight: 600; color: #444; }
         .rd-cpt-pct     { font-weight: 700; }
-
         .rd-dark.rd-popup            { background: rgba(10, 22, 40, 0.75) !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; }
         .rd-dark .rd-popup-header    { background: rgba(255, 255, 255, 0.03) !important; border-bottom-color: rgba(255, 255, 255, 0.1) !important; }
         .rd-dark .rd-popup-title     { color: #fff !important; }
@@ -898,12 +850,10 @@
         .rd-dark .rd-vrid-sub-item   { background: #1e2040 !important; border-color: #3a3a6e !important; color: #c5cae9 !important; }
         .rd-dark .rd-vrid-sub-lane   { color: #7878a8 !important; }
         .rd-dark .rd-vrid-sub-pkgs   { color: #90caf9 !important; }
-
         .rd-vrid-sub      { padding: 3px 4px 5px 8px; border-top: 1px dashed #e0e0e0; display: flex; flex-wrap: wrap; gap: 4px; }
         .rd-vrid-sub-item { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 20px; background: #f3f4ff; border: 1px solid #c5cae9; font-size: 10px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; cursor: default; }
         .rd-vrid-sub-lane { font-weight: 400; color: #777; font-size: 9.5px; }
         .rd-vrid-sub-pkgs { font-weight: 700; color: #0d47a1; }
-
         .rd-settings-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999999;display:flex;align-items:center;justify-content:center; }
         .rd-settings-panel   { background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);padding:20px 24px;min-width:280px;font-family:'Amazon Ember',Arial,sans-serif; }
         .rd-settings-panel.rd-dark-panel { background:#1a1a2e;color:#e0e0f0; }
@@ -919,7 +869,6 @@
         .rd-dark-panel .rd-settings-opt.active { border-color:#5060ff;background:#2a2a5e;color:#90a0ff; }
     `;
         document.head.appendChild(styleEl);
-
         function makeBtn(text, extraClass, disabled) {
             const b = document.createElement('button');
             b.className = 'tl-btn ' + (extraClass || '');
@@ -927,7 +876,6 @@
             if (disabled) b.disabled = true;
             return b;
         }
-
         function getOrCreateBtnGroup(row) {
             var cell = row.querySelector('td.loadIdCol');
             if (!cell) return null;
@@ -940,14 +888,11 @@
             }
             return g;
         }
-
         if (isVista) {
-
             var vpHost = document.createElement('div');
             vpHost.style.cssText = 'all:initial;position:fixed;bottom:80px;right:24px;z-index:2147483647;width:0;height:0;overflow:visible;pointer-events:none';
             document.body.appendChild(vpHost);
             var vpShadow = vpHost.attachShadow({ mode: 'open' });
-
             var vpStyle = document.createElement('style');
             vpStyle.textContent = [
                 '* { box-sizing: border-box; font-family: "Amazon Ember", Arial, sans-serif; }',
@@ -972,11 +917,9 @@
                 '.td-right { text-align:right; }'
             ].join('\n');
             vpShadow.appendChild(vpStyle);
-
             var vpOverlay = document.createElement('div');
             vpOverlay.id = 'vp-overlay';
             vpShadow.appendChild(vpOverlay);
-
             var vpPopup = document.createElement('div');
             vpPopup.id = 'vp-popup';
             vpPopup.innerHTML =
@@ -989,7 +932,6 @@
                 '<div id="vp-body"><div class="vp-loading">' + L("vistaLoading") + '</div></div>' +
                 '<div id="vp-footer"><span id="vp-info"></span><span id="vp-count"></span></div>';
             vpShadow.appendChild(vpPopup);
-
             var vpDragX = 0, vpDragY = 0, vpDragging = false;
             vpPopup.querySelector('#vp-header').addEventListener('mousedown', function (e) {
                 if (e.target.closest('button')) return;
@@ -1008,18 +950,14 @@
                 vpPopup.style.top = (e.clientY - vpDragY) + 'px';
             });
             document.addEventListener('mouseup', function () { vpDragging = false; });
-
             function vpOpen() { vpPopup.classList.add('open'); vpOverlay.classList.add('open'); }
             function vpClose() { vpPopup.classList.remove('open'); vpOverlay.classList.remove('open'); }
-
             vpOverlay.addEventListener('click', function (e) { e.stopPropagation(); vpClose(); });
             vpPopup.addEventListener('click', function (e) { e.stopPropagation(); });
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') vpClose(); });
             vpPopup.querySelector('#vp-close').addEventListener('click', function (e) { e.stopPropagation(); vpClose(); });
-
             var currentContainers = [];
             var currentLane = '';
-
             function vpDownloadCSV() {
                 if (!currentContainers.length) return;
                 var csv = ['Scannable ID,Rota,Doca,CPT,Pacotes,Volume (ft3)'];
@@ -1041,7 +979,6 @@
                     ];
                     csv.push(row.join(','));
                 });
-
                 var blob = new Blob(['\ufeff' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
                 var link = document.createElement('a');
                 var url = URL.createObjectURL(blob);
@@ -1060,7 +997,6 @@
                 var body = vpShadow.getElementById('vp-body');
                 var count = vpShadow.getElementById('vp-count');
                 if (titleEl) titleEl.textContent = '\uD83C\uDFED Loaded \u2014 ' + lane;
-
                 var docas = {};
                 containers.forEach(function (c) {
                     if (!c.locationLabel) return;
@@ -1070,17 +1006,14 @@
                     docas[doca].totalVol += c.packageVolume || 0;
                     docas[doca].totalPkgs += (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
                 });
-
                 if (!Object.keys(docas).length) {
                     body.innerHTML = '<div class="vp-loading">' + L('noContainersFound') + '</div>';
                     if (count) count.textContent = '0 containers';
                     return;
                 }
-
                 var html = '<table><thead><tr>' +
                     '<th>Doca</th><th>Rota</th><th>Scannable ID</th><th>CPT</th><th>Pacotes</th><th>Volume (ft\u00B3)</th>' +
                     '</tr></thead><tbody>';
-
                 Object.keys(docas).sort().forEach(function (doca) {
                     var group = docas[doca];
                     html += '<tr style="background:#fff3e0;font-weight:700;">' +
@@ -1109,19 +1042,16 @@
                 var total = containers.length;
                 if (count) count.textContent = total + ' ' + L('containerIn') + ' ' + Object.keys(docas).length + ' ' + L('docksWord');
             }
-
             function vpLoadData(lane) {
                 var destination = laneToDestination(lane);
                 var status = vpShadow.getElementById('vp-status');
                 var body = vpShadow.getElementById('vp-body');
                 var info = vpShadow.getElementById('vp-info');
                 var titleEl = vpShadow.getElementById('vp-header').querySelector('.vp-title');
-
                 if (titleEl) titleEl.textContent = '\uD83C\uDFED Loaded \u2014 ' + lane;
                 if (status) status.textContent = L('vistaSearching');
                 body.innerHTML = '<div class="vp-loading">' + L('vistaSearching') + '</div>';
                 vpOpen();
-
                 if (!_SUITE.vsm) {
                     body.innerHTML = '<div class="vp-loading" style="color:#c62828">⚠ VSM Module not loaded</div>';
                     return;
@@ -1137,7 +1067,6 @@
                     if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString('pt-BR', { hour12: false });
                 });
             }
-
             function addVistaButtons() {
                 var rows = document.querySelectorAll('tr.route-level-row');
                 for (var i = 0; i < rows.length; i++) {
@@ -1145,7 +1074,6 @@
                     if (row.querySelector('.vista-route-btn')) continue;
                     var routeSpan = row.querySelector('span.route.float-left');
                     if (!routeSpan) continue;
-
                     var fullRoute = '';
                     var rowId = row.id || '';
                     var match = rowId.match(/CURRENT(.+)$/);
@@ -1157,9 +1085,7 @@
                         });
                     }
                     if (!fullRoute) continue;
-
                     var lane = fullRoute.includes('->') ? fullRoute : CURRENT_NODE + '->' + fullRoute;
-
                     var btn = makeBtn('\uD83C\uDFED ' + (fullRoute.split('->')[1] || fullRoute), 'tl-btn-orange vista-route-btn');
                     btn.style.marginLeft = '8px';
                     btn.title = 'Ver containers loaded \u2014 ' + lane;
@@ -1173,7 +1099,6 @@
                     routeSpan.insertAdjacentElement('afterend', btn);
                 }
             }
-
             var debounceVista = null;
             new MutationObserver(function () {
                 clearTimeout(debounceVista);
@@ -1181,7 +1106,6 @@
             }).observe(document.body, { childList: true, subtree: true });
             setTimeout(addVistaButtons, 2000);
         }
-
         if (isOutbound) {
             function getDock(row) {
                 var label = row.querySelector('span.locLabel');
@@ -1189,12 +1113,10 @@
                 var text = label.textContent.trim();
                 return /^DD\d+$/i.test(text) ? text : null;
             }
-
             function getLane(row) {
                 var lane = row.querySelector('span.floatL[class*="lane"]');
                 return lane ? lane.textContent.trim() : '';
             }
-
             function getLoadedContainers(row) {
                 var planid = row.getAttribute('planid');
                 if (!planid) return 0;
@@ -1204,12 +1126,10 @@
                 if (!link) return 0;
                 return parseInt(link.textContent.trim(), 10) || 0;
             }
-
             function isFinished(row) {
                 var statusEl = row.querySelector('.originalStatusCheck[data-status]');
                 return statusEl && statusEl.getAttribute('data-status') === 'FINISHED_LOADING';
             }
-
             function fetchCuft(dock, lane, wrapper) {
                 wrapper.innerHTML = '';
                 wrapper.appendChild(makeBtn('⏳ ' + dock, 'tl-btn-gray tl-loading', true));
@@ -1229,7 +1149,6 @@
                     }
                 });
             }
-
             function renderResult(dock, lane, wrapper, cuft) {
                 wrapper.innerHTML = '';
                 var split = document.createElement('span');
@@ -1242,7 +1161,6 @@
                 split.appendChild(ref);
                 wrapper.appendChild(split);
             }
-
             function renderError(dock, lane, wrapper) {
                 wrapper.innerHTML = '';
                 var split = document.createElement('span');
@@ -1255,11 +1173,8 @@
                 split.appendChild(ref);
                 wrapper.appendChild(split);
             }
-
         }
-
         if (isRTT) {
-
             if (location.href.includes('relay_token_init=1')) {
                 var _checkClose = setInterval(function () {
                     var t = GM_getValue('relay_token', '');
@@ -1273,7 +1188,6 @@
             }
             return;
         }
-
         if (isYMS && !window.opener) {
             function parseYmsTimestamp(raw) {
                 const m = raw.trim().match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s+(AM|PM)$/i);
@@ -1288,7 +1202,6 @@
                 const ms = Date.UTC(2000 + parseInt(year, 10), MONTHS[monthStr], parseInt(day, 10), hour + 3, parseInt(min, 10), parseInt(m[6], 10));
                 return { formatted, ms };
             }
-
             function waitFor(condFn, timeoutMs, intervalMs, onReady, onTimeout) {
                 const deadline = Date.now() + timeoutMs;
                 const iv = setInterval(() => {
@@ -1296,13 +1209,11 @@
                     else if (Date.now() > deadline) { clearInterval(iv); onTimeout(); }
                 }, intervalMs);
             }
-
             function extractAndSaveYMS() {
                 const vridMatch = location.href.match(/loadIdentifier=([A-Z0-9]{6,15})/i);
                 if (!vridMatch) return false;
                 const vrid = vridMatch[1].toUpperCase();
                 const isIbVehicle = location.href.includes('isib=1');
-
                 let checkIn = null, checkInMs = null, tdrDock = null, tdrDockMs = null;
                 let dockStarted = null, dockCompleted = null, checkOut = null;
                 const docksSet = new Set();
@@ -1356,7 +1267,6 @@
                 if (location.href.includes('yms_autoclose=1')) setTimeout(() => window.close(), 300);
                 return true;
             }
-
             function ymsInit() {
                 const vridMatch = location.href.match(/loadIdentifier=([A-Z0-9]{6,15})/i);
                 if (!vridMatch) return;
@@ -1364,20 +1274,17 @@
                 const nodeParam = (location.href + location.hash).match(/[?&#]yms_node=([A-Z0-9]+)/i);
                 const expectedNode = nodeParam ? nodeParam[1].toUpperCase() : null;
                 const isIbVehicle = location.href.includes('isib=1');
-
                 waitFor(
                     () => !!document.querySelector('#availableNodeName'),
                     8000, 100,
                     () => stepSelectNode(),
                     () => stepOutboundTab()
                 );
-
                 function stepSelectNode() {
                     if (!expectedNode) { stepOutboundTab(); return; }
                     const nodeSelect = document.querySelector('#availableNodeName');
                     const currentVal = (nodeSelect.value || '').trim().toUpperCase();
                     if (currentVal === expectedNode) { stepOutboundTab(); return; }
-
                     let targetOpt = null;
                     nodeSelect.querySelectorAll('option').forEach(opt => {
                         const id = (opt.id || '').trim().toUpperCase();
@@ -1386,15 +1293,12 @@
                         if (id === expectedNode || val === expectedNode || txt === expectedNode) targetOpt = opt;
                     });
                     if (!targetOpt) { stepOutboundTab(); return; }
-
                     nodeSelect.value = targetOpt.value || targetOpt.id || expectedNode;
                     nodeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
                     const prevCount = document.querySelectorAll('tr[ng-repeat-start]').length;
                     waitFor(
                         () => {
                             const newCount = document.querySelectorAll('tr[ng-repeat-start]').length;
-
                             return newCount !== prevCount || document.querySelector('li.OUTBOUND.ui-tabs-selected');
                         },
                         4000, 150,
@@ -1402,22 +1306,18 @@
                         () => stepOutboundTab()
                     );
                 }
-
                 function stepOutboundTab() {
                     const tabLink = document.querySelector('li.OUTBOUND a[tab="OUTBOUND"]');
                     if (tabLink) tabLink.click();
                     setTimeout(() => stepExtract(), 1500);
                 }
-
                 function stepExtract() {
-
                     if (extractAndSaveYMS()) return;
                     let tries = 0;
                     const iv = setInterval(() => {
                         tries++;
                         if (extractAndSaveYMS() || tries >= 20) {
                             clearInterval(iv);
-
                             if (!GM_getValue('yms_done_ts_' + vrid, 0)) {
                                 GM_setValue('yms_done_' + vrid, '0');
                                 GM_setValue('yms_done_ts_' + vrid, Date.now());
@@ -1426,7 +1326,6 @@
                     }, 250);
                 }
             }
-
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', ymsInit);
             } else {
@@ -1434,24 +1333,20 @@
             }
             return;
         }
-
         if (isDock) {
             function parseSdtToMs(sdtText) {
-
                 const m = sdtText.trim().match(/^(\d{2})[- ]([A-Za-z]{3})[- ](\d{2})\s+(\d{2}):(\d{2})$/);
                 if (!m) return null;
                 const month = MONTHS[m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase()];
                 if (month === undefined) return null;
                 return Date.UTC(2000 + parseInt(m[3], 10), month, parseInt(m[1], 10), parseInt(m[4], 10) + 3, parseInt(m[5], 10), 0);
             }
-
             function getYmsDateRange(sdtMs) {
                 const DAY_MS = 86400000;
                 const sd = new Date(sdtMs);
                 const mid = Date.UTC(sd.getUTCFullYear(), sd.getUTCMonth(), sd.getUTCDate(), 3, 0, 0);
                 return { fromDate: mid - 3 * DAY_MS, toDate: mid + 3 * DAY_MS - 1 };
             }
-
             function waitForResults(vrid, timeout, onResult, skipRtt) {
                 const start = Date.now();
                 let rttDone = !!skipRtt, ymsDone = false;
@@ -1464,14 +1359,12 @@
                     }
                 }, 80);
             }
-
             function chip(cssClass, lkey, value) {
                 const c = document.createElement('span');
                 c.className = 'tl-chip ' + cssClass;
                 c.innerHTML = '<span class="tl-chip-label" data-lkey="' + lkey + '">' + L(lkey) + ':</span> <span class="tl-chip-val">' + value + '</span>';
                 return c;
             }
-
             function cubeChip(cubeVal) {
                 let bg, color;
                 if (cubeVal <= 0.35) { bg = '#66BB6A'; color = '#1a3a1a'; }
@@ -1483,7 +1376,6 @@
                 c.innerHTML = '<span class="tl-chip-label" style="color:inherit;">Cube:</span> <span class="tl-chip-val" style="color:inherit;">' + cubeVal.toFixed(2) + '</span>';
                 return c;
             }
-
             function createInfoBadge(vrid, cuft, checkIn, arrivalDelay, tdrDock, dockStarted, dockCompleted, checkOut, lateDeparture, cube, dockDoors) {
                 const card = document.createElement('span');
                 card.className = 'tl-info-card';
@@ -1514,11 +1406,8 @@
                 if (row2.children.length) card.appendChild(row2);
                 return card;
             }
-
             const infoStore = {};
-
             const routeStore = {};
-
             function mergeRoutesIntoStore(accumObj) {
                 Object.entries(accumObj).forEach(([route, v]) => {
                     if (route === '_xdock') return;
@@ -1537,7 +1426,6 @@
                 });
                 updateFullExportBtn();
             }
-
             function updateFullExportBtn() {
                 const btn = document.getElementById('rd-full-export-btn');
                 if (!btn) return;
@@ -1548,14 +1436,12 @@
                     ? `Export: ${Object.keys(infoStore).length} VRIDs (Get Info) · ${Object.keys(routeStore).length} routes`
                     : 'No data collected yet';
             }
-
             function downloadFullExcel() {
                 if (typeof XLSX === 'undefined') {
                     alert('SheetJS (XLSX) not loaded. Check @require in the script header.');
                     return;
                 }
                 const wb = XLSX.utils.book_new();
-
                 function autoColWidths(rows) {
                     if (!rows.length) return [];
                     const widths = rows[0].map((_, ci) =>
@@ -1563,7 +1449,6 @@
                     );
                     return widths.map(w => ({ wch: w + 2 }));
                 }
-
                 const infoHeaders = isIB
                     ? ['VRID', 'Pacotes', 'CuFt', 'Cube (ft³/pkg)', 'Check-In', 'Atraso Chegada', 'TDR-Dock', 'Doca(s)', 'Início Descarreg.', 'Fim Descarreg.', 'Check-Out']
                     : ['VRID', 'Pacotes', 'CuFt', 'Check-In', 'TDR-Dock', 'Doca(s)', 'Início Carreg.', 'Fim Carreg.', 'Check-Out', 'Atraso Saída'];
@@ -1605,7 +1490,6 @@
                 wsInfo['!cols'] = autoColWidths(infoRows);
                 wsInfo['!freeze'] = { xSplit: 0, ySplit: 1 };
                 XLSX.utils.book_append_sheet(wb, wsInfo, isIB ? 'Info IB' : 'Info OB');
-
                 const hasRoutes = Object.keys(routeStore).length > 0;
                 if (hasRoutes) {
                     const routeHeaders = [
@@ -1645,12 +1529,10 @@
                     wsRoutes['!freeze'] = { xSplit: 0, ySplit: 1 };
                     XLSX.utils.book_append_sheet(wb, wsRoutes, 'Rotas');
                 }
-
                 const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', 'h').replace(':', 'm');
                 const name = `${isIB ? 'IB' : 'OB'}_export_${ts}.xlsx`;
                 XLSX.writeFile(wb, name);
             }
-
             function getRowMeta(row) {
                 const vrid = getVridFromRow(row);
                 if (!vrid) return null;
@@ -1664,7 +1546,6 @@
                         const raw = laneEl.textContent.trim();
                         const m = raw.match(/->([A-Z0-9]{3,6})/);
                         if (m) yard = m[1];
-
                         routeName = raw.replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || raw;
                     }
                 } else {
@@ -1688,10 +1569,8 @@
                 const packages = pkgEl ? parseInt(pkgEl.textContent.trim(), 10) || 0 : 0;
                 return { vrid, sdt, yard, packages, routeName };
             }
-
             const infoQueue = [];
             let infoRunning = false;
-
             function fetchInfo(vrid, sdt, yard, btn, packages, row, status) {
                 btn.textContent = '⏸ ' + vrid;
                 btn.className = 'tl-btn tl-btn-gray';
@@ -1699,18 +1578,14 @@
                 infoQueue.push({ vrid, sdt, yard, btn, packages, row, status });
                 processInfoQueue();
             }
-
             function showInfoPanel(vrid, data) {
                 document.querySelectorAll('.tl-info-overlay').forEach(e => e.remove());
                 const { cuft, checkIn, arrivalDelay, tdrDock, dockStarted, dockCompleted, checkOut, lateDeparture, cube, dockDoors } = data;
-
                 const overlay = document.createElement('div');
                 overlay.className = 'tl-info-overlay';
                 overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99998;';
-
                 const popup = document.createElement('div');
                 popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:18px 22px;min-width:320px;max-width:520px;font-family:"Amazon Ember",Arial,sans-serif;z-index:99999;';
-
                 const hdr = document.createElement('div');
                 hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;';
                 hdr.innerHTML = `<span style="font-size:13px;font-weight:700;color:#1a1a1a;">ℹ️ Info — ${vrid}</span>`;
@@ -1720,17 +1595,14 @@
                 closeBtn.onclick = () => overlay.remove();
                 hdr.appendChild(closeBtn);
                 popup.appendChild(hdr);
-
                 const badge = createInfoBadge(vrid, cuft, checkIn, arrivalDelay, tdrDock, dockStarted, dockCompleted, checkOut, lateDeparture, cube, dockDoors);
                 badge.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
                 popup.appendChild(badge);
-
                 overlay.appendChild(popup);
                 overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
                 document.addEventListener('keydown', function onEsc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); } });
                 document.body.appendChild(overlay);
             }
-
             function processInfoQueue() {
                 if (infoRunning || infoQueue.length === 0) return;
                 infoRunning = true;
@@ -1758,7 +1630,6 @@
                     processInfoQueue();
                 }, skipRtt);
             }
-
             function buildResult(vrid, sdt, packages) {
                 const cuft = GM_getValue('cuft_' + vrid, null);
                 const checkIn = GM_getValue('yms_checkin_' + vrid, null);
@@ -1799,16 +1670,13 @@
                 }
                 return (hasData || lateDeparture) ? { cuft, checkIn, checkInMs, arrivalDelay, tdrDock, dockStarted, dockCompleted, checkOut, lateDeparture, dockDoors, cube } : null;
             }
-
             const YMS_API = 'https://ii51s3lexd.execute-api.us-east-1.amazonaws.com/call/getEventReport';
-
             function tsToYmsFmt(unixSec) {
                 var d = new Date((unixSec - 3 * 3600) * 1000);
                 return String(d.getUTCDate()).padStart(2, '0') + '-' + MONTH_ABBR[d.getUTCMonth()] + '-' +
                     String(d.getUTCFullYear()).slice(2) + ' ' +
                     String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
             }
-
             function parseAndStoreYmsEvents(vrid, events, isIbVehicle) {
                 var now = Date.now();
                 var checkIn = null, checkInMs = null;
@@ -1817,19 +1685,16 @@
                 var dockCompleted = null;
                 var checkOutFmt = null, checkOutMs = null;
                 var docksSet = {};
-
                 events.forEach(function (ev) {
                     var ts = ev.timestamp;
                     var ms = ts * 1000;
                     var fmt = tsToYmsFmt(ts);
                     var loc = ev.location || '';
                     var et = ev.eventType || '';
-
                     var ddMatch = loc.match(/(DD\d+)/);
                     if (ddMatch) docksSet[ddMatch[1]] = true;
                     var ddMatch2 = (ev.locationPlanId || '').match(/(DD\d+)/);
                     if (ddMatch2) docksSet[ddMatch2[1]] = true;
-
                     if (et === 'CHECK_IN' && !checkIn) {
                         checkIn = fmt;
                         checkInMs = ms;
@@ -1853,7 +1718,6 @@
                         checkOutMs = ms;
                     }
                 });
-
                 if (checkIn) { GM_setValue('yms_checkin_' + vrid, checkIn); GM_setValue('yms_checkin_ts_' + vrid, now); }
                 if (checkInMs) GM_setValue('yms_checkin_ms_' + vrid, checkInMs);
                 if (tdrDock) { GM_setValue('yms_tdrdock_' + vrid, tdrDock); GM_setValue('yms_tdrdock_ts_' + vrid, now); }
@@ -1863,17 +1727,14 @@
                 if (checkOutMs) GM_setValue('yms_checkout_ms_' + vrid, checkOutMs);
                 var dockKeys = Object.keys(docksSet);
                 if (dockKeys.length) GM_setValue('yms_docks_' + vrid, dockKeys.join(', '));
-
                 GM_setValue('yms_done_' + vrid, checkIn || tdrDock || dockCompleted ? '1' : '0');
                 GM_setValue('yms_done_ts_' + vrid, now);
             }
-
             var _ymsPending = false, _ymsQueue = [];
             function ensureYmsToken(cb) {
                 var t = _SUITE.ymsToken || GM_getValue('yms_token', '');
                 var ts = GM_getValue('yms_token_ts', 0);
                 var isExpired = (Date.now() - ts) > (12 * 60 * 60 * 1000);
-
                 if (t && t.length > 20 && !isExpired) {
                     _SUITE.ymsToken = t; cb(t); return;
                 }
@@ -1905,7 +1766,6 @@
                     }
                 }, 200);
             }
-
             var _relayPending = false, _relayQueue = [];
             function ensureRelayToken(cb) {
                 var t = GM_getValue('relay_token', '');
@@ -1941,7 +1801,6 @@
                     }
                 }, 200);
             }
-
             function parseRelayResponse(resp, vrid, onDone) {
                 try {
                     var data = JSON.parse(resp.responseText);
@@ -1968,7 +1827,6 @@
                     onDone(null);
                 }
             }
-
             function fetchCuftFromRelay(vrid, onDone) {
                 ensureRelayToken(function (token) {
                     if (!token) { GM_setValue('cuft_ts_' + vrid, Date.now()); onDone(null); return; }
@@ -2002,7 +1860,6 @@
                     doRequest(token);
                 });
             }
-
             function fetchYmsViaApi(vrid_raw, yard_raw, sdt, isIbVehicle) {
                 var vrid = String(vrid_raw).trim().toUpperCase();
                 var yard = String(yard_raw).trim().toUpperCase();
@@ -2017,9 +1874,7 @@
                         toDate = Math.floor(range.toDate / 1000);
                     }
                 }
-
                 console.log('[YMS-API] Buscando VRID:', vrid, 'em:', yard, 'Range:', fromDate, '-', toDate);
-
                 var payload = JSON.stringify({
                     firstRow: 0, rowCount: 1000, yard: yard,
                     loadIdentifier: vrid, loadIdentifierType: 'VRID',
@@ -2056,22 +1911,17 @@
                                 var json = JSON.parse(resp.responseText);
                                 if (json.events && json.events.length > 0) {
                                     const filtered = json.events.filter(e => {
-
                                         const evVrid = String(e.vrId || e.vrid || '').trim().toUpperCase();
                                         return evVrid === vrid || evVrid.includes(vrid) || vrid.includes(evVrid) || evVrid.startsWith(vrid + '_');
                                     });
-
                                     var finalEvents = filtered.length > 0 ? filtered : (json.events.length <= 15 ? json.events : []);
-
                                     if (finalEvents.length > 0) {
                                         parseAndStoreYmsEvents(vrid, finalEvents, isIbVehicle);
                                     } else if (!_retried) {
                                         console.warn('[YMS-API] VRID não encontrado nos eventos (Filtro Zero)');
-
                                         GM_setValue('yms_done_' + vrid, '0');
                                         GM_setValue('yms_done_ts_' + vrid, Date.now());
                                     } else {
-
                                         const msg = document.getElementById('yms-status-msg-' + vrid);
                                         if (msg) {
                                             msg.innerHTML = '<span style="color:#ff4444">Nenhum dado YMS encontrado para este VRID. </span>' +
@@ -2109,10 +1959,8 @@
                 }
                 ensureYmsToken(function (t) { doPost(t); });
             }
-
             function fetchInfoCore(vrid, sdt, yard, packages, onDone, skipRtt) {
                 const now = Date.now();
-
                 if (!skipRtt) {
                     GM_setValue('cuft_' + vrid, '');
                     GM_setValue('cuft_ts_' + vrid, 0);
@@ -2122,17 +1970,13 @@
                     GM_setValue(p + 'ts_' + vrid, 0);
                 });
                 GM_setValue('yms_checkin_ms_' + vrid, 0);
-
                 if (!skipRtt) fetchCuftFromRelay(vrid, function () { });
                 fetchYmsViaApi(vrid, yard, sdt, isIB);
-
                 waitForResults(vrid, 18000, () => {
                     onDone(buildResult(vrid, sdt, packages));
                 }, skipRtt);
             }
-
             function fetchAllInfo(onDone, statusEl) {
-
                 if (isIB) {
                     const candidates = [];
                     document.querySelectorAll('tr[vrid]').forEach(row => {
@@ -2150,14 +1994,10 @@
                     runInfoBatch(candidates, onDone, statusEl);
                     return;
                 }
-
                 if (statusEl) statusEl.textContent = L('scanningPages');
-
                 const firstBtn = document.querySelector('#dashboard_paginate .first');
                 if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) firstBtn.click();
-
                 const allMetas = [];
-
                 function waitForPageLoad(expectedDifferentVrid, cb) {
                     let attempts = 0;
                     const iv = setInterval(() => {
@@ -2169,13 +2009,11 @@
                         }
                     }, 50);
                 }
-
                 function collectPage() {
                     document.querySelectorAll('tr[vrid]').forEach(row => {
                         const meta = getRowMeta(row);
                         if (!meta) return;
                         if (infoStore[meta.vrid]) return;
-
                         if (allMetas.some(m => m.vrid === meta.vrid)) return;
                         const statusElRow = row.querySelector('[data-status]');
                         const status = statusElRow ? statusElRow.getAttribute('data-status') : '';
@@ -2183,7 +2021,6 @@
                         allMetas.push({ meta, status });
                     });
                 }
-
                 function nextPage(cb) {
                     const nextBtn = document.querySelector('#dashboard_next');
                     if (!nextBtn || nextBtn.classList.contains('ui-state-disabled')) { cb(false); return; }
@@ -2192,36 +2029,29 @@
                     nextBtn.click();
                     waitForPageLoad(prevVrid, () => cb(true));
                 }
-
                 function scanPages() {
                     collectPage();
                     nextPage(hasNext => {
                         if (hasNext) { scanPages(); return; }
-
                         if (allMetas.length === 0) { onDone(); return; }
                         if (statusEl) statusEl.textContent = 'Fetching info 0 / ' + allMetas.length + '…';
                         runInfoBatch(allMetas, onDone, statusEl);
                     });
                 }
-
                 setTimeout(scanPages, firstBtn && !firstBtn.classList.contains('ui-state-disabled') ? 300 : 0);
             }
-
             function runInfoBatch(candidates, onDone, statusEl) {
                 const CONCURRENCY = 3;
                 let started = 0, finished = 0;
-
                 const updateStatus = () => {
                     if (statusEl) statusEl.textContent = 'Fetching info ' + finished + ' / ' + candidates.length + '…';
                 };
                 updateStatus();
-
                 function startNext() {
                     if (started >= candidates.length) return;
                     const idx = started++;
                     const { meta, row, status } = candidates[idx];
                     const skipRtt = !isIB && status !== 'COMPLETED';
-
                     const rowBtn = row ? row.querySelector('[data-vrid-getinfo="' + meta.vrid + '"]') : null;
                     if (rowBtn) {
                         rowBtn.textContent = '⏳';
@@ -2251,13 +2081,10 @@
                         startNext();
                     }, skipRtt);
                 }
-
                 for (let i = 0; i < Math.min(CONCURRENCY, candidates.length); i++) startNext();
             }
-
             let fetchSingleRoutes = null;
             let runRoutesForBadge = null;
-
             function showSettingsPanel() {
                 document.querySelectorAll('.rd-settings-overlay').forEach(e => e.remove());
                 const isDark = SETTINGS.theme === 'dark';
@@ -2265,12 +2092,10 @@
                 overlay.className = 'rd-settings-overlay';
                 const panel = document.createElement('div');
                 panel.className = 'rd-settings-panel' + (isDark ? ' rd-dark-panel' : '');
-
                 const title = document.createElement('div');
                 title.className = 'rd-settings-title';
                 title.textContent = L('settingsTitle');
                 panel.appendChild(title);
-
                 function makeRow(labelKey, options, currentVal, onPick) {
                     const row = document.createElement('div'); row.className = 'rd-settings-row';
                     const lbl = document.createElement('div'); lbl.className = 'rd-settings-label'; lbl.textContent = L(labelKey);
@@ -2289,7 +2114,6 @@
                     row.appendChild(lbl); row.appendChild(opts);
                     return row;
                 }
-
                 panel.appendChild(makeRow('themeLabel',
                     [{ val: 'light', label: L('themeLight') }, { val: 'dark', label: L('themeDark') }],
                     SETTINGS.theme, val => saveSetting('theme', val)
@@ -2298,29 +2122,24 @@
                     [{ val: 'pt', label: '🇧🇷 Português' }, { val: 'en', label: '🇺🇸 English' }],
                     SETTINGS.lang, val => saveSetting('lang', val)
                 ));
-
                 const saveBtn = document.createElement('button');
                 saveBtn.className = 'tl-btn tl-btn-blue';
                 saveBtn.style.cssText = 'margin-top:8px;width:100%;justify-content:center;';
                 saveBtn.textContent = L('saveClose');
                 saveBtn.addEventListener('click', () => {
                     overlay.remove();
-
                     document.querySelectorAll('[data-rd-settings-btn]').forEach(b => {
                         b.textContent = L('settingsTitle');
                         b.title = L('settingsTitle');
                     });
-
                     document.querySelectorAll('[data-vrid-getinfo]').forEach(b => {
                         if (!b.disabled && !b.textContent.startsWith('⏳') && !b.textContent.startsWith('⏸') && !b.textContent.startsWith('⚠')) {
                             b.textContent = L('getInfo');
                         }
                     });
-
                     document.querySelectorAll('[data-rd-btn]').forEach(b => {
                         b.textContent = L('routesBtn');
                     });
-
                     document.querySelectorAll('[data-lkey]').forEach(el => {
                         el.textContent = L(el.getAttribute('data-lkey')) + ':';
                     });
@@ -2330,7 +2149,6 @@
                 overlay.appendChild(panel);
                 document.body.appendChild(overlay);
             }
-
             if (isIB) {
                 function pctColor(pct) {
                     if (pct >= 30) return '#c0392b';
@@ -2338,18 +2156,15 @@
                     if (pct >= 5) return '#f1c40f';
                     return '#27ae60';
                 }
-
                 function pctColorDark(pct) {
                     if (pct >= 30) return '#ff6b6b';
                     if (pct >= 15) return '#ffaa57';
                     if (pct >= 5) return '#ffe066';
                     return '#69f0ae';
                 }
-
                 function resolvedPctColor(pct) {
                     return SETTINGS.theme === 'dark' ? pctColorDark(pct) : pctColor(pct);
                 }
-
                 function makePanel(headerClass, headerText, totalVal, rows, sortKey, routeVridMap) {
                     const dark = SETTINGS.theme === 'dark';
                     const panel = document.createElement('div');
@@ -2363,7 +2178,6 @@
                     rows.slice().sort((a, b) => b[sortKey] - a[sortKey]).forEach(r => {
                         const val = r[sortKey];
                         const pct = totalVal > 0 ? (val / totalVal) * 100 : 0;
-
                         const row = document.createElement('div');
                         row.className = 'rd-route-row';
                         const name = document.createElement('div');
@@ -2386,7 +2200,6 @@
                         pctLabel.style.color = resolvedPctColor(pct);
                         row.appendChild(name); row.appendChild(pkgs); row.appendChild(barWrap); row.appendChild(pctLabel);
                         scroll.appendChild(row);
-
                         if (r.cpts && r.cpts.length > 0) {
                             const cptList = document.createElement('div');
                             cptList.className = 'rd-cpt-list';
@@ -2402,7 +2215,6 @@
                             });
                             scroll.appendChild(cptList);
                         }
-
                         if (sortKey === 'remaining' && routeVridMap && routeVridMap[r.route]) {
                             const vridEntries = Object.entries(routeVridMap[r.route])
                                 .map(([vrid, v]) => ({ vrid, pkgs: v.pkgs, lane: v.lane }))
@@ -2426,13 +2238,11 @@
                     panel.appendChild(scroll);
                     return panel;
                 }
-
                 function downloadExcel(title, routes, total, xdData, cptAnalysis, routeVridMap, vridSdtMap) {
                     if (typeof XLSX === 'undefined') { alert('SheetJS not loaded.'); return; }
                     const wb = XLSX.utils.book_new();
                     const totalRemaining = routes.reduce((s, r) => s + r.remaining, 0);
                     const sorted = routes.slice().sort((a, b) => b.pkgs - a.pkgs);
-
                     function routeSheet(sortKey, grandTotal) {
                         const rows = [['Route', 'Pkgs', '%', 'CPT', 'CPT Pkgs', 'CPT %']];
                         sorted.slice().sort((a, b) => b[sortKey] - a[sortKey]).forEach(r => {
@@ -2454,11 +2264,8 @@
                         ws['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 8 }, { wch: 22 }, { wch: 10 }, { wch: 8 }];
                         return ws;
                     }
-
                     XLSX.utils.book_append_sheet(wb, routeSheet('pkgs', total), 'Total');
-
                     XLSX.utils.book_append_sheet(wb, routeSheet('remaining', totalRemaining), L('tabRemaining').replace(/[^a-zA-Z0-9 ]/g, ''));
-
                     if (xdData && xdData.vrids && Object.keys(xdData.vrids).length > 0) {
                         const rows = [['VRID', 'Lane', 'Pkgs', 'Pallets', 'Route', 'Route Pkgs', 'Route Pallets']];
                         Object.entries(xdData.vrids).sort((a, b) => b[1].pkgs - a[1].pkgs).forEach(([vrid, d]) => {
@@ -2476,7 +2283,6 @@
                         ws['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 20 }, { wch: 10 }, { wch: 12 }];
                         XLSX.utils.book_append_sheet(wb, ws, 'X-Dock');
                     }
-
                     if (cptAnalysis && Object.keys(cptAnalysis).length > 0) {
                         const rows = [['CPT', 'VRID', 'Lane', L('restantes'), 'Route', 'Route Pkgs']];
                         Object.keys(cptAnalysis).sort().forEach(cpt => {
@@ -2496,7 +2302,6 @@
                         ws['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 10 }];
                         XLSX.utils.book_append_sheet(wb, ws, L('cptPriority').replace(/[^a-zA-Z0-9 ]/g, ''));
                     }
-
                     if (cptAnalysis && vridSdtMap && Object.keys(vridSdtMap).length > 0) {
                         function parseDtLocal(s) {
                             if (!s) return 0;
@@ -2532,11 +2337,9 @@
                             XLSX.utils.book_append_sheet(wb, ws, L('latePkgsWord') + ' & ' + L('earlyPkgsWord'));
                         }
                     }
-
                     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', 'h').replace(':', 'm');
                     XLSX.writeFile(wb, `routes_${ts}.xlsx`);
                 }
-
                 function showRoutesPopup(title, subtitle, routes, total, xdData, cptAnalysis, routeVridMap, vridSdtMap) {
                     document.querySelectorAll('.rd-popup-overlay').forEach(el => el.remove());
                     const isDark = SETTINGS.theme === 'dark';
@@ -2544,7 +2347,6 @@
                     overlay.className = 'rd-popup-overlay';
                     const popup = document.createElement('div');
                     popup.className = 'rd-popup' + (isDark ? ' rd-dark' : '');
-
                     const header = document.createElement('div');
                     header.className = 'rd-popup-header';
                     header.innerHTML = `
@@ -2606,9 +2408,7 @@
                         popup.style.top = (e.clientY - dragY) + 'px';
                     });
                     document.addEventListener('mouseup', () => { dragging = false; });
-
                     const totalRemaining = routes.reduce((s, r) => s + r.remaining, 0);
-
                     function parseDateLocalMs(s) {
                         if (!s) return 0;
                         const mo = {
@@ -2622,7 +2422,6 @@
                         if (mon === undefined) return 0;
                         return new Date(yr, mon, parseInt(m[1]), parseInt(m[4]), parseInt(m[5])).getTime();
                     }
-
                     let latePkgs = 0, earlyPkgs = 0;
                     const lateByVrid = {};
                     const earlyByVrid = {};
@@ -2648,10 +2447,8 @@
                             });
                         });
                     }
-
                     const paneTotal = makePanel('rd-panel-header-total', L('total'), total, routes, 'pkgs', null);
                     paneTotal.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;';
-
                     if (latePkgs > 0 || earlyPkgs > 0) {
                         const ph = paneTotal.querySelector('.rd-panel-header');
                         if (ph) {
@@ -2681,9 +2478,7 @@
                                 earlyBadge.textContent = '🟡 ' + earlyPkgs.toLocaleString('en-US') + ' ' + L('earlyPkgsWord') + ' (' + earlyPct + '%) ▾';
                                 badges.appendChild(earlyBadge);
                             }
-
                             ph.appendChild(badges);
-
                             if (latePkgs > 0) {
                                 const lateBadgeEl = Array.from(badges.querySelectorAll('span')).find(s => s.textContent.includes(L('latePkgsWord')));
                                 const lateList = document.createElement('div');
@@ -2716,7 +2511,6 @@
                                     lateBadgeEl.textContent = '🔴 ' + latePkgs.toLocaleString('en-US') + ' ' + L('latePkgsWord') + ' (' + latePct + '%) ' + (lateExp ? '▴' : '▾');
                                 });
                             }
-
                             if (earlyPkgs > 0) {
                                 const earlyBadge = Array.from(badges.querySelectorAll('span')).find(s => s.textContent.includes(L('earlyPkgsWord')));
                                 const earlyList = document.createElement('div');
@@ -2751,10 +2545,8 @@
                             }
                         }
                     }
-
                     const paneRemaining = makePanel('rd-panel-header-rest', L('tabRemaining'), totalRemaining, routes, 'remaining', routeVridMap || null);
                     paneRemaining.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;';
-
                     const xdTotalPkgs = xdData ? (xdData.pkgs || 0) : 0;
                     const xdTotalPallets = xdData ? (xdData.pallets || 0) : 0;
                     const xdVrids = xdData && xdData.vrids
@@ -2770,20 +2562,16 @@
                         const xdScroll = document.createElement('div');
                         xdScroll.className = 'rd-panel-scroll';
                         xdScroll.style.flex = '1';
-
                         const xdC = isDark
                             ? { title: '#ffcc80', info: '#ffaa57', border: '#4a2800', vridName: '#d0d0e8', lane: '#8080a8', vridInfo: '#ffaa57', routeName: '#b0b0cc', pallet: '#ffaa57', bar: '#ff8c42', pct: '#ffaa57' }
                             : { title: '#e65100', info: '#bf360c', border: '#ffe0b2', vridName: '#333', lane: '#888', vridInfo: '#e65100', routeName: '#555', pallet: '#e65100', bar: '#e65100', pct: '#e65100' };
-
                         const xdTotalHeader = document.createElement('div');
                         xdTotalHeader.style.cssText = `padding:6px 0 4px;border-bottom:2px solid ${xdC.border};display:flex;align-items:center;gap:6px;margin-bottom:4px;`;
                         const xdTotalTitle = document.createElement('div'); xdTotalTitle.style.cssText = `flex:1;font-size:11px;font-weight:800;color:${xdC.title};`; xdTotalTitle.textContent = 'X-Dock restante';
                         const xdTotalInfo = document.createElement('div'); xdTotalInfo.style.cssText = `font-size:11px;font-weight:700;color:${xdC.info};white-space:nowrap;`; xdTotalInfo.textContent = `${xdTotalPkgs.toLocaleString('en-US')} pkgs · ${xdTotalPallets} Pallets`;
                         xdTotalHeader.appendChild(xdTotalTitle); xdTotalHeader.appendChild(xdTotalInfo);
                         xdScroll.appendChild(xdTotalHeader);
-
                         xdVrids.forEach(v => {
-
                             const vridRow = document.createElement('div');
                             vridRow.style.cssText = 'padding:5px 0 2px;display:flex;align-items:center;gap:6px;margin-top:6px;';
                             const vridName = document.createElement('div'); vridName.style.cssText = `flex:1;font-size:11px;font-weight:800;color:${xdC.vridName};`;
@@ -2792,7 +2580,6 @@
                             vridInfo.textContent = `${v.pkgs.toLocaleString('en-US')} pkgs · ${v.pallets} Pallets`;
                             vridRow.appendChild(vridName); vridRow.appendChild(vridInfo);
                             xdScroll.appendChild(vridRow);
-
                             v.routes.forEach(r => {
                                 const pct = v.pkgs > 0 ? (r.pkgs / v.pkgs) * 100 : 0;
                                 const routeRow = document.createElement('div'); routeRow.className = 'rd-route-row'; routeRow.style.paddingLeft = '10px';
@@ -2806,10 +2593,8 @@
                                 xdScroll.appendChild(routeRow);
                             });
                         });
-
                         paneXd.appendChild(xdScroll);
                     }
-
                     let paneCpt = null;
                     if (cptAnalysis && Object.keys(cptAnalysis).length > 0) {
                         const parseCptDate = s => {
@@ -2822,14 +2607,12 @@
                             const yr = parseInt(m[3]) < 100 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
                             const mon = mo[m[2]];
                             if (!mon) return 0;
-
                             return yr * 100000000 + mon * 1000000 + parseInt(m[1]) * 10000 + parseInt(m[4]) * 100 + parseInt(m[5]);
                         };
                         const _n = new Date();
                         const nowNaive = _n.getFullYear() * 100000000 + (_n.getMonth() + 1) * 1000000 + _n.getDate() * 10000 + _n.getHours() * 100 + _n.getMinutes();
                         const sortedCpts = Object.keys(cptAnalysis).sort((a, b) => parseCptDate(a) - parseCptDate(b)); paneCpt = document.createElement('div');
                         paneCpt.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;';
-
                         let hideExpired = false;
                         const toggleBar = document.createElement('div');
                         toggleBar.style.cssText = `display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid ${isDark ? '#3a3a5e' : '#e0e0e0'};flex-shrink:0;background:${isDark ? '#252535' : '#f9f9f9'};`;
@@ -2841,11 +2624,9 @@
                         updateToggle();
                         toggleBar.appendChild(toggleBtn);
                         paneCpt.appendChild(toggleBar);
-
                         const cptScroll = document.createElement('div');
                         cptScroll.className = 'rd-panel-scroll';
                         cptScroll.style.flex = '1';
-
                         const cptC = isDark
                             ? {
                                 border: '#3a1a4a', cptName: '#ce93d8', cptTotal: '#ba68c8', vridName: '#d0d0e8', lane: '#8080a8', bar: '#ab47bc', pct: '#ce93d8',
@@ -2855,9 +2636,7 @@
                                 border: '#e1bee7', cptName: '#4a148c', cptTotal: '#6a1b9a', vridName: '#333', lane: '#888', bar: '#9c27b0', pct: '#7b1fa2',
                                 expiredBg: '#fff3f3', expiredBorder: '#f44336', expiredName: '#b71c1c', expiredTotal: '#c62828', expiredBadge: '#f44336'
                             };
-
                         const cptBlocks = [];
-
                         sortedCpts.forEach(cpt => {
                             const vrids = Object.entries(cptAnalysis[cpt])
                                 .map(([vrid, v]) => ({ vrid, pkgs: v.pkgs, lane: v.lane, routes: v.routes || {} }))
@@ -2867,31 +2646,25 @@
                             const cptTotal = vrids.reduce((s, v) => s + v.pkgs, 0);
                             const cptMs = parseCptDate(cpt);
                             const expired = cptMs > 0 && nowNaive > cptMs;
-
                             const block = document.createElement('div');
                             block.dataset.expired = expired ? '1' : '0';
-
                             const cptRow = document.createElement('div');
                             const rowBg = expired ? cptC.expiredBg : 'transparent';
                             cptRow.style.cssText = `padding:6px 8px 3px;border-bottom:2px solid ${expired ? cptC.expiredBorder : cptC.border};border-radius:${expired ? '4px 4px 0 0' : '0'};display:flex;align-items:center;gap:6px;margin-top:4px;background:${rowBg};`;
-
                             const cptName = document.createElement('div');
                             cptName.style.cssText = `flex:1;font-size:11px;font-weight:800;color:${expired ? cptC.expiredName : cptC.cptName};`;
                             cptName.textContent = cpt;
-
                             if (expired) {
                                 const badge = document.createElement('span');
                                 badge.style.cssText = `font-size:10px;font-weight:700;color:${cptC.expiredBadge};white-space:nowrap;margin-left:6px;`;
                                 badge.textContent = L('cptExpired');
                                 cptName.appendChild(badge);
                             }
-
                             const cptTotalEl = document.createElement('div');
                             cptTotalEl.style.cssText = `font-size:11px;font-weight:700;color:${expired ? cptC.expiredTotal : cptC.cptTotal};white-space:nowrap;`;
                             cptTotalEl.textContent = cptTotal.toLocaleString('en-US') + ' ' + L('restantes');
                             cptRow.appendChild(cptName); cptRow.appendChild(cptTotalEl);
                             block.appendChild(cptRow);
-
                             vrids.forEach(({ vrid, pkgs, lane, routes }) => {
                                 const pct = cptTotal > 0 ? (pkgs / cptTotal) * 100 : 0;
                                 const vridRow = document.createElement('div');
@@ -2905,7 +2678,6 @@
                                 const pctLabel = document.createElement('div'); pctLabel.className = 'rd-pct-label'; pctLabel.style.color = expired ? cptC.expiredTotal : cptC.pct; pctLabel.textContent = pct.toFixed(1) + '%';
                                 vridRow.appendChild(vridName); vridRow.appendChild(vridPkgs); vridRow.appendChild(barWrap); vridRow.appendChild(pctLabel);
                                 block.appendChild(vridRow);
-
                                 if (routes && Object.keys(routes).length > 0) {
                                     const routeChipRow = document.createElement('div');
                                     routeChipRow.style.cssText = `display:flex;flex-wrap:wrap;gap:3px;padding:2px 8px 5px 20px;background:${expired ? cptC.expiredBg : 'transparent'};`;
@@ -2924,40 +2696,32 @@
                                     block.appendChild(routeChipRow);
                                 }
                             });
-
                             cptBlocks.push(block);
                             cptScroll.appendChild(block);
                         });
-
                         const applyHideExpired = () => {
                             cptBlocks.forEach(b => {
                                 b.style.display = (hideExpired && b.dataset.expired === '1') ? 'none' : '';
                             });
                         };
-
                         toggleBtn.addEventListener('click', () => {
                             hideExpired = !hideExpired;
                             updateToggle();
                             applyHideExpired();
                         });
-
                         paneCpt.appendChild(cptScroll);
                     }
-
                     const tabs = [
                         { label: L('total'), pane: paneTotal, color: '#1b5e20' },
                         { label: L('tabRemaining'), pane: paneRemaining, color: '#0d47a1' },
                         ...(paneXd ? [{ label: L('xdock'), pane: paneXd, color: '#e65100' }] : []),
                         ...(paneCpt ? [{ label: L('cptPriority'), pane: paneCpt, color: '#4a148c' }] : []),
                     ];
-
                     const tabBar = document.createElement('div');
                     tabBar.className = 'rd-tab-bar';
                     tabBar.style.cssText = `display:flex;gap:0;border-bottom:2px solid ${isDark ? '#3a3a5e' : '#e0e0e0'};background:${isDark ? '#252535' : '#f5f5f5'};flex-shrink:0;`;
-
                     const body = document.createElement('div');
                     body.style.cssText = `flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:${isDark ? '#1a1a2e' : '#fff'};`;
-
                     function activateTab(idx) {
                         tabBar.querySelectorAll('.rd-tab-btn').forEach((btn, i) => {
                             const isActive = i === idx;
@@ -2969,7 +2733,6 @@
                         body.innerHTML = '';
                         body.appendChild(tabs[idx].pane);
                     }
-
                     tabs.forEach((t, i) => {
                         const btn = document.createElement('button');
                         btn.className = 'rd-tab-btn';
@@ -2978,21 +2741,17 @@
                         btn.addEventListener('click', () => activateTab(i));
                         tabBar.appendChild(btn);
                     });
-
                     activateTab(0);
-
                     popup.appendChild(header);
                     popup.appendChild(tabBar);
                     popup.appendChild(body);
                     overlay.appendChild(popup);
                     document.body.appendChild(overlay);
                 }
-
                 function closePackagesModal() {
                     const closeBtn = document.querySelector('#viewPackages')?.closest('.ui-dialog')?.querySelector('.ui-dialog-titlebar-close');
                     if (closeBtn) closeBtn.click();
                 }
-
                 function readAllPages(accum, callback) {
                     function getFirstCellText() {
                         const first = document.querySelector('#tableViewCPTMix tbody tr:first-child td:first-child');
@@ -3011,7 +2770,6 @@
                             const rawRoute = cells[8].textContent.trim();
                             const route = rawRoute.replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || rawRoute;
                             if (!route) return;
-
                             if (noReboqueC > 0) {
                                 if (!accum._xdock) accum._xdock = { pkgs: 0, pallets: 0, routes: {} };
                                 accum._xdock.pkgs += remaining;
@@ -3059,15 +2817,12 @@
                         goNextOrFinish();
                     }
                 }
-
                 function openAndRead(link, accum, onDone, onError) {
                     var _onError = typeof onError === 'function' ? onError : function () { };
                     var MAX_RETRIES = 3;
-
                     function countAccumRows(a) {
                         return Object.keys(a).filter(function (k) { return k !== '_xdock'; }).length;
                     }
-
                     function attempt(retriesLeft) {
                         link.click();
                         var attempts = 0;
@@ -3076,7 +2831,6 @@
                             if (document.querySelector('#tableViewCPTMix tbody tr')) {
                                 clearInterval(wait);
                                 readAllPages(accum, function () {
-
                                     if (countAccumRows(accum) === 0 && retriesLeft > 0) {
                                         closePackagesModal();
                                         attempt(retriesLeft - 1);
@@ -3098,31 +2852,25 @@
                             }
                         }, 1);
                     }
-
                     attempt(MAX_RETRIES);
                 }
-
                 fetchSingleRoutes = function (vrid, row, btn) {
                     btn.textContent = '⏳ API...';
                     btn.className = 'tl-btn tl-btn-gray tl-loading';
                     btn.disabled = true;
-
                     const cParams = _SUITE._capturedParams[vrid] || {};
                     const planId = cParams.planId || row.getAttribute('planid') || row.getAttribute('planId');
-
                     if (!planId) {
                         btn.textContent = '⚠ No PlanID';
                         btn.className = 'tl-btn tl-btn-red';
                         btn.disabled = false;
                         return;
                     }
-
                     const laneEl = row.querySelector('[class*="lane"]');
                     const laneText = laneEl ? laneEl.textContent.trim() : vrid;
                     const sdtEl = row.querySelector('[data-sat]');
                     const sdtCell = row.querySelector('td.scheduledArrivalTimeCol');
                     const sdt = (sdtEl ? sdtEl.getAttribute('data-sat').trim() : null) || (sdtCell ? sdtCell.textContent.trim() : null);
-
                     _SUITE.API.fetchContainers(planId, (err, data) => {
                         if (err || !data || !data.containers) {
                             btn.textContent = '⚠ API Error';
@@ -3130,13 +2878,11 @@
                             btn.disabled = false;
                             return;
                         }
-
                         const accum = _SUITE.API.mapToAccum(data.containers);
                         const routeVridMap = {};
                         Object.entries(accum).forEach(([route, v]) => {
                             if (v.remaining > 0) routeVridMap[route] = { [vrid]: { pkgs: v.remaining, lane: laneText } };
                         });
-
                         const cptAnalysis = {};
                         Object.entries(accum).forEach(([route, v]) => {
                             Object.entries(v.cpts || {}).forEach(([cpt, c]) => {
@@ -3148,7 +2894,6 @@
                                 cptAnalysis[cpt][vrid].routes[route] += c.remaining;
                             });
                         });
-
                         const vridSdtMap = sdt ? { [vrid]: sdt } : {};
                         const routes = Object.entries(accum).map(([route, v]) => ({
                             route,
@@ -3156,7 +2901,6 @@
                             remaining: v.remaining,
                             cpts: Object.entries(v.cpts || {}).map(([cpt, c]) => ({ cpt, pkgs: c.pkgs, remaining: c.remaining }))
                         }));
-
                         const total = routes.reduce((s, r) => s + r.pkgs, 0);
                         btn.textContent = '📊 Routes';
                         btn.className = 'tl-btn tl-btn-green';
@@ -3164,28 +2908,22 @@
                         showRoutesPopup('📊 Route Distribution', `${vrid} — ${laneText} · ${routes.length} routes`, routes, total, null, cptAnalysis, routeVridMap, vridSdtMap);
                     });
                 }
-
                 runRoutesForBadge = function (vrid, row, badgeCard) {
                     const cParams = _SUITE._capturedParams[vrid] || {};
                     const planId = cParams.planId || row.getAttribute('planid');
                     if (!planId) return;
-
                     _SUITE.API.fetchContainers(planId, (err, data) => {
                         if (err || !data || !data.containers) return;
                         const accum = _SUITE.API.mapToAccum(data.containers);
                         mergeRoutesIntoStore(accum);
                     });
                 }
-
                 function collectAllPagesRows(statusEl, callback) {
-
                     const firstBtn = document.querySelector('#dashboard_paginate .first');
                     if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) {
                         firstBtn.click();
                     }
-
                     const allRowData = [];
-
                     function collectCurrentPage() {
                         document.querySelectorAll('tr[vrid]').forEach(row => {
                             const statusEl = row.querySelector('[class*="originalStatusCheck"][data-status]') || row.querySelector('[data-status]');
@@ -3202,7 +2940,6 @@
                             allRowData.push({ vrid, laneText, href: link.href });
                         });
                     }
-
                     function goNextPage(onDone) {
                         const nextBtn = document.querySelector('#dashboard_next');
                         if (!nextBtn || nextBtn.classList.contains('ui-state-disabled')) { onDone(false); return; }
@@ -3219,7 +2956,6 @@
                             }
                         }, 50);
                     }
-
                     function processPages() {
                         collectCurrentPage();
                         goNextPage(hasNext => {
@@ -3227,25 +2963,20 @@
                             else { processPages(); }
                         });
                     }
-
                     processPages();
                 }
-
                 function fetchAllRoutes(globalBtn, statusEl, onDone) {
                     globalBtn.disabled = true;
                     globalBtn.className = 'tl-btn tl-btn-gray tl-loading';
                     statusEl.textContent = L('scanningPages');
-
                     const firstBtn = document.querySelector('#dashboard_paginate .first');
                     if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) firstBtn.click();
-
                     const accum = {};
                     const cptAnalysis = {};
                     const routeVridMap = {};
                     const vridSdtMap = {};
                     let totalProcessed = 0;
                     let totalFound = 0;
-
                     function waitForPageLoad(expectedDifferentVrid, callback) {
                         let attempts = 0;
                         const wait = setInterval(() => {
@@ -3258,7 +2989,6 @@
                             }
                         }, 50);
                     }
-
                     function finish() {
                         globalBtn.disabled = false;
                         globalBtn.className = 'tl-btn tl-btn-blue';
@@ -3278,7 +3008,6 @@
                             );
                         }
                     }
-
                     function processRowsOnPage(vrids, onPageDone) {
                         const validVrids = vrids.map(v => {
                             const params = _SUITE._capturedParams[v.vrid] || {};
@@ -3286,13 +3015,10 @@
                             const pid = params.planId || (row ? row.getAttribute('planid') || row.getAttribute('planId') : null);
                             return { ...v, pid };
                         }).filter(v => !!v.pid);
-
                         if (validVrids.length === 0) { onPageDone(); return; }
-
                         let completed = 0;
                         let active = 0;
                         let queue = validVrids.slice();
-
                         function next() {
                             while (active < 5 && queue.length > 0) {
                                 const v = queue.shift();
@@ -3301,11 +3027,9 @@
                                     active--;
                                     completed++;
                                     statusEl.textContent = `API Fetching ${completed}/${validVrids.length} trucks on this page...`;
-
                                     if (!err && data && data.containers) {
                                         totalProcessed++;
                                         const truckAccum = _SUITE.API.mapToAccum(data.containers);
-
                                         Object.entries(truckAccum).forEach(([k, val]) => {
                                             if (!accum[k]) accum[k] = { pkgs: 0, remaining: 0, cpts: {} };
                                             accum[k].pkgs += val.pkgs;
@@ -3316,7 +3040,6 @@
                                                 accum[k].cpts[cpt].remaining += c.remaining;
                                             });
                                         });
-
                                         Object.entries(truckAccum).forEach(([route, val]) => {
                                             if (val.remaining > 0) {
                                                 if (!routeVridMap[route]) routeVridMap[route] = {};
@@ -3332,7 +3055,6 @@
                                             });
                                         });
                                     }
-
                                     if (completed === validVrids.length) {
                                         onPageDone();
                                     } else {
@@ -3341,32 +3063,25 @@
                                 });
                             }
                         }
-
                         statusEl.textContent = `API Fetching ${completed}/${validVrids.length} trucks on this page...`;
                         next();
                     }
-
                     function processNextPage() {
-
                         const vrids = [];
                         document.querySelectorAll('tr[vrid]').forEach(row => {
                             const vridAttr = row.getAttribute('vrid') || '';
                             if (!vridAttr) return;
-
                             const cParams = _SUITE._capturedParams[vridAttr.toUpperCase()] || {};
                             const planId = cParams.planId || row.getAttribute('planid') || row.getAttribute('planId');
                             if (!planId) return;
-
                             const laneEl = row.querySelector('[class*="lane"]');
                             const laneText = laneEl ? laneEl.textContent.trim() : vridAttr.toUpperCase();
-
                             const sdtCell = row.querySelector('td.scheduledArrivalTimeCol');
                             const sdt = sdtCell ? sdtCell.textContent.trim() : null;
                             if (sdt) vridSdtMap[vridAttr.toUpperCase()] = sdt;
                             vrids.push({ vrid: vridAttr.toUpperCase(), vridAttr, laneText });
                         });
                         totalFound += vrids.length;
-
                         if (vrids.length === 0) {
                             const nextBtn = document.querySelector('#dashboard_next');
                             if (!nextBtn || nextBtn.classList.contains('ui-state-disabled')) { finish(); return; }
@@ -3375,7 +3090,6 @@
                             waitForPageLoad(prevVrid, processNextPage);
                             return;
                         }
-
                         processRowsOnPage(vrids, () => {
                             const nextBtn = document.querySelector('#dashboard_next');
                             if (!nextBtn || nextBtn.classList.contains('ui-state-disabled')) { finish(); return; }
@@ -3384,38 +3098,30 @@
                             waitForPageLoad(prevVrid, processNextPage);
                         });
                     }
-
                     setTimeout(processNextPage, 100);
                 }
-
                 function injectGlobalBar() {
                     if (document.getElementById('rd-global-bar')) return;
                     const bar = document.createElement('div');
                     bar.id = 'rd-global-bar';
-
                     const label = document.createElement('span');
                     label.className = 'rd-global-label';
                     label.textContent = L('ibBarLabel');
-
                     const settingsBtn = document.createElement('button');
                     settingsBtn.className = 'tl-btn tl-btn-gray';
                     settingsBtn.setAttribute('data-rd-settings-btn', '1');
                     settingsBtn.textContent = L('settingsTitle');
                     settingsBtn.title = L('settingsTitle');
                     settingsBtn.addEventListener('click', () => showSettingsPanel());
-
                     const statusEl = document.createElement('span');
                     statusEl.className = 'rd-global-status';
-
                     const creditEl = document.createElement('span');
                     creditEl.style.cssText = 'margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,0.45);font-family:"Amazon Ember",Arial,sans-serif;white-space:nowrap;letter-spacing:0.3px;';
                     creditEl.textContent = 'By emanunec@';
-
                     const updateStatus = () => {
                         const lastCheck = GM_getValue("suite_last_check_ts", 0);
                         statusEl.innerHTML = ` <span style="opacity:0.6;margin-left:8px;font-size:10px;">${L('versionLabel')} ${VERSION} · ${lastCheck ? L('lastUpdateLabel') + ': ' + new Date(lastCheck).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>`;
                     };
-
                     const checkUpdateBtn = document.createElement('button');
                     checkUpdateBtn.className = 'tl-btn tl-btn-orange';
                     checkUpdateBtn.style.marginLeft = '8px';
@@ -3429,7 +3135,6 @@
                             updateStatus();
                         });
                     };
-
                     bar.appendChild(label);
                     bar.appendChild(settingsBtn);
                     bar.appendChild(checkUpdateBtn);
@@ -3438,21 +3143,16 @@
                     document.body.appendChild(bar);
                     updateStatus();
                 }
-
                 injectGlobalBar();
-
                 _openIbPanel = function openIbPanel(vrid, sdt, yard, packages, row, status, btn) {
                     document.querySelectorAll('.ib-panel-overlay').forEach(function (e) { e.remove(); });
-
                     const isDark = SETTINGS.theme === 'dark';
                     const laneEl = row.querySelector('[class*="lane"]');
                     const lane = laneEl ? laneEl.textContent.trim() : '';
-
                     const overlay = document.createElement('div');
                     overlay.className = 'ib-panel-overlay rd-popup-overlay';
                     const popup = document.createElement('div');
                     popup.className = 'rd-popup' + (isDark ? ' rd-dark' : '');
-
                     ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'].forEach(function (dir) {
                         const h = document.createElement('div');
                         h.className = 'rd-resize-handle rd-resize-' + dir;
@@ -3467,7 +3167,6 @@
                             document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
                         });
                     });
-
                     const header = document.createElement('div');
                     header.className = 'rd-popup-header';
                     header.innerHTML = '<div><div class="rd-popup-title">🚛 ' + esc(vrid) + '</div><div class="rd-popup-sub">' + esc(lane) + '</div></div><button class="rd-popup-close" title="Fechar">✕</button>';
@@ -3479,17 +3178,14 @@
                     header.addEventListener('mousedown', function (e) { if (e.target.closest('button')) return; dragging = true; const r = popup.getBoundingClientRect(); popup.style.transform = 'none'; popup.style.left = r.left + 'px'; popup.style.top = r.top + 'px'; dragX = e.clientX - r.left; dragY = e.clientY - r.top; e.preventDefault(); });
                     document.addEventListener('mousemove', function (e) { if (!dragging) return; popup.style.left = (e.clientX - dragX) + 'px'; popup.style.top = (e.clientY - dragY) + 'px'; });
                     document.addEventListener('mouseup', function () { dragging = false; });
-
                     const tabBar = document.createElement('div');
                     tabBar.className = 'rd-tab-bar';
                     tabBar.style.cssText = 'display:flex;gap:0;border-bottom:2px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';background:' + (isDark ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
                     const body = document.createElement('div');
                     body.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
-
                     const paneInfo = document.createElement('div');
                     paneInfo.style.cssText = 'flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px;';
                     paneInfo.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';" class="tl-loading">' + L('fetchingYms') + '</div>';
-
                     const hasLink = !!row.querySelector('a.packageDetails');
                     const paneRoutes = document.createElement('div');
                     paneRoutes.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
@@ -3498,12 +3194,10 @@
                     } else {
                         paneRoutes.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px 16px;" class="tl-loading">' + L('fetchingRoutes') + '</div>';
                     }
-
                     const tabDefs = [
                         { label: '🔍 Info', pane: paneInfo, color: '#0d47a1', enabled: true },
                         { label: '📊 Rotas', pane: paneRoutes, color: '#2e7d32', enabled: hasLink },
                     ];
-
                     function activateTabIb(idx) {
                         tabBar.querySelectorAll('.rd-tab-btn').forEach(function (b, i) {
                             const a = i === idx;
@@ -3524,7 +3218,6 @@
                     activateTabIb(0);
                     popup.appendChild(header); popup.appendChild(tabBar); popup.appendChild(body);
                     overlay.appendChild(popup); document.body.appendChild(overlay);
-
                     fetchInfoCore(vrid, sdt, yard, packages, function (data) {
                         paneInfo.innerHTML = '';
                         if (!data) {
@@ -3555,7 +3248,6 @@
                         btn.textContent = 'Info'; btn.className = 'tl-btn tl-btn-blue'; btn.disabled = false;
                         btn.onclick = function (e) { e.stopPropagation(); if (_openIbPanel) _openIbPanel(vrid, sdt, yard, packages, row, status, btn); };
                     }, false);
-
                     if (hasLink) {
                         const link = row.querySelector('a.packageDetails');
                         const laneText = lane;
@@ -3563,7 +3255,6 @@
                         const sdtEl2 = row.querySelector('[data-sat]');
                         const sdtCell2 = row.querySelector('td.scheduledArrivalTimeCol');
                         const sdtR = (sdtEl2 ? sdtEl2.getAttribute('data-sat').trim() : null) || (sdtCell2 ? sdtCell2.textContent.trim() : null) || sdt;
-
                         openAndRead(link, accumR, function () {
                             if (accumR._xdock && accumR._xdock.pallets > 0) {
                                 accumR._xdock.vrids = { [vrid]: { pkgs: accumR._xdock.pkgs, pallets: accumR._xdock.pallets, lane: laneText, routes: accumR._xdock.routes || {} } };
@@ -3587,12 +3278,9 @@
                             const totPkgs = routes.reduce((s, r) => s + r.pkgs, 0);
                             const totRem = routes.reduce((s, r) => s + r.remaining, 0);
                             const xdD = accumR._xdock || null;
-
                             mergeRoutesIntoStore(accumR);
-
                             paneRoutes.innerHTML = '';
                             paneRoutes.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
-
                             const rHdr = document.createElement('div');
                             rHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 14px;background:' + (isDark ? '#252535' : '#f9f9f9') + ';border-bottom:1px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';flex-shrink:0;flex-wrap:wrap;';
                             rHdr.innerHTML = '<span style="font-size:11px;font-weight:700;color:' + (isDark ? '#d0d0e8' : '#333') + ';">' + esc(vrid) + ' — ' + esc(laneText) + ' · ' + routes.length + ' rotas · ' + totPkgs.toLocaleString('en-US') + ' pkgs</span>';
@@ -3603,17 +3291,14 @@
                             xlBtn.addEventListener('click', function () { downloadExcel(vrid + ' — ' + laneText, routes, totPkgs, xdD, cptA, rvm, vsdtM); });
                             rHdr.appendChild(xlBtn);
                             paneRoutes.appendChild(rHdr);
-
                             const stBar = document.createElement('div');
                             stBar.style.cssText = 'display:flex;border-bottom:2px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';background:' + (isDark ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
                             const stBody = document.createElement('div');
                             stBody.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
-
                             const pTot = makePanel('rd-panel-header-total', L('total'), totPkgs, routes, 'pkgs', null);
                             pTot.style.flex = '1';
                             const pRem = makePanel('rd-panel-header-rest', L('tabRemaining'), totRem, routes, 'remaining', rvm);
                             pRem.style.flex = '1';
-
                             let pXd = null;
                             if (xdD && xdD.pallets > 0) {
                                 const xdC = isDark
@@ -3640,7 +3325,6 @@
                                 }
                                 pXd.appendChild(xScroll);
                             }
-
                             let pCpt = null;
                             if (cptA && Object.keys(cptA).length > 0) {
                                 pCpt = document.createElement('div'); pCpt.style.cssText = 'flex:1;overflow-y:auto;';
@@ -3666,7 +3350,6 @@
                                     pCpt.appendChild(blk);
                                 });
                             }
-
                             const stTabs = [
                                 { label: L('total'), pane: pTot, color: '#1b5e20' },
                                 { label: L('tabRemaining'), pane: pRem, color: '#0d47a1' },
@@ -3681,41 +3364,33 @@
                             activateSt(0);
                             paneRoutes.appendChild(stBar);
                             paneRoutes.appendChild(stBody);
-
                         }, function () {
                             paneRoutes.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c62828;font-size:12px;padding:20px;">' + L('routeError') + '</div>';
                         });
                     }
                 };
-
             }
-
             if (isOutbound) {
                 function injectOBBar() {
                     if (document.getElementById('rd-global-bar')) return;
                     const bar = document.createElement('div');
                     bar.id = 'rd-global-bar';
                     bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:40px;background:#0d47a1;border-bottom:2px solid #90caf9;z-index:9999;display:flex;align-items:center;padding:0 20px;gap:15px;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
-
                     const label = document.createElement('span');
                     label.className = 'rd-global-label';
                     label.textContent = L('obBarLabel');
-
                     const statusEl = document.createElement('span');
                     statusEl.className = 'rd-global-status';
-
                     const fullExportBtn = document.createElement('button');
                     fullExportBtn.id = 'rd-full-export-btn';
                     fullExportBtn.className = 'tl-btn tl-btn-purple';
                     fullExportBtn.textContent = L('Full Export');
                     fullExportBtn.title = 'Fetch Get Info for all eligible VRIDs, then download XLSX';
-
                     fullExportBtn.addEventListener('click', () => {
                         fullExportBtn.disabled = true;
                         fullExportBtn.className = 'tl-btn tl-btn-gray tl-loading';
                         fullExportBtn.textContent = '⏳ Collecting...';
                         statusEl.textContent = L('fetchingAllInfo');
-
                         fetchAllInfo(() => {
                             statusEl.textContent = L('generatingXlsx');
                             setTimeout(() => {
@@ -3727,23 +3402,19 @@
                             }, 200);
                         }, statusEl);
                     });
-
                     const settingsBtn = document.createElement('button');
                     settingsBtn.className = 'tl-btn tl-btn-gray';
                     settingsBtn.setAttribute('data-rd-settings-btn', '1');
                     settingsBtn.textContent = L('settingsTitle');
                     settingsBtn.title = L('settingsTitle');
                     settingsBtn.addEventListener('click', () => showSettingsPanel());
-
                     const creditEl = document.createElement('span');
                     creditEl.style.cssText = 'margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,0.45);font-family:"Amazon Ember",Arial,sans-serif;white-space:nowrap;letter-spacing:0.3px;';
                     creditEl.textContent = 'By emanunec@';
-
                     const updateStatus = () => {
                         const lastCheck = GM_getValue("suite_last_check_ts", 0);
                         statusEl.innerHTML = ` <span style="opacity:0.6;margin-left:8px;font-size:10px;">${L('versionLabel')} ${VERSION} · ${lastCheck ? L('lastUpdateLabel') + ': ' + new Date(lastCheck).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>`;
                     };
-
                     const checkUpdateBtn = document.createElement('button');
                     checkUpdateBtn.className = 'tl-btn tl-btn-orange';
                     checkUpdateBtn.style.marginLeft = '8px';
@@ -3757,7 +3428,6 @@
                             updateStatus();
                         });
                     };
-
                     bar.appendChild(label);
                     bar.appendChild(fullExportBtn);
                     bar.appendChild(settingsBtn);
@@ -3767,16 +3437,13 @@
                     document.body.appendChild(bar);
                     updateStatus();
                 }
-
                 injectOBBar();
             }
-
             function getVridFromRow(row) {
                 if (isIB) return (row.getAttribute('vrid') || '').trim().toUpperCase() || null;
                 const span = row.querySelector('span.loadId[data-vrid]');
                 return span ? span.getAttribute('data-vrid').trim().toUpperCase() : null;
             }
-
             function processRows() {
                 const selector = isIB ? 'tr[vrid]' : 'tr';
                 const allRows = document.querySelectorAll(selector);
@@ -3787,24 +3454,18 @@
                     const status = statusEl ? statusEl.getAttribute('data-status') : '';
                     if (isIB) { if (!status) return; }
                     else { if (!status || status === 'SCHEDULED') return; }
-
                     const meta = getRowMeta(row);
                     if (!meta) return;
                     const { vrid, sdt, yard, packages } = meta;
-
                     if (row.querySelector(`[data-vrid-getinfo="${vrid}"]`)) return;
                     if (row.querySelector(`[data-vrid-badge="${vrid}"]`)) return;
-
                     const finished = status === 'FINISHED_LOADING';
-
                     if (isIB) {
                         const bar = row.querySelector('.progressbarDashboard');
-
                         if (!finished) {
                             if (!bar) return;
                             if (!bar.querySelector('.progressLoaded') || bar.querySelector('.width100')) return;
                         }
-
                         const ibBtn = makeBtn('Info', finished ? 'tl-btn-gray' : 'tl-btn-blue');
                         ibBtn.setAttribute('data-vrid-getinfo', vrid);
                         ibBtn.disabled = finished;
@@ -3818,7 +3479,6 @@
                         const insertBefore = row.querySelector('span.loadId') || row.querySelectorAll('td')[7];
                         if (insertBefore) insertBefore.parentNode.insertBefore(ibBtn, insertBefore);
                     } else {
-
                         const obBtn = makeBtn('Info', finished ? 'tl-btn-gray' : 'tl-btn-blue');
                         obBtn.setAttribute('data-vrid-getinfo', vrid);
                         obBtn.disabled = finished;
@@ -3834,15 +3494,11 @@
                     }
                 });
             }
-
             new MutationObserver(processRows).observe(document.body, { childList: true, subtree: true });
             window.addEventListener('load', () => setTimeout(processRows, 2500));
-
             _openObPanel = function openObPanel(vrid, sdt, yard, packages, row, status, btn) {
                 document.querySelectorAll('.ob-panel-overlay').forEach(function (e) { e.remove(); });
-
                 var isDark = SETTINGS.theme === 'dark';
-
                 var laneEl = row.querySelector('span.floatL[class*="lane"]');
                 var lane = laneEl ? laneEl.textContent.trim() : '';
                 var dockEl = row.querySelector('span.locLabel');
@@ -3851,16 +3507,13 @@
                 var _lCell = _planid ? document.getElementById('loadedCCell_' + _planid) : null;
                 var _lLink = _lCell ? _lCell.querySelector('a.trailerCount') : null;
                 var loadedCount = _lLink ? (parseInt(_lLink.textContent.trim(), 10) || 0) : 0;
-
                 var canCuft = !!(dock && loadedCount > 0);
                 var pRow = extractParamsFromRow(row, vrid);
                 var canCpt = !!(pRow.trailerId && !/^OTHR/i.test(pRow.trailerId));
-
                 var overlay = document.createElement('div');
                 overlay.className = 'ob-panel-overlay rd-popup-overlay';
                 var popup = document.createElement('div');
                 popup.className = 'rd-popup' + (isDark ? ' rd-dark' : '');
-
                 ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'].forEach(function (dir) {
                     var h = document.createElement('div');
                     h.className = 'rd-resize-handle rd-resize-' + dir;
@@ -3875,7 +3528,6 @@
                         document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
                     });
                 });
-
                 var header = document.createElement('div');
                 header.className = 'rd-popup-header';
                 header.innerHTML = '<div><div class="rd-popup-title">📋 ' + esc(vrid) + (dock ? ' — ' + esc(dock) : '') + ' </div><div class="rd-popup-sub">' + esc(lane) + '</div></div><button class="rd-popup-close" title="Fechar">✕</button>';
@@ -3887,29 +3539,23 @@
                 header.addEventListener('mousedown', function (e) { if (e.target.closest('button')) return; dragging = true; var r = popup.getBoundingClientRect(); popup.style.transform = 'none'; popup.style.left = r.left + 'px'; popup.style.top = r.top + 'px'; dragX = e.clientX - r.left; dragY = e.clientY - r.top; e.preventDefault(); });
                 document.addEventListener('mousemove', function (e) { if (!dragging) return; popup.style.left = (e.clientX - dragX) + 'px'; popup.style.top = (e.clientY - dragY) + 'px'; });
                 document.addEventListener('mouseup', function () { dragging = false; });
-
                 var tabBar = document.createElement('div');
                 tabBar.className = 'rd-tab-bar'; tabBar.style.cssText = 'display:flex;gap:0;border-bottom:2px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';background:' + (isDark ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
                 var body = document.createElement('div');
                 body.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
-
                 var paneInfo = document.createElement('div'); paneInfo.style.cssText = 'flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:8px;';
                 paneInfo.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';" class="tl-loading">' + L('fetchingYms') + '</div>';
-
                 var paneCuft = document.createElement('div'); paneCuft.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
                 if (!canCuft) paneCuft.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:' + (isDark ? '#8080a0' : '#888') + ';font-size:12px;padding:20px;text-align:center;"><span style="font-size:28px;">🚛</span><span style="font-weight:700;">' + L('noContainersLoaded') + '</span></div>';
                 else paneCuft.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px 16px;" class="tl-loading">' + L('fetchingContainers') + '</div>';
-
                 var paneCpt = document.createElement('div'); paneCpt.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
                 if (!canCpt) paneCpt.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:' + (isDark ? '#8080a0' : '#888') + ';font-size:12px;padding:20px;text-align:center;"><span style="font-size:28px;">🚛</span><span style="font-weight:700;">' + L('afterRelease') + '</span></div>';
                 else paneCpt.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px 16px;" class="tl-loading">' + L('analyzingPkgs') + '</div>';
-
                 var tabDefs = [
                     { label: '🔍 Info', pane: paneInfo, color: '#0d47a1', enabled: true },
                     { label: '📦 CuFt', pane: paneCuft, color: '#c47000', enabled: canCuft },
                     { label: '📦 Pallets', pane: paneCpt, color: '#7b1fa2', enabled: canCpt },
                 ];
-
                 function activateTab(idx) {
                     tabBar.querySelectorAll('.rd-tab-btn').forEach(function (b, i) { var a = i === idx; b.style.borderBottom = a ? '3px solid ' + tabDefs[i].color : '3px solid transparent'; b.style.color = !tabDefs[i].enabled ? (isDark ? '#555' : '#bbb') : (a ? tabDefs[i].color : (isDark ? '#8080a0' : '#666')); b.style.fontWeight = a ? '800' : '600'; b.style.background = a ? (isDark ? '#1e1e38' : '#fff') : 'transparent'; });
                     body.innerHTML = ''; body.appendChild(tabDefs[idx].pane);
@@ -3924,7 +3570,6 @@
                 activateTab(0);
                 popup.appendChild(header); popup.appendChild(tabBar); popup.appendChild(body);
                 overlay.appendChild(popup); document.body.appendChild(overlay);
-
                 var skipRtt = status !== 'COMPLETED';
                 fetchInfoCore(vrid, sdt, yard, packages, function (data) {
                     paneInfo.innerHTML = '';
@@ -3947,7 +3592,6 @@
                     }
                     btn.textContent = 'Info'; btn.className = 'tl-btn tl-btn-blue'; btn.disabled = false;
                 }, skipRtt);
-
                 if (canCuft) {
                     function loadCuft() {
                         paneCuft.innerHTML = '<div style="font-size:11px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px 16px;" class="tl-loading">' + L('fetchingContainers') + '</div>';
@@ -3967,12 +3611,10 @@
                             var allVol = dockContainers.reduce(function (s, c) { return s + (c.packageVolume || 0); }, 0);
                             var allPkgs = dockContainers.reduce(function (s, c) { return s + ((c.contentCountMap && c.contentCountMap.PACKAGE) || 0); }, 0);
                             paneCuft.innerHTML = '';
-
                             if (!dockContainers.length) {
                                 paneCuft.innerHTML = '<div style="font-size:12px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px;">' + L('noContainersDock') + '</div>';
                                 return;
                             }
-
                             var hdrCuft = document.createElement('div');
                             hdrCuft.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#e65100;color:#fff;flex-shrink:0;';
                             var refreshBtn = document.createElement('button');
@@ -3983,12 +3625,10 @@
                             hdrCuft.innerHTML = '<span style="font-size:13px;font-weight:800;">🚛 Loaded — ' + esc(lane) + '</span><span style="font-size:12px;font-weight:600;opacity:.85;">' + cm3ToFt3(allVol) + ' ft³ · ' + allPkgs + ' pkgs · ' + dockContainers.length + ' containers</span>';
                             hdrCuft.appendChild(refreshBtn);
                             paneCuft.appendChild(hdrCuft);
-
                             var dHdr = document.createElement('div');
                             dHdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 16px;background:' + (isDark ? '#2b1200' : '#fff3e0') + ';border-bottom:1px solid ' + (isDark ? '#5a2800' : '#ffe0b2') + ';flex-shrink:0;';
                             dHdr.innerHTML = '<span style="font-size:12px;font-weight:800;color:#e65100;">🔶 ' + esc(dock) + ' — ' + dockContainers.length + ' container(s)</span><span style="font-size:12px;font-weight:700;color:' + (isDark ? '#d0d0e8' : '#333') + ';">' + cm3ToFt3(allVol) + ' ft³ · ' + allPkgs + ' pkgs</span>';
                             paneCuft.appendChild(dHdr);
-
                             var tblWrap = document.createElement('div');
                             tblWrap.style.cssText = 'overflow-y:auto;flex:1;background:' + (isDark ? '#1a1a2e' : '#fff') + ';';
                             var tbl = document.createElement('table');
@@ -4017,7 +3657,6 @@
                     }
                     loadCuft();
                 }
-
                 if (canCpt) {
                     var formBody = ['entity=getOutboundLoadContainerDetails', 'nodeId=' + encodeURIComponent(pRow.nodeId), 'loadGroupId=' + encodeURIComponent(pRow.loadGroupId), 'planId=' + encodeURIComponent(pRow.planId), 'vrid=' + encodeURIComponent(vrid), 'status=', 'trailerId=' + encodeURIComponent(pRow.trailerId), 'trailerNumber=' + encodeURIComponent(pRow.trailerNumber)].join('&');
                     GM_xmlhttpRequest({
@@ -4051,17 +3690,13 @@
                 }
             }
         }
-
-
         var _logLines = [];
-
         function log(msg, level) {
             var ts = new Date().toLocaleTimeString('pt-BR', { hour12: false });
             _logLines.push({ ts: ts, msg: msg, level: level || 'info' });
             if (_logLines.length > 400) _logLines.shift();
             console.log('[LPD ' + ts + '] ' + msg);
         }
-
         function parseApiDate(str) {
             if (!str) return null;
             var m = str.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})\s+(\d{1,2}):(\d{2})/);
@@ -4072,7 +3707,6 @@
             if (mon === undefined) return null;
             return new Date(year, mon, parseInt(m[1], 10), parseInt(m[4], 10), parseInt(m[5], 10));
         }
-
         function walkNodes(nodes, palletLabel, cptMap, palletMap, satTime) {
             if (!Array.isArray(nodes)) return;
             nodes.forEach(function (node) {
@@ -4082,7 +3716,6 @@
                     var assStr = c.parentChildAssTime || '';
                     var assTime = parseApiDate(assStr);
                     var cptTime = parseApiDate(cpt);
-
                     var category = 'inCpt';
                     if (!assTime || !cptTime) {
                         category = 'inCpt';
@@ -4091,13 +3724,10 @@
                     } else if (assTime > new Date(cptTime - 3600000)) {
                         category = 'preHour';
                     }
-
                     var pkgEntry = { label: c.label || '?', assTime: assStr, cpt: cpt, cptTime: cptTime, category: category, pallet: palletLabel };
-
                     if (!cptMap[cpt]) cptMap[cpt] = { inCpt: 0, preHour: 0, late: 0, early: 0, pkgs: [] };
                     cptMap[cpt][category]++;
                     cptMap[cpt].pkgs.push(pkgEntry);
-
                     if (!palletMap[palletLabel]) palletMap[palletLabel] = { inCpt: 0, preHour: 0, late: 0, early: 0, pkgs: [] };
                     palletMap[palletLabel][category]++;
                     palletMap[palletLabel].pkgs.push(pkgEntry);
@@ -4107,50 +3737,39 @@
                 }
             });
         }
-
         function processFetchData(responseText, satTime) {
             if (!responseText || !responseText.trim()) {
                 log('Resposta vazia da API', 'error'); return null;
             }
-
             var text = responseText.replace(/^\uFEFF/, '').trim();
-
             if (text.charAt(0) === '<') {
                 log('Resposta e HTML — sessao expirada ou redirecionamento. Recarregue a pagina.', 'error');
                 return null;
             }
-
             var data;
             try { data = JSON.parse(text); }
             catch (e) {
                 log('JSON parse error: ' + e.message + ' — inicio da resposta: ' + text.slice(0, 120), 'error');
                 return null;
             }
-
             var aaData = data && data.ret && (typeof data.ret.aaData === 'object') ? data.ret.aaData : null;
             if (!aaData) {
                 log('aaData ausente — chaves em data.ret: [' + Object.keys((data && data.ret) || {}).join(', ') + ']', 'error');
                 return null;
             }
-
             var rootNodes = aaData.ROOT_NODE;
-
             if (!Array.isArray(rootNodes)) {
                 log('ROOT_NODE nao e array — aaData keys: [' + Object.keys(aaData).join(', ') + ']', 'warn');
                 return { cptMap: {}, palletMap: {}, totals: { inCpt: 0, preHour: 0, late: 0, early: 0 }, total: 0 };
             }
-
             if (rootNodes.length === 0) {
                 log('ROOT_NODE vazio — nenhum pacote carregado ainda', 'info');
                 return { cptMap: {}, palletMap: {}, totals: { inCpt: 0, preHour: 0, late: 0, early: 0 }, total: 0 };
             }
-
             log('ROOT_NODE entries: ' + rootNodes.length, 'info');
-
             var cptMap = {};
             var palletMap = {};
             var total = 0;
-
             rootNodes.forEach(function (rootNode) {
                 var pallets = rootNode.childNodes || [];
                 pallets.forEach(function (palletNode, pi) {
@@ -4162,37 +3781,29 @@
                     walkNodes(children, palletLabel, cptMap, palletMap, satTime);
                 });
             });
-
             var refCptTime = satTime;
             if (!refCptTime) {
-
                 Object.keys(cptMap).forEach(function (cptStr) {
                     var t = parseApiDate(cptStr);
                     if (t && (!refCptTime || t < refCptTime)) refCptTime = t;
                 });
             }
-
             if (refCptTime) {
-
                 var mainDay = refCptTime.getFullYear() * 10000 + (refCptTime.getMonth() + 1) * 100 + refCptTime.getDate();
-
                 Object.keys(cptMap).forEach(function (cptStr) {
                     var cptT = parseApiDate(cptStr);
                     if (!cptT) return;
                     var cptDay = cptT.getFullYear() * 10000 + (cptT.getMonth() + 1) * 100 + cptT.getDate();
                     if (cptDay <= mainDay) return;
-
                     var bucket = cptMap[cptStr];
                     bucket.pkgs.forEach(function (pkg) {
                         if (pkg.category === 'late') return;
                         var oldCat = pkg.category;
                         pkg.category = 'early';
-
                         if (oldCat !== 'early') {
                             bucket[oldCat]--;
                             bucket.early++;
                         }
-
                         var pm = palletMap[pkg.pallet];
                         if (pm && oldCat !== 'early') {
                             pm[oldCat]--;
@@ -4201,7 +3812,6 @@
                     });
                 });
             }
-
             var totals = { inCpt: 0, preHour: 0, late: 0, early: 0 };
             Object.values(cptMap).forEach(function (v) {
                 totals.inCpt += v.inCpt;
@@ -4209,72 +3819,53 @@
                 totals.late += v.late;
                 totals.early += v.early;
             });
-
             log('CPT ref do caminhão: ' + (refCptTime ? refCptTime.toLocaleString() : 'desconhecido') +
                 ' — Scan done — total=' + total + ' inCpt=' + totals.inCpt + ' preHour=' + totals.preHour + ' late=' + totals.late + ' early=' + totals.early,
                 totals.late > 0 ? 'warn' : 'ok');
-
             return { cptMap: cptMap, palletMap: palletMap, totals: totals, total: total };
         }
-
         function getVridFromRow(row) {
             var span = row.querySelector('span.loadId[data-vrid]');
             return span ? span.getAttribute('data-vrid').trim().toUpperCase() : '';
         }
-
         function getTrailerIdFromRow(row) {
-
             var fromAttr = row.getAttribute('data-trailerid') || row.getAttribute('data-trailer-id') || '';
             if (fromAttr) return fromAttr;
-
             var trailerCell = row.querySelector('td.trailerNumberCol, td[class*="trailer"]');
             if (trailerCell) {
                 var txt = trailerCell.textContent.trim();
                 if (txt && txt.length > 4) return txt;
             }
-
             var el = row.querySelector('[data-trailerid]');
             if (el) return el.getAttribute('data-trailerid');
-
             var loadIdCell = row.querySelector('td.loadIdCol');
             if (loadIdCell) {
-
                 var m = loadIdCell.textContent.match(/\b([A-Z0-9]{9,})\b/);
                 if (m) return m[1];
-
                 var raw = loadIdCell.textContent.trim();
                 if (raw.length >= 9 && raw.length <= 15) return raw;
             }
-
             return '';
         }
-
         var esc = _SUITE.utils.esc;
-
         function extractParamsFromRow(row, vrid) {
             var captured = _SUITE._capturedParams[vrid] || {};
-
             var loadGroupId = captured.loadGroupId || row.getAttribute('data-loadgroupid') || '';
             var trailerId = captured.trailerId || getTrailerIdFromRow(row);
             var trailerNumber = captured.trailerNumber || '';
             var planId = captured.planId || row.getAttribute('planid') || '';
             var nodeId = captured.nodeId || CURRENT_NODE;
-
             log('  DOM trailerId="' + getTrailerIdFromRow(row) + '"' +
                 ' captured.trailerId="' + (captured.trailerId || '') + '"' +
                 ' → usando="' + trailerId + '"', 'debug');
-
             return { nodeId, loadGroupId, planId, vrid, trailerId, trailerNumber };
         }
-
         function openCptPanelLoading(vrid, lane) {
             var _D = SETTINGS.theme === 'dark';
             document.querySelectorAll('.lpd-panel-overlay').forEach(function (e) { e.remove(); });
-
             var overlay = document.createElement('div');
             overlay.className = 'lpd-panel-overlay';
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99998;';
-
             var popup = document.createElement('div');
             popup.style.cssText = [
                 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)',
@@ -4284,7 +3875,6 @@
                 'display:flex;flex-direction:column;overflow:hidden',
                 'font-family:"Amazon Ember",Arial,sans-serif;z-index:99999'
             ].join(';');
-
             var hdr = document.createElement('div');
             hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px;border-bottom:1px solid ' + (_D ? '#2e2e45' : '#e0e0e0') + ';background:' + (_D ? '#16213e' : '#f5f5f5') + ';flex-shrink:0;cursor:grab;user-select:none;';
             var hdrInfo = document.createElement('div');
@@ -4298,7 +3888,6 @@
             hdr.appendChild(hdrInfo);
             hdr.appendChild(closeBtn);
             popup.appendChild(hdr);
-
             var dragX = 0, dragY = 0, dragging = false;
             hdr.addEventListener('mousedown', function (e) {
                 if (e.target.closest('button')) return;
@@ -4311,18 +3900,14 @@
             });
             document.addEventListener('mousemove', function (e) { if (!dragging) return; popup.style.left = (e.clientX - dragX) + 'px'; popup.style.top = (e.clientY - dragY) + 'px'; });
             document.addEventListener('mouseup', function () { dragging = false; });
-
             var summaryBar = document.createElement('div');
             summaryBar.style.cssText = 'display:flex;gap:8px;padding:10px 16px;background:' + (_D ? '#252535' : '#fafafa') + ';border-bottom:1px solid ' + (_D ? '#2e2e45' : '#e0e0e0') + ';flex-shrink:0;flex-wrap:wrap;align-items:center;min-height:40px;';
             popup.appendChild(summaryBar);
-
             var tabBar = document.createElement('div');
             tabBar.style.cssText = 'display:flex;border-bottom:2px solid ' + (_D ? '#2e2e45' : '#e0e0e0') + ';background:' + (_D ? '#252535' : '#f5f5f5') + ';flex-shrink:0;';
             popup.appendChild(tabBar);
-
             var bodyEl = document.createElement('div');
             bodyEl.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;background:' + (_D ? '#1a1a2e' : '#fff') + ';';
-
             var skeletonStyle = '@keyframes lpd-shimmer{0%{background-position:-600px 0}100%{background-position:600px 0}}';
             if (!document.getElementById('lpd-skeleton-style')) {
                 var st = document.createElement('style'); st.id = 'lpd-skeleton-style'; st.textContent = skeletonStyle;
@@ -4341,17 +3926,13 @@
             }
             bodyEl.appendChild(skeletonWrap);
             popup.appendChild(bodyEl);
-
             overlay.appendChild(popup);
             overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
             document.addEventListener('keydown', function onEsc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); } });
             document.body.appendChild(overlay);
-
             function populate(result) {
-
                 var sub = hdrInfo.querySelector('.lpd-hdr-sub');
                 if (sub) { sub.textContent = esc(lane) + ' · ' + result.total + ' packages'; sub.style.color = _D ? '#8080a0' : '#555'; }
-
                 summaryBar.innerHTML = '';
                 var t = result.totals, tot = result.total;
                 function summaryChip(bg, color, label, count) {
@@ -4368,7 +3949,6 @@
                 summaryBar.appendChild(summaryChip(_sc[1][0], _sc[1][1], L('lastHour'), t.preHour));
                 summaryBar.appendChild(summaryChip(_sc[2][0], _sc[2][1], L('lateLabel'), t.late));
                 if (t.early > 0) summaryBar.appendChild(summaryChip(_sc[3][0], _sc[3][1], L('earlyLabel'), t.early));
-
                 tabBar.innerHTML = '';
                 bodyEl.innerHTML = '';
                 var tabs = [L('byPallet'), L('byCpt')];
@@ -4395,7 +3975,6 @@
                 }
                 activateTab(0);
             }
-
             function showError(msg) {
                 summaryBar.innerHTML = '';
                 tabBar.innerHTML = '';
@@ -4407,48 +3986,38 @@
                 var sub = hdrInfo.querySelector('.lpd-hdr-sub');
                 if (sub) sub.textContent = esc(lane) + ' · erro';
             }
-
             return { populate: populate, showError: showError };
         }
-
         function showCptPanel(vrid, lane, result) {
             var handle = openCptPanelLoading(vrid, lane);
             handle.populate(result);
         }
-
         function buildCptPane(result, isDark) {
             var D = isDark || SETTINGS.theme === 'dark';
             var pane = document.createElement('div');
             pane.style.cssText = 'overflow-y:auto;flex:1;padding:12px 16px;background:' + (D ? '#1a1a2e' : '#fff') + ';';
-
             var cptEntries = Object.keys(result.cptMap).sort(function (a, b) {
                 var da = parseApiDate(a), db = parseApiDate(b);
                 return (da && db) ? da - db : 0;
             });
-
             var now = new Date();
-
             cptEntries.forEach(function (cpt) {
                 var v = result.cptMap[cpt];
                 var tot = v.inCpt + v.preHour + v.late + (v.early || 0);
                 var cptT = parseApiDate(cpt);
                 var expired = cptT && cptT < now;
-
                 var blockBorder = D ? (expired ? '#5a1a1a' : '#2e2e45') : (expired ? '#ffcdd2' : '#e0e0e0');
                 var hdrBg = D ? (expired ? '#2a0a0a' : '#252535') : (expired ? '#fff3f3' : '#f5f5f5');
                 var hdrColor = D ? (expired ? '#ff8a80' : '#d0d0e8') : (expired ? '#b71c1c' : '#333');
                 var pkgsColor = D ? '#8080a0' : '#555';
                 var barBg = D ? '#2e2e45' : '#eee';
-
                 var block = document.createElement('div');
                 block.style.cssText = 'margin-bottom:14px;border-radius:8px;border:1px solid ' + blockBorder + ';overflow:hidden;';
-
                 var rowHdr = document.createElement('div');
                 rowHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;background:' + hdrBg + ';';
                 rowHdr.innerHTML = '<span style="flex:1;font-size:12px;font-weight:800;color:' + hdrColor + ';">' +
                     esc(cpt) + (expired ? ' <span style="font-size:10px;font-weight:700;color:#f44336;">' + L('cptExpired') + '</span>' : '') + '</span>' +
                     '<span style="font-size:12px;font-weight:700;color:' + pkgsColor + ';">' + tot + ' pkgs</span>';
-
                 var barWrap = document.createElement('div');
                 barWrap.style.cssText = 'display:flex;height:6px;border-radius:3px;overflow:hidden;margin:0 12px 8px;background:' + barBg + ';';
                 function seg(w, bg) {
@@ -4461,7 +4030,6 @@
                 seg(tot > 0 ? (v.preHour / tot * 100) : 0, '#ff9800');
                 seg(tot > 0 ? (v.late / tot * 100) : 0, '#f44336');
                 seg(tot > 0 ? ((v.early || 0) / tot * 100) : 0, '#1976d2');
-
                 var chips = document.createElement('div');
                 chips.style.cssText = 'display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap;';
                 function countChip(bgLight, bgDark, colorLight, colorDark, label, count) {
@@ -4475,37 +4043,30 @@
                 countChip('#fff3e0', '#2b1200', '#e65100', '#ffcc80', L('lastHour'), v.preHour);
                 countChip('#ffebee', '#2a0a0a', '#c62828', '#ff8a80', L('lateLabel'), v.late);
                 countChip('#e3f2fd', '#0a1929', '#0d47a1', '#90caf9', L('earlyLabel'), v.early || 0);
-
                 block.appendChild(rowHdr);
                 block.appendChild(barWrap);
                 block.appendChild(chips);
                 pane.appendChild(block);
             });
-
             if (!cptEntries.length) {
                 pane.style.color = D ? '#8080a0' : '#888';
                 pane.textContent = L('noCptFound');
             }
             return pane;
         }
-
         function buildPalletPane(result, isDark) {
             var D = isDark || SETTINGS.theme === 'dark';
             var pane = document.createElement('div');
             pane.style.cssText = 'overflow-y:auto;flex:1;padding:12px 16px;background:' + (D ? '#1a1a2e' : '#fff') + ';';
-
             var palletEntries = Object.keys(result.palletMap).sort(function (a, b) {
                 var ta = result.palletMap[a], tb = result.palletMap[b];
                 return (tb.inCpt + tb.preHour + tb.late + (tb.early || 0)) - (ta.inCpt + ta.preHour + ta.late + (ta.early || 0));
             });
-
             palletEntries.forEach(function (palletLabel) {
                 var v = result.palletMap[palletLabel];
                 var tot = v.inCpt + v.preHour + v.late + (v.early || 0);
-
                 var block = document.createElement('div');
                 block.style.cssText = 'margin-bottom:14px;border-radius:8px;border:1px solid ' + (D ? '#2e2e45' : '#e0e0e0') + ';overflow:hidden;';
-
                 var rowHdr = document.createElement('div');
                 rowHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;background:' + (D ? '#252535' : '#f5f5f5') + ';cursor:pointer;user-select:none;';
                 rowHdr.innerHTML =
@@ -4513,7 +4074,6 @@
                     '<span style="flex:1;font-size:12px;font-weight:800;color:' + (D ? '#d0d0e8' : '#333') + ';">' + esc(palletLabel) + '</span>' +
                     '<span style="font-size:12px;font-weight:700;color:' + (D ? '#8080a0' : '#555') + ';">' + tot + ' pkgs</span>' +
                     '<span class="lpd-chevron" style="font-size:13px;color:' + (D ? '#6060a0' : '#999') + ';margin-left:6px;">▾</span>';
-
                 var barWrap = document.createElement('div');
                 barWrap.style.cssText = 'display:flex;height:6px;overflow:hidden;margin:0 12px 8px;background:' + (D ? '#2e2e45' : '#eee') + ';border-radius:3px;';
                 function seg(w, bg) {
@@ -4526,7 +4086,6 @@
                 seg(tot > 0 ? (v.preHour / tot * 100) : 0, '#ff9800');
                 seg(tot > 0 ? (v.late / tot * 100) : 0, '#f44336');
                 seg(tot > 0 ? ((v.early || 0) / tot * 100) : 0, '#1976d2');
-
                 var chips = document.createElement('div');
                 chips.style.cssText = 'display:flex;gap:6px;padding:0 12px 10px;flex-wrap:wrap;';
                 function countChip(bgLight, bgDark, colorLight, colorDark, label, count) {
@@ -4540,10 +4099,8 @@
                 countChip('#fff3e0', '#2b1200', '#e65100', '#ffcc80', L('lastHour'), v.preHour);
                 countChip('#ffebee', '#2a0a0a', '#c62828', '#ff8a80', L('lateLabel'), v.late);
                 countChip('#e3f2fd', '#0a1929', '#0d47a1', '#90caf9', L('earlyLabel'), v.early || 0);
-
                 var dropdown = document.createElement('div');
                 dropdown.style.cssText = 'display:none;border-top:1px solid ' + (D ? '#2e2e45' : '#e0e0e0') + ';max-height:200px;overflow-y:auto;background:' + (D ? '#1a1a2e' : '#fff') + ';';
-
                 var thBg = D ? '#1e1e38' : '#fafafa';
                 var thBorder = D ? '#2e2e45' : '#eee';
                 var thColor = D ? '#8080a0' : '#888';
@@ -4556,7 +4113,6 @@
                     '<th style="text-align:center;padding:4px 8px;color:' + thColor + ';font-weight:600;">Status</th>' +
                     '</tr></thead>';
                 var tbody = document.createElement('tbody');
-
                 var catOrder = { late: 0, preHour: 1, early: 2, inCpt: 3 };
                 v.pkgs.slice().sort(function (a, b) { return (catOrder[a.category] || 3) - (catOrder[b.category] || 3); })
                     .forEach(function (p, i) {
@@ -4585,28 +4141,24 @@
                     });
                 table.appendChild(tbody);
                 dropdown.appendChild(table);
-
                 var open = false;
                 rowHdr.addEventListener('click', function () {
                     open = !open;
                     dropdown.style.display = open ? 'block' : 'none';
                     rowHdr.querySelector('.lpd-chevron').textContent = open ? '▴' : '▾';
                 });
-
                 block.appendChild(rowHdr);
                 block.appendChild(barWrap);
                 block.appendChild(chips);
                 block.appendChild(dropdown);
                 pane.appendChild(block);
             });
-
             if (!palletEntries.length) {
                 pane.style.color = D ? '#8080a0' : '#888';
                 pane.textContent = L('noPalletFound');
             }
             return pane;
         }
-
         function getCptFromRow(row) {
             if (!row) return null;
             var candidates = [
@@ -4622,7 +4174,6 @@
                     if (t) return t;
                 }
             }
-
             var tds = row.querySelectorAll('td');
             for (var j = 0; j < tds.length; j++) {
                 var txt2 = tds[j].textContent.trim();
@@ -4633,11 +4184,9 @@
             }
             return null;
         }
-
         function runCheck(row, btn) {
             var vrid = getVridFromRow(row);
             if (!vrid) { log('Não foi possível determinar VRID', 'error'); return; }
-
             var _p0 = extractParamsFromRow(row, vrid);
             if (!_p0.loadGroupId) {
                 btn.textContent = '⏳ Aguardando dados...';
@@ -4662,17 +4211,12 @@
                 }, 200);
                 return;
             }
-
             runCheckCore(row, btn, vrid, _p0);
         }
-
         function runCheckCore(row, btn, vrid, p) {
-
             var truckCptTime = getCptFromRow(row);
-
             log('--- Check VRID: ' + vrid, 'info');
             log('loadGroupId="' + p.loadGroupId + '" trailerId="' + p.trailerId + '" planId="' + p.planId + '" truckCpt="' + (truckCptTime ? truckCptTime.toLocaleString() : 'null') + '"', 'info');
-
             if (!p.loadGroupId) {
                 log('loadGroupId vazio — XHR não capturado', 'warn');
                 btn.textContent = '⚠ Sem loadGroupId';
@@ -4681,7 +4225,6 @@
                 setTimeout(function () { btn.textContent = '📦 CPT'; btn.style.background = '#7b1fa2'; }, 4000);
                 return;
             }
-
             if (!p.trailerId || /^OTHR/i.test(p.trailerId)) {
                 var reason = /^OTHR/i.test(p.trailerId)
                     ? 'Caminhão ainda em doca (trailerId virtual "' + p.trailerId + '") — disponível apenas após liberação'
@@ -4693,15 +4236,12 @@
                 setTimeout(function () { btn.textContent = '📦 CPT'; btn.style.background = '#7b1fa2'; }, 3000);
                 return;
             }
-
             btn.textContent = '⏳ Checking...';
             btn.disabled = true;
             btn.style.background = '#555';
-
             var laneEl = row.querySelector('td.routeCol, td[class*="route"], span[class*="stackFilter"]');
             var lane = (laneEl && laneEl.textContent.trim()) || vrid;
             var panelHandle = openCptPanelLoading(vrid, lane);
-
             var formBody = [
                 'entity=getOutboundLoadContainerDetails',
                 'nodeId=' + encodeURIComponent(p.nodeId),
@@ -4712,9 +4252,7 @@
                 'trailerId=' + encodeURIComponent(p.trailerId),
                 'trailerNumber=' + encodeURIComponent(p.trailerNumber)
             ].join('&');
-
             log('POST body: ' + formBody, 'debug');
-
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: location.origin + '/ssp/dock/hrz/ob/fetchdata',
@@ -4734,7 +4272,6 @@
                         btn.disabled = false;
                         return;
                     }
-
                     var result = processFetchData(resp.responseText, truckCptTime);
                     if (!result) {
                         panelHandle.showError('Parse error — resposta inesperada da API');
@@ -4743,11 +4280,9 @@
                         btn.disabled = false;
                         return;
                     }
-
                     var btnBg = '#2e7d32';
                     if (result.totals.preHour > 0) btnBg = '#e65100';
                     if (result.totals.late > 0) btnBg = '#c62828';
-
                     var lateLabel = result.totals.late > 0 ? '🚨 ' + result.totals.late + ' late' : '';
                     var preLabel = result.totals.preHour > 0 ? '⏰ ' + result.totals.preHour + ' última h' : '';
                     var okLabel = !result.totals.late && !result.totals.preHour ? L('onTime') : '';
@@ -4755,7 +4290,6 @@
                     btn.style.background = btnBg;
                     btn.disabled = false;
                     btn.onclick = function (e) { e.stopPropagation(); showCptPanel(vrid, lane, result); };
-
                     panelHandle.populate(result);
                 },
                 onerror: function () {
@@ -4767,39 +4301,16 @@
                 }
             });
         }
-
-
     })();
-
     if (_SUITE.isDock || _SUITE.isVista) {
         (function loadModuleMapaVSM() {
             if (!_SUITE.isDock && !_SUITE.isVista) return;
             'use strict';
-
             const BASE = _SUITE.BASE;
-
             const CSRF_TTL = 15 * 60 * 1000;
             const FETCH_CONCURRENCY = 50;
-
             let _csrf = '';
-
-            const DEFAULT_VSM_SEGMENT_MAP = {
-                'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
-                'SBP9': ['AA32'],
-                'SUA9': ['AA42'], 'SVA9': ['AA51'], 'SSD9': ['AA52'], 'SBT9': ['AA53'], 'XSP2': ['AB31'], 'SPC9': ['AB32'], 'SSP9': ['AB41'], 'SBZ1_C2': ['AB42'],
-                'SSO9': ['AB51'], 'SSC9': ['AB52'], 'SRG9': ['AB53'], 'DSA8': ['AB61'],
-                'SDI9_C2': ['CC11'], 'DSP4': ['CC12'], 'DBR9_EF': ['CC13'], 'SLI9_C2': ['CC21'], 'SCG9': ['CC22'],
-                'DBR9': ['CC23'], 'SCZ9': ['CC31'], 'SDA9': ['CC32'], 'SBZ1': ['CC34'],
-                'SDI9': ['CC35'], 'SLI9': ['CC36'], 'SLO9': ['CC41'],
-                'SBZ2': ['CC61'], 'DSP2': ['CD11'], 'SQA9': ['CD12'], 'SFC9': ['CD13'], 'SFI9': ['CD21'],
-                'DFR2': ['CD23'], 'SRP9': ['CD31'], 'SAE9': ['CD32'], 'SCB9': ['CD33'], 'DBS5_EF': ['CD41'],
-                'SBL9': ['CD51'], 'SFM9': ['CD52'], 'DRS5': ['CD53'], 'SPM9': ['CD61'], 'TBAV': ['H-11'],
-                'STJ9': ['H-31'], 'SSJ9': ['H-32'], 'SUB9': ['H-41'], 'DSP5': ['H-51'],
-                'GIG7': ['H-61'], 'CNF7': ['X-12'], 'DGO2': ['X-21'], 'SSV9': ['X-22'],
-                'REC9': ['X-31'], 'DPR2': ['X-41'], 'SBU9': ['X-51'], 'DSP2_EF': ['X-53'], 'DRS5_EF': ['X-61'],
-                'DSP4_EF': ['X-62']
-            };
-
+            const DEFAULT_VSM_SEGMENT_MAP = _SUITE.DEFAULT_VSM_SEGMENT_MAP;
             const DEFAULT_BELT_GROUPS = [
                 { id: 1, vsms: ['H-12', 'H-11', 'H-31', 'H-32'] },
                 { id: 2, vsms: ['H-41', 'H-51', 'H-61'] },
@@ -4819,7 +4330,6 @@
                 { id: 16, vsms: ['AB51', 'AB52', 'AB53', 'AB61'] },
                 { id: 17, vsms: ['CD51', 'CD52', 'CD53', 'CD61'] }
             ];
-
             const DEFAULT_MAP_MATRIX = [
                 ["", "", "", "", "", "", "", "", "", "[F1]", "[L_F1]", "", "", "[L_TS]", "[SKIP]", "", "", "[L_F2]", "[F2]", "", "", "", "", "", "", "", "", "", ""],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "[TS_V]", "[SKIP]", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
@@ -4851,21 +4361,17 @@
                 ["CD21", "CD23", "CD23", "CD31", "CD31", "CD32", "", "CC61", "CC61", "CC61", "CC41", "CC41", "CC41", "", "", "-", "-", "-", "X-62", "X-61", "X-61", "", "AB52", "AB52", "AB53", "AB61", "AB61", "AB61", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""]
             ];
-
             const DEFAULT_FINGERS = [
                 { id: 1, name: "Finger 1", belts: [1, 2, 3, 4, 5, 6, 7, 8, 17] },
                 { id: 2, name: "Finger 2", belts: [9, 10, 11, 12, 13, 14, 15, 16] }
             ];
-
             let ALL_VSMS = [];
             let VSM_SEGMENT_MAP = {};
             let BELT_GROUPS = [];
             let activeMapMatrix = [];
             let activeFingers = [];
-
             let activeMappings = [];
             let configIsDirty = false;
-
             let currentCountMode = 'totalCount';
             let currentVsmTotals = {};
             let currentVsmMatrix = {};
@@ -4888,7 +4394,6 @@
                         routeArr = String(routes).split('-');
                     }
                     routeArr = routeArr.map(r => r.trim()).filter(r => r);
-
                     // 1. Try Cache First
                     const cached = lastExportData.filter(v => routeArr.includes(v.route) || routeArr.includes(v.vrid));
                     if (cached.length > 0) {
@@ -4898,7 +4403,6 @@
                             return;
                         }
                     }
-
                     // 2. Headless Fetch (Reliable VSM style)
                     const ts = getLocalDayTs(new Date());
                     fetchVRIData(ts.start, ts.end, (err, res) => {
@@ -4913,9 +4417,7 @@
                                 route: l.route || ''
                             };
                         }).filter(v => v.vrid && (routeArr.includes(v.route) || routeArr.includes(v.vrid)));
-
                         if (!vridList.length) { callback([]); return; }
-
                         const planIds = vridList.map(v => v.planId).filter(id => id);
                         fetchContainers(planIds, (errC, resC) => {
                             if (errC || !resC) { callback([]); return; }
@@ -4930,20 +4432,16 @@
                     });
                 }
             };
-
             let autoRefreshTimer = null;
             let autoRefreshCountdownInterval = null;
             let autoRefreshNextTimestamp = 0;
             let lastSearch = null;
             let isRefreshing = false;
-
             let selectedVrids = new Set();
             let hideZeroPkgs = true;
-
             function initializeConfig() {
                 const savedNode = GM_getValue('vsm_custom_node');
                 if (savedNode) activeNodeId = savedNode;
-
                 const savedMap = GM_getValue('vsm_custom_map_matrix');
                 if (savedMap) {
                     try { activeMapMatrix = JSON.parse(savedMap); }
@@ -4951,7 +4449,6 @@
                 } else {
                     activeMapMatrix = JSON.parse(JSON.stringify(DEFAULT_MAP_MATRIX));
                 }
-
                 const saved = GM_getValue('vsm_custom_config');
                 if (saved) {
                     try { activeMappings = JSON.parse(saved); }
@@ -4959,7 +4456,6 @@
                 } else {
                     buildDefaultMappings();
                 }
-
                 const savedFingers = GM_getValue('vsm_custom_fingers');
                 if (savedFingers) {
                     try { activeFingers = JSON.parse(savedFingers); }
@@ -4967,17 +4463,14 @@
                 } else {
                     activeFingers = JSON.parse(JSON.stringify(DEFAULT_FINGERS));
                 }
-
                 rebuildDictionaries();
             }
-
             function buildDefaultMappings() {
                 activeMappings = [];
                 const vsmToGroup = {};
                 for (const group of DEFAULT_BELT_GROUPS) {
                     for (const vsm of group.vsms) vsmToGroup[vsm] = group.id;
                 }
-
                 for (const route in DEFAULT_VSM_SEGMENT_MAP) {
                     const vsms = DEFAULT_VSM_SEGMENT_MAP[route];
                     for (const vsm of vsms) {
@@ -4989,26 +4482,20 @@
                     }
                 }
             }
-
             function rebuildDictionaries() {
                 VSM_SEGMENT_MAP = {};
                 const vsmSet = new Set(['AIR']);
-
                 BELT_GROUPS = JSON.parse(JSON.stringify(DEFAULT_BELT_GROUPS));
                 BELT_GROUPS.forEach(g => { g.vsms = []; });
-
                 activeMappings.forEach(m => {
                     const routeUpper = m.route.toUpperCase();
                     const vsmUpper = m.vsm.toUpperCase();
                     const groupId = parseInt(m.group, 10);
-
                     if (!VSM_SEGMENT_MAP[routeUpper]) VSM_SEGMENT_MAP[routeUpper] = [];
                     if (!VSM_SEGMENT_MAP[routeUpper].includes(vsmUpper)) {
                         VSM_SEGMENT_MAP[routeUpper].push(vsmUpper);
                     }
-
                     vsmSet.add(vsmUpper);
-
                     let groupObj = BELT_GROUPS.find(bg => bg.id === groupId);
                     if (!groupObj && !isNaN(groupId)) {
                         groupObj = { id: groupId, vsms: [] };
@@ -5018,10 +4505,8 @@
                         if (!groupObj.vsms.includes(vsmUpper)) groupObj.vsms.push(vsmUpper);
                     }
                 });
-
                 ALL_VSMS = Array.from(vsmSet).sort();
             }
-
             function saveConfig() {
                 const nodeInput = document.getElementById('cfg-node-input');
                 if (nodeInput) {
@@ -5031,7 +4516,6 @@
                         GM_setValue('vsm_custom_node', activeNodeId);
                     }
                 }
-
                 const tbody = document.getElementById('config-table-body');
                 if (tbody) {
                     const rows = tbody.querySelectorAll('tr.cfg-row');
@@ -5045,7 +4529,6 @@
                     activeMappings = newMappings;
                     GM_setValue('vsm_custom_config', JSON.stringify(activeMappings));
                 }
-
                 const fTbody = document.getElementById('config-finger-body');
                 if (fTbody) {
                     const fRows = fTbody.querySelectorAll('tr.cfg-finger-row');
@@ -5062,34 +4545,27 @@
                     activeFingers = newFingers;
                     GM_setValue('vsm_custom_fingers', JSON.stringify(activeFingers));
                 }
-
                 rebuildDictionaries();
                 configIsDirty = false;
-
                 renderConfigTable();
                 if (lastExportData.length > 0) computeAndRenderAll();
             }
-
             function resetConfigToDefault() {
                 if (confirm("Tem certeza que deseja restaurar as configurações padrão (Node, Rotas, VSM, Grupos e Fingers)?")) {
                     activeNodeId = detectCurrentNode() || GM_getValue('tl_node', 'Node não selecionado');
                     buildDefaultMappings();
                     activeFingers = JSON.parse(JSON.stringify(DEFAULT_FINGERS));
-
                     GM_setValue('vsm_custom_node', activeNodeId);
                     GM_setValue('vsm_custom_config', JSON.stringify(activeMappings));
                     GM_setValue('vsm_custom_fingers', JSON.stringify(activeFingers));
-
                     const nodeInput = document.getElementById('cfg-node-input');
                     if (nodeInput) nodeInput.value = activeNodeId;
-
                     rebuildDictionaries();
                     configIsDirty = false;
                     renderConfigTable();
                     if (lastExportData.length > 0) computeAndRenderAll();
                 }
             }
-
             function loadCsrfFromStorage() {
                 try {
                     const t = localStorage.getItem('gql_csrf_token');
@@ -5101,7 +4577,6 @@
                 } catch (e) { }
                 return false;
             }
-
             function saveCsrf(t) {
                 if (!t || t.length <= 10) return;
                 _csrf = t;
@@ -5110,7 +4585,6 @@
                     localStorage.setItem('gql_csrf_ts', String(Date.now()));
                 } catch (e) { }
             }
-
             // Sync local _csrf with the central interceptor (avoiding redundant XHR prototype patch)
             (function syncCsrfFromCentral() {
                 // Listen for CSRF changes from the central patchXHR via polling _SUITE.antiCsrfToken
@@ -5120,7 +4594,6 @@
                         saveCsrf(_SUITE.antiCsrfToken);
                     }
                 }, 2000);
-
                 // Keep fetch interception (unique to VSM — no other module does this)
                 const originalFetch = window.fetch;
                 if (originalFetch && !window._tlFetchPatched) {
@@ -5141,10 +4614,8 @@
                     };
                 }
             })();
-
             loadCsrfFromStorage();
             initializeConfig();
-
             function parseLocalDateTime(s) {
                 if (!s) return null;
                 const m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})\s+(\d{2}):(\d{2})/);
@@ -5158,34 +4629,28 @@
                 if (year < 100) year += 2000;
                 return new Date(year, months[m[2]], parseInt(m[1], 10), parseInt(m[4], 10), parseInt(m[5], 10));
             }
-
             function getLocalDayTs(date) {
                 const s = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
                 const e = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
                 return { start: String(s.getTime()), end: String(e.getTime()) };
             }
-
             var esc = _SUITE.utils.esc;
-
             function getLoadObject(item) {
                 if (!item) return {};
                 if (item.load) return item.load;
                 const found = Object.values(item).find(v => v && typeof v === 'object' && (v.vrid || v.vrId || v.vId || v.planId || v.planForOrderId));
                 return found || item;
             }
-
             function fetchVRIData(startTimestamp, endTimestamp, callback) {
                 if (!activeNodeId || activeNodeId.includes('selecionado')) {
                     activeNodeId = _SUITE.utils.detectNode() || 'CGH7';
                 }
-
                 _SUITE.utils.fetchAntiCsrfToken(function (token) {
                     const finalToken = token || _csrf;
                     if (!finalToken) {
                         callback('Erro: Token de segurança não encontrado. Recarregue a página.', null);
                         return;
                     }
-
                     const params = new URLSearchParams({
                         entity: 'getInboundDockView',
                         nodeId: activeNodeId,
@@ -5222,11 +4687,9 @@
                     });
                 });
             }
-
             function fetchContainers(planIds, callback) {
                 if (!planIds || planIds.length === 0) { callback(null, {}); return; }
                 const idsParam = planIds.join(',');
-
                 _SUITE.utils.fetchAntiCsrfToken(function (token) {
                     const finalToken = token || _csrf;
                     const params = new URLSearchParams({
@@ -5262,7 +4725,6 @@
                     });
                 });
             }
-
             function fetchCompletePercent(planIds, callback) {
                 if (!planIds || planIds.length === 0) { callback(null, {}); return; }
                 const idsParam = planIds.join(',');
@@ -5294,28 +4756,20 @@
                     ontimeout: function () { callback('Timeout', null); }
                 });
             }
-
             function getVRIDsFromData(data, startDate, startHour, endDate, endHour) {
                 if (!data || !data.ret || !data.ret.aaData) return [];
-
                 const dataArray = Array.isArray(data.ret.aaData) ? data.ret.aaData : Object.values(data.ret.aaData);
                 const results = [];
-
                 const startDateTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), startHour - 1, 0, 0);
                 const endDateTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), endHour, 59, 59);
-
                 if (startDateTime.getTime() >= endDateTime.getTime()) return [];
-
                 for (let i = 0; i < dataArray.length; i++) {
                     const item = dataArray[i];
                     const load = getLoadObject(item);
-
                     const scheduledTimeStr = load.scheduledArrivalTime;
                     if (!scheduledTimeStr) continue;
-
                     const scheduledDate = parseLocalDateTime(scheduledTimeStr);
                     if (!scheduledDate) continue;
-
                     const scheduledMs = scheduledDate.getTime();
                     if (scheduledMs >= startDateTime.getTime() && scheduledMs <= endDateTime.getTime()) {
                         results.push({
@@ -5329,7 +4783,6 @@
                 }
                 return results;
             }
-
             function getCounts(container) {
                 let counts = container[currentCountMode];
                 if (!counts) {
@@ -5339,7 +4792,6 @@
                 if (!counts) counts = { P: 0, C: 0 };
                 return { P: counts.P !== undefined ? counts.P : 0, C: counts.C !== undefined ? counts.C : 0 };
             }
-
             function simplifyLane(lane) {
                 if (!lane) return '—';
                 if (lane.indexOf('->') === -1) return lane;
@@ -5348,7 +4800,6 @@
                 if (parts[1] === activeNodeId) return parts[0];
                 return lane;
             }
-
             function splitLaneSegments(lane) {
                 if (!lane) return [''];
                 if (lane.indexOf('->') === -1) return [lane];
@@ -5361,42 +4812,34 @@
                 if (allNodes) return segments;
                 return [afterArrow];
             }
-
             function segmentToVSM(segment) {
                 if (!segment) return [];
                 const upper = segment.toUpperCase();
                 if (VSM_SEGMENT_MAP[upper]) return VSM_SEGMENT_MAP[upper];
                 return [];
             }
-
             function computeVsmHourlyMatrixFromExportData(exportDataList) {
                 const matrix = {};
                 for (const vsm of ALL_VSMS) {
                     matrix[vsm] = new Array(25).fill(0);
                 }
-
                 for (const vridData of exportDataList) {
                     const timeStr = vridData.actualArrivalTime && vridData.actualArrivalTime !== 'N/A' ? vridData.actualArrivalTime : vridData.scheduledArrivalTime;
                     if (!timeStr) continue;
                     const vridDate = parseLocalDateTime(timeStr);
                     if (!vridDate) continue;
-
                     const hour = vridDate.getHours();
                     const minute = vridDate.getMinutes();
                     const currentRatio = (60 - minute) / 60;
-
                     const route = vridData.route || '';
                     const isMMRoute = route.toUpperCase().endsWith('_MM');
-
                     const containers = vridData.containers || [];
                     for (const container of containers) {
                         const counts = getCounts(container);
                         if (counts.C > 0 || counts.P === 0) continue;
-
                         if (isMMRoute) {
                             const curP = Math.round(counts.P * currentRatio);
                             const nextP = counts.P - curP;
-
                             if (matrix['AIR']) {
                                 matrix['AIR'][hour] += curP;
                                 let nextIndex = hour + 1;
@@ -5405,34 +4848,27 @@
                             }
                             continue;
                         }
-
                         const originalLane = container.lane || '';
                         const segments = splitLaneSegments(originalLane);
                         const nSeg = segments.length;
                         if (nSeg === 0) continue;
-
                         const baseP = Math.floor(counts.P / nSeg);
                         const remP = counts.P % nSeg;
-
                         for (let i = 0; i < nSeg; i++) {
                             const seg = segments[i];
                             const addP = baseP + (i < remP ? 1 : 0);
                             if (addP === 0) continue;
-
                             const targetVsms = segmentToVSM(seg);
                             if (targetVsms && targetVsms.length > 0) {
                                 const subBaseP = Math.floor(addP / targetVsms.length);
                                 const subRemP = addP % targetVsms.length;
-
                                 for (let j = 0; j < targetVsms.length; j++) {
                                     const vsm = targetVsms[j];
                                     if (ALL_VSMS.includes(vsm)) {
                                         const finalAddP = subBaseP + (j < subRemP ? 1 : 0);
                                         if (finalAddP === 0) continue;
-
                                         const curP = Math.round(finalAddP * currentRatio);
                                         const nextP = finalAddP - curP;
-
                                         matrix[vsm][hour] += curP;
                                         let nextIndex = hour + 1;
                                         if (nextIndex >= 24) nextIndex = 24;
@@ -5445,7 +4881,6 @@
                 }
                 return matrix;
             }
-
             function getVsmCellStyle(count) {
                 if (count === 0) return { bg: '#141f2c', fg: '#2a3a4a' };
                 if (count <= 50) return { bg: '#1a3a2a', fg: '#4dbb7a' };
@@ -5454,12 +4889,10 @@
                 if (count <= 600) return { bg: '#8a3d00', fg: '#ffaa55' };
                 return { bg: '#6a1020', fg: '#ff7090' };
             }
-
             function renderVsmHourlyTable(matrix, container) {
                 const hourTotals = new Array(25).fill(0);
                 let grandTotal = 0;
                 const activeVsms = [];
-
                 for (const vsm of ALL_VSMS) {
                     const row = matrix[vsm];
                     const total = row.reduce((a, b) => a + b, 0);
@@ -5468,9 +4901,7 @@
                     for (let h = 0; h <= 24; h++) hourTotals[h] += row[h];
                     grandTotal += total;
                 }
-
                 const showExtraHour = hourTotals[24] > 0;
-
                 let html = '<div class="vsm-tbl-wrap"><table class="vsm-hourly-table" id="vsm-ht">';
                 html += '<thead>';
                 html += '<th class="vsm-label-hdr">VSM</th>';
@@ -5482,11 +4913,9 @@
                     const hdrStyle = getVsmCellStyle(hourTotals[24]);
                     html += `<th class="hour-col" data-col="24" style="background:${hdrStyle.bg};color:${hdrStyle.fg};">00:00 (+1)</th>`;
                 }
-
                 const grandHdrStyle = getVsmCellStyle(grandTotal);
                 html += `<th class="total-col" style="background:${grandHdrStyle.bg};color:${grandHdrStyle.fg};">Total</th>`;
                 html += '</thead><tbody>';
-
                 for (const vsm of activeVsms) {
                     const row = matrix[vsm];
                     const total = row.reduce((a, b) => a + b, 0);
@@ -5506,7 +4935,6 @@
                     html += `<td class="total-cell" data-row="${esc(vsm)}" style="background:${totalStyle.bg};color:${totalStyle.fg};font-weight:700;">${total}</td>`;
                     html += '</tr>';
                 }
-
                 html += '<tr class="hour-total-row">';
                 html += '<td class="vsm-label"><strong>Total por hora</strong></td>';
                 for (let h = 0; h < 24; h++) {
@@ -5523,9 +4951,7 @@
                 html += `<td class="total-cell" style="background:${grandStyle.bg};color:${grandStyle.fg};font-weight:700;">${grandTotal}</td>`;
                 html += '</tr>';
                 html += '</tbody></table></div>';
-
                 container.innerHTML = html;
-
                 const tbl = container.querySelector('#vsm-ht');
                 if (tbl) {
                     let hoverCss = document.getElementById('vsm-ht-hovercss');
@@ -5534,7 +4960,6 @@
                         hoverCss.id = 'vsm-ht-hovercss';
                         document.head.appendChild(hoverCss);
                     }
-
                     let lastRow = null, lastCol = null, hraf = null;
                     tbl.addEventListener('mouseover', e => {
                         const td = e.target.closest('[data-row],[data-col]');
@@ -5543,7 +4968,6 @@
                         const col = td.dataset.col !== undefined ? td.dataset.col : null;
                         if (lastRow === row && lastCol === col) return;
                         lastRow = row; lastCol = col;
-
                         if (hraf) cancelAnimationFrame(hraf);
                         hraf = requestAnimationFrame(() => {
                             let css = '';
@@ -5560,7 +4984,6 @@
                     });
                 }
             }
-
             function computeAndRenderAll() {
                 let filtered = getFilteredExportData();
                 if (hideZeroPkgs) {
@@ -5573,13 +4996,11 @@
                 currentVsmMatrix = matrix;
                 const totals = {};
                 let hasExtraSpillover = false;
-
                 for (const vsm of ALL_VSMS) {
                     totals[vsm] = matrix[vsm].reduce((a, b) => a + b, 0);
                     if (matrix[vsm][24] > 0) hasExtraSpillover = true;
                 }
                 currentVsmTotals = totals;
-
                 const mapContainer = document.getElementById('vsm-map-container');
                 if (mapContainer) {
                     if (!filtered.length) {
@@ -5588,7 +5009,6 @@
                         renderVsmHourlyTable(matrix, mapContainer);
                     }
                 }
-
                 const pillNextDay = document.getElementById('pill-next-day');
                 if (pillNextDay) {
                     pillNextDay.style.display = hasExtraSpillover ? 'inline-block' : 'none';
@@ -5598,10 +5018,8 @@
                         document.querySelector('.hour-pill[data-hour="-1"]').classList.add('active');
                     }
                 }
-
                 renderStaticVsmMap();
             }
-
             function isMeaningful(value) {
                 if (!value || value === "") return false;
                 const upper = String(value).toUpperCase();
@@ -5615,7 +5033,6 @@
                 if (upper === "AIR") return true;
                 return false;
             }
-
             function getBoundingBox(matrix) {
                 let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity;
                 for (let r = 0; r < matrix.length; r++) {
@@ -5631,7 +5048,6 @@
                 if (minRow === Infinity) return null;
                 return { minRow, maxRow, minCol, maxCol };
             }
-
             function cropWithMargin(matrix, margin = 1) {
                 const bbox = getBoundingBox(matrix);
                 if (!bbox) return [];
@@ -5649,7 +5065,6 @@
                 }
                 return cropped;
             }
-
             function getCellCategory(value) {
                 if (!value || value === "") return "default";
                 if (value === "0") return "ZERO";
@@ -5662,7 +5077,6 @@
                 if (value === "AIR") return "AIR";
                 return "default";
             }
-
             function findVsmForZero(croppedMatrix, row, col, allVsmsSet) {
                 if (row > 0) {
                     const above = croppedMatrix[row - 1][col];
@@ -5674,7 +5088,6 @@
                 }
                 return null;
             }
-
             function getStaticVsmTotals() {
                 if (staticSelectedHour === -1) return currentVsmTotals;
                 const result = {};
@@ -5683,30 +5096,24 @@
                 }
                 return result;
             }
-
             function getFilteredExportData() {
                 if (!lastExportData.length) return [];
                 return lastExportData.filter(v => selectedVrids.has(v.vrid));
             }
-
             function updateLayoutFromSelection() {
                 computeAndRenderAll();
             }
-
             function renderStaticVsmMap(vsmTotals) {
                 const container = document.getElementById('vsm-layout-container');
                 if (!container) return;
-
                 const vsmTotalsLocal = vsmTotals || getStaticVsmTotals();
                 const croppedMatrix = cropWithMargin(activeMapMatrix, 1);
                 if (!croppedMatrix.length) {
                     container.innerHTML = '<div class="vsm-map-empty">Nenhum dado disponível para o layout físico.</div>';
                     return;
                 }
-
                 const allVsmsSet = new Set(ALL_VSMS);
                 const beltSums = {};
-
                 for (const group of BELT_GROUPS) {
                     const sum = group.vsms.reduce((acc, vsm) => acc + (vsmTotalsLocal[vsm] || 0), 0);
                     if (sum > 0) {
@@ -5717,10 +5124,8 @@
                         beltSums[group.id] = { sum, cbNeed, poNeed, poExceeded };
                     }
                 }
-
                 const fingerSums = {};
                 let totalSortation = 0;
-
                 for (const f of activeFingers) {
                     let sum = 0;
                     for (const bId of f.belts) {
@@ -5729,14 +5134,11 @@
                     fingerSums[f.id] = { sum, name: f.name };
                     totalSortation += sum;
                 }
-
                 let html = '<div class="vsm-static-wrap"><table class="vsm-static-table">';
-
                 for (let r = 0; r < croppedMatrix.length; r++) {
                     html += '<tr>';
                     for (let c = 0; c < croppedMatrix[r].length; c++) {
                         let cellValue = String(croppedMatrix[r][c]).trim();
-
                         if (cellValue === '[SKIP]') {
                             continue;
                         }
@@ -5752,7 +5154,6 @@
                              </td>`;
                             continue;
                         }
-
                         const lfMatch = cellValue.match(/^\[L_F(\d+)\]$/);
                         if (lfMatch) {
                             const fId = parseInt(lfMatch[1], 10);
@@ -5760,7 +5161,6 @@
                             html += `<td class="total-finger-label">${esc(fName)}</td>`;
                             continue;
                         }
-
                         const fMatch = cellValue.match(/^\[F(\d+)\]$/);
                         if (fMatch) {
                             const fId = parseInt(fMatch[1], 10);
@@ -5772,7 +5172,6 @@
                              </td>`;
                             continue;
                         }
-
                         const beltMatch = cellValue.match(/^\[B(\d+)\]$/);
                         if (beltMatch) {
                             const beltId = parseInt(beltMatch[1], 10);
@@ -5793,11 +5192,9 @@
                             }
                             continue;
                         }
-
                         let content = cellValue;
                         let cellClass = '';
                         let dataCat = '';
-
                         if (cellValue === '') {
                             cellClass = 'empty-cell';
                         } else if (cellValue === '0' || cellValue === 0) {
@@ -5827,9 +5224,7 @@
                                 cellClass = 'vsm-code';
                             }
                         }
-
                         content = String(content).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
                         if (dataCat) {
                             html += `<td class="${cellClass}" data-cat="${dataCat}">${content}</td>`;
                         } else if (cellClass) {
@@ -5841,18 +5236,15 @@
                     html += '</tr>';
                 }
                 html += '</table></div>';
-
                 container.innerHTML = html;
                 updateNeedSummary();
             }
-
             function updateStaticMapWithTotals() {
                 const staticContainer = document.getElementById('vsm-layout-container');
                 if (staticContainer && staticContainer.innerHTML !== '') {
                     renderStaticVsmMap(getStaticVsmTotals());
                 }
             }
-
             function updateNeedSummary() {
                 const summaryEl = document.getElementById('static-need-summary');
                 if (!summaryEl) return;
@@ -5863,7 +5255,6 @@
                     return;
                 }
                 summaryEl.style.display = 'flex';
-
                 let cbTotal = 0;
                 let poTotal = 0;
                 for (const group of BELT_GROUPS) {
@@ -5875,41 +5266,34 @@
                 }
                 cbTotal = Math.max(17, cbTotal);
                 poTotal = Math.max(17, poTotal);
-
                 const cbEl = document.getElementById('need-cb-total');
                 const poEl = document.getElementById('need-po-total');
                 if (cbEl) cbEl.textContent = cbTotal;
                 if (poEl) poEl.textContent = poTotal;
             }
-
             function getStatusInfo(percent) {
                 if (percent === undefined || percent === null) return { text: 'N/A', color: '#aaa', order: 4 };
                 if (percent <= 2) return { text: 'Não processado', color: '#ff6b6b', order: 2 };
                 if (percent < 93) return { text: 'Em processamento', color: '#aad4ff', order: 1 };
                 return { text: 'Concluído', color: '#88cc99', order: 3 };
             }
-
             function renderVridList() {
                 const container = document.getElementById('vrid-list-container');
                 if (!container) return;
-
                 if (!lastExportData || lastExportData.length === 0) {
                     container.innerHTML = '<div class="vsm-map-empty">Nenhum VRID carregado.</div>';
                     return;
                 }
-
                 const enriched = lastExportData.map(v => {
                     const totalP = (v.containers || []).reduce((s, c) => s + getCounts(c).P, 0);
                     const percent = v.completePercent !== undefined ? v.completePercent : null;
                     const status = getStatusInfo(percent);
                     return { ...v, totalP, status };
                 }).filter(v => !hideZeroPkgs || v.totalP > 0);
-
                 enriched.sort((a, b) => {
                     if (a.status.order !== b.status.order) return a.status.order - b.status.order;
                     return b.totalP - a.totalP;
                 });
-
                 let html = `
             <div class="vrid-list-controls" style="flex-wrap: wrap;">
                 <input type="text" id="vrid-search-input" placeholder="Filtrar por VRID, rota ou horário..." class="vrid-search" style="min-width: 150px;">
@@ -5923,7 +5307,6 @@
             </div>
             <div id="vrid-list-items" class="vrid-badge-grid">
         `;
-
                 for (const v of enriched) {
                     const checked = selectedVrids.has(v.vrid);
                     const sat = v.scheduledArrivalTime || 'N/A';
@@ -5931,7 +5314,6 @@
                     const route = v.route || 'N/A';
                     const percent = v.completePercent !== undefined ? v.completePercent : null;
                     const status = v.status;
-
                     html += `
                 <div class="vrid-badge ${checked ? 'selected' : ''}" data-vrid="${esc(v.vrid)}" data-status-order="${status.order}">
                     <div class="vrid-badge-content">
@@ -5953,10 +5335,8 @@
                 }
                 html += `</div>`;
                 container.innerHTML = html;
-
                 const searchInput = document.getElementById('vrid-search-input');
                 const itemsContainer = document.getElementById('vrid-list-items');
-
                 let filterraf = null;
                 function filterList() {
                     if (filterraf) cancelAnimationFrame(filterraf);
@@ -5970,7 +5350,6 @@
                     });
                 }
                 searchInput.addEventListener('input', filterList);
-
                 itemsContainer.querySelectorAll('.vrid-badge').forEach(badge => {
                     badge.addEventListener('click', () => {
                         const vrid = badge.dataset.vrid;
@@ -5984,7 +5363,6 @@
                         computeAndRenderAll();
                     });
                 });
-
                 function filterSelectionByStatus(targetOrder) {
                     itemsContainer.querySelectorAll('.vrid-badge:not([style*="display: none"])').forEach(b => {
                         const vrid = b.dataset.vrid;
@@ -5999,40 +5377,31 @@
                     });
                     computeAndRenderAll();
                 }
-
                 document.getElementById('btn-sel-all').addEventListener('click', () => {
                     const visibleBadges = Array.from(itemsContainer.querySelectorAll('.vrid-badge:not([style*="display: none"])'));
-
                     const allSelected = visibleBadges.length > 0 && visibleBadges.every(b => b.classList.contains('selected'));
-
                     visibleBadges.forEach(b => {
                         const vrid = b.dataset.vrid;
                         if (allSelected) {
-
                             selectedVrids.delete(vrid);
                             b.classList.remove('selected');
                         } else {
-
                             selectedVrids.add(vrid);
                             b.classList.add('selected');
                         }
                     });
                     computeAndRenderAll();
                 });
-
                 document.getElementById('btn-sel-proc').addEventListener('click', () => filterSelectionByStatus(1));
                 document.getElementById('btn-sel-unproc').addEventListener('click', () => filterSelectionByStatus(2));
                 document.getElementById('btn-sel-done').addEventListener('click', () => filterSelectionByStatus(3));
-
                 document.getElementById('toggle-zero-pkgs-btn').addEventListener('click', () => {
                     hideZeroPkgs = !hideZeroPkgs;
                     renderVridList();
                     computeAndRenderAll();
                 });
-
                 filterList();
             }
-
             function renderContainersWithControls(containerData, containerDiv, totalsSpan) {
                 const containers = containerData.ret && containerData.ret.inboundCDTContainerCount ? Object.values(containerData.ret.inboundCDTContainerCount)[0] : null;
                 if (!containers || containers.length === 0) {
@@ -6047,7 +5416,6 @@
                     totals.totalC += counts.C;
                 }
                 if (totalsSpan) totalsSpan.innerText = ` (P:${totals.totalP}, C:${totals.totalC})`;
-
                 let mode = 'detailed';
                 function refreshDisplay() {
                     let html = '';
@@ -6082,7 +5450,6 @@
                 }
                 refreshDisplay();
             }
-
             function consolidateContainers(containers) {
                 const nonXdock = new Map();
                 const xdock = new Map();
@@ -6111,18 +5478,15 @@
                 result.sort((a, b) => a.lane.localeCompare(b.lane));
                 return result;
             }
-
             function renderCardsFromCache() {
                 if (!lastExportData || lastExportData.length === 0) return;
                 const resultDiv = document.getElementById('vl-result');
                 if (!resultDiv) return;
                 resultDiv.innerHTML = '';
-
                 const sorted = [...lastExportData].sort((a, b) => {
                     const sumP = v => (v.containers || []).reduce((s, c) => s + getCounts(c).P, 0);
                     return sumP(b) - sumP(a);
                 });
-
                 for (let i = 0; i < sorted.length; i++) {
                     const v = sorted[i];
                     const cardId = `vl-card-${i}`;
@@ -6140,10 +5504,8 @@
                     <div class="vl-card-body" id="vl-body-${i}">
                     </div>
                 </div>`);
-
                     const bodyEl = document.getElementById(`vl-body-${i}`);
                     const countEl = document.getElementById(`vl-count-${i}`);
-
                     const tempContainer = document.createElement('div');
                     renderContainersWithControls(
                         { ret: { inboundCDTContainerCount: { [v.planId]: v.containers } } },
@@ -6151,7 +5513,6 @@
                     );
                     bodyEl.innerHTML = '';
                     bodyEl.appendChild(tempContainer);
-
                     document.getElementById(cardId)?.querySelector('.vl-card-head')
                         ?.addEventListener('click', () => {
                             bodyEl.classList.toggle('show');
@@ -6160,7 +5521,6 @@
                         });
                 }
             }
-
             function promiseFetchContainers(planIds) {
                 return new Promise((resolve, reject) => {
                     fetchContainers(planIds, (err, data) => {
@@ -6168,7 +5528,6 @@
                     });
                 });
             }
-
             function promiseFetchCompletePercent(planIds) {
                 return new Promise((resolve, reject) => {
                     fetchCompletePercent(planIds, (err, data) => {
@@ -6176,23 +5535,18 @@
                     });
                 });
             }
-
             async function processVRIDs(vridList, label) {
                 const resultDiv = document.getElementById('vl-result');
                 const progressDiv = document.getElementById('vl-progress');
                 resultDiv.innerHTML = '';
-
                 const allExportData = [];
                 const total = vridList.length;
-
                 function setProgress(n, text) {
                     progressDiv.style.display = 'block';
                     progressDiv.querySelector('.vl-prog-text').textContent = text;
                     progressDiv.querySelector('.vl-prog-fill').style.width = `${Math.round((n / total) * 100)}%`;
                 }
-
                 setProgress(0, `Processando VRIDs… 0 / ${total}`);
-
                 for (let i = 0; i < total; i++) {
                     const v = vridList[i];
                     resultDiv.insertAdjacentHTML('beforeend', `
@@ -6218,7 +5572,6 @@
                         </div>
                     </div>
                 </div>`);
-
                     const bodyEl = document.getElementById(`vl-body-${i}`);
                     document.getElementById(`vl-card-${i}`)?.querySelector('.vl-card-head')
                         ?.addEventListener('click', () => {
@@ -6227,12 +5580,10 @@
                             if (chev) chev.textContent = bodyEl.classList.contains('show') ? '▾' : '▸';
                         });
                 }
-
                 let done = 0;
                 for (let start = 0; start < total; start += FETCH_CONCURRENCY) {
                     const batch = vridList.slice(start, start + FETCH_CONCURRENCY);
                     const planIds = batch.map(v => v.planId).filter(id => id);
-
                     let containersMap = {};
                     let percentMap = {};
                     try {
@@ -6245,13 +5596,11 @@
                     } catch (err) {
                         console.error('Error fetching data:', err);
                     }
-
                     for (let bi = 0; bi < batch.length; bi++) {
                         const v = batch[bi];
                         const i = start + bi;
                         const bodyEl = document.getElementById(`vl-body-${i}`);
                         const countEl = document.getElementById(`vl-count-${i}`);
-
                         const planId = v.planId;
                         if (!planId) {
                             countEl.innerHTML = `<span class="badge-err">sem Plan ID</span>`;
@@ -6260,16 +5609,13 @@
                             setProgress(done, `Processando VRIDs… ${done} / ${total}`);
                             continue;
                         }
-
                         const containers = containersMap[planId] || [];
                         const percentInfo = percentMap[planId] || {};
                         const completePercent = percentInfo.completePercent !== undefined ? percentInfo.completePercent : null;
-
                         const tempContainer = document.createElement('div');
                         renderContainersWithControls({ ret: { inboundCDTContainerCount: { [planId]: containers } } }, tempContainer, countEl);
                         bodyEl.innerHTML = '';
                         bodyEl.appendChild(tempContainer);
-
                         allExportData.push({
                             vrid: v.vrid,
                             planId: v.planId,
@@ -6279,24 +5625,19 @@
                             containers: containers,
                             completePercent: completePercent
                         });
-
                         done++;
                         setProgress(done, `Processando VRIDs… ${done} / ${total}`);
                     }
                 }
-
                 setProgress(total, `Concluído: ${allExportData.length} VRIDs`);
                 progressDiv.querySelector('.vl-prog-fill').style.background = '#2d8a4e';
                 setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
-
                 if (!resultDiv.children.length) {
                     resultDiv.innerHTML = '<div class="vl-err">Nenhum VRID encontrado.</div>';
                 }
-
                 const isRefresh = lastExportData.length > 0;
                 const oldKnownVrids = new Set(lastExportData.map(v => v.vrid));
                 const newSelectedVrids = new Set();
-
                 allExportData.forEach(v => {
                     if (isRefresh && oldKnownVrids.has(v.vrid)) {
                         if (selectedVrids.has(v.vrid)) newSelectedVrids.add(v.vrid);
@@ -6304,26 +5645,21 @@
                         newSelectedVrids.add(v.vrid);
                     }
                 });
-
                 selectedVrids = newSelectedVrids;
                 lastExportData = allExportData;
                 if (_SUITE.vsm) _SUITE.vsm.lastUpdate = Date.now();
-
                 computeAndRenderAll();
                 renderVridList();
                 renderCardsFromCache();
-
                 const csvBtn = document.getElementById('vl-vsm-export-csv-btn');
                 if (csvBtn) {
                     csvBtn.onclick = function () { vsmDownloadExportDataCSV(); };
                     csvBtn.style.display = lastExportData.length > 0 ? 'block' : 'none';
                 }
             }
-
             function vsmDownloadExportDataCSV() {
                 const data = getFilteredExportData();
                 if (!data.length) return;
-
                 const csv = ['VRID,Plan ID,Scheduled Arrival,Route,Actual Arrival,Total Pkgs,Total Containers,Percent Complete'];
                 data.forEach(v => {
                     const totalP = (v.containers || []).reduce((s, c) => s + getCounts(c).P, 0);
@@ -6340,7 +5676,6 @@
                     ];
                     csv.push(row.join(','));
                 });
-
                 const blob = new Blob(['\ufeff' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
@@ -6349,7 +5684,6 @@
                 link.setAttribute('download', `vrid_vsm_export_${ts}.csv`);
                 link.click();
             }
-
             async function doSingleSearch(vrid) {
                 const resultDiv = document.getElementById('vl-result');
                 const progDiv = document.getElementById('vl-progress');
@@ -6357,7 +5691,6 @@
                 progDiv.querySelector('.vl-prog-text').textContent = 'Buscando VRIDs…';
                 progDiv.querySelector('.vl-prog-fill').style.width = '0';
                 progDiv.style.display = 'block';
-
                 let data;
                 try {
                     const ts = getLocalDayTs(new Date());
@@ -6373,7 +5706,6 @@
                     progDiv.style.display = 'none';
                     return;
                 }
-
                 const all = (function () {
                     const src = data?.ret?.aaData ?? {};
                     const arr = Array.isArray(src) ? src : Object.values(src);
@@ -6388,18 +5720,15 @@
                         };
                     }).filter(v => v.vrid);
                 })();
-
                 const found = all.find(v => v.vrid.toUpperCase() === vrid);
                 if (!found) {
                     resultDiv.innerHTML = '<div class="vl-err">VRID não encontrado no período de hoje.</div>';
                     progDiv.style.display = 'none';
                     return;
                 }
-
                 lastSearch = { mode: 'single', vrid: found.vrid };
                 await processVRIDs([found], `VRID_${found.vrid}`);
             }
-
             async function doRangeSearch(startDate, endDate, startHour, endHour) {
                 const resultDiv = document.getElementById('vl-result');
                 const progDiv = document.getElementById('vl-progress');
@@ -6407,17 +5736,14 @@
                 progDiv.querySelector('.vl-prog-text').textContent = 'Buscando VRIDs…';
                 progDiv.querySelector('.vl-prog-fill').style.width = '0';
                 progDiv.style.display = 'block';
-
                 let data;
                 try {
                     const queryStart = new Date(startDate);
                     if (startHour === 0) {
                         queryStart.setDate(queryStart.getDate() - 1);
                     }
-
                     const tsStart = getLocalDayTs(queryStart);
                     const tsEnd = getLocalDayTs(endDate);
-
                     data = await new Promise((resolve, reject) => {
                         fetchVRIData(tsStart.start, tsEnd.end, (err, res) => {
                             if (err) reject(err); else resolve(res);
@@ -6430,25 +5756,20 @@
                     progDiv.style.display = 'none';
                     return;
                 }
-
                 const filtered = getVRIDsFromData(data, startDate, startHour, endDate, endHour);
                 if (!filtered.length) {
                     resultDiv.innerHTML = '<div class="vl-err">Nenhum VRID encontrado neste período.</div>';
                     progDiv.style.display = 'none';
                     return;
                 }
-
                 const lbl = `${startDate.toISOString().slice(0, 10)}_${endDate.toISOString().slice(0, 10)}_${startHour}-${endHour}h`;
-
                 lastSearch = { mode: 'range', startDate, endDate, startHour, endHour };
                 await processVRIDs(filtered, lbl);
             }
-
             function updateCountdownDisplay() {
                 const statusSpan = document.getElementById('auto-refresh-status');
                 const toggleEl = document.getElementById('auto-refresh-toggle');
                 if (!statusSpan) return;
-
                 if (autoRefreshNextTimestamp > 0) {
                     const remainingMs = Math.max(0, autoRefreshNextTimestamp - Date.now());
                     const remainingSec = Math.floor(remainingMs / 1000);
@@ -6466,7 +5787,6 @@
                     }
                 }
             }
-
             function stopAutoRefresh() {
                 if (autoRefreshTimer) {
                     clearTimeout(autoRefreshTimer);
@@ -6479,23 +5799,18 @@
                 autoRefreshNextTimestamp = 0;
                 updateCountdownDisplay();
             }
-
             function startAutoRefresh(intervalMinutes) {
                 stopAutoRefresh();
-
                 if (!lastSearch) {
                     updateCountdownDisplay();
                     return;
                 }
-
                 const intervalMs = intervalMinutes * 60 * 1000;
-
                 function scheduleNext() {
                     autoRefreshTimer = setTimeout(refreshNow, intervalMs);
                     autoRefreshNextTimestamp = Date.now() + intervalMs;
                     updateCountdownDisplay();
                 }
-
                 async function refreshNow() {
                     if (isRefreshing) return;
                     isRefreshing = true;
@@ -6512,16 +5827,13 @@
                         scheduleNext();
                     }
                 }
-
                 scheduleNext();
-
                 if (!autoRefreshCountdownInterval) {
                     autoRefreshCountdownInterval = setInterval(() => {
                         updateCountdownDisplay();
                     }, 1000);
                 }
             }
-
             GM_addStyle(`
         @keyframes shimmer {
             0% { background-position: -200px 0; }
@@ -6543,7 +5855,6 @@
         .skel-row-flex { display: flex; gap: 10px; align-items: center; }
         .skel-circle { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; }
         .skel-bar { height: 10px; border-radius: 4px; }
-
         #vl-panel {
             position: fixed !important;
             inset: 0 !important;
@@ -6563,7 +5874,6 @@
             display: none;
             transition: all .2s ease;
         }
-
         #vl-panel-head {
             background: rgba(255, 255, 255, 0.03);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #e8eaed; padding: 0 16px;
@@ -6700,7 +6010,6 @@
         @keyframes pulse-red-finger-anim { 0% { background-color: #1a1040; color: #c8b8ff; border-color: #6655cc; box-shadow: none; } 50% { background-color: #8a0b1c; color: #ffffff; border-color: #ff3333; box-shadow: inset 0 0 10px rgba(255,51,51,0.8); } 100% { background-color: #1a1040; color: #c8b8ff; border-color: #6655cc; box-shadow: none; } }
         .belt-need-val { font-size: 12px; font-weight: 800; }
         .belt-need-lbl { font-size: 8px; font-weight: 600; letter-spacing: 0.4px; opacity: 0.85; }
-
         .vsm-static-table td[data-cat="ZERO"] { background-color: #141f2c; color: #445566; font-weight: 600; }
         .vsm-static-table td[data-cat="VALUE_LOW"] { background-color: #1a3a2a; color: #88cc99; font-weight: 700; border: 1px solid #2a5a3a !important; }
         .vsm-static-table td.value-cell { font-weight: 600; }
@@ -6756,7 +6065,6 @@
         .vrid-badge-status { font-size: 12px; margin-top: 4px; }
         #vl-toggle { position: fixed; bottom: 80px; right: 20px; background: linear-gradient(135deg, #1a2a3a 0%, #232f3e 100%); color: #ff9900; border: 1px solid rgba(255,153,0,.3); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.4); z-index: 99998; transition: all .2s; letter-spacing: .3px; }
         #vl-toggle:hover { background: linear-gradient(135deg, #232f3e 0%, #2a3a4a 100%); box-shadow: 0 6px 20px rgba(0,0,0,.5); transform: translateY(-2px); }
-
         .vsm-config-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
         .vsm-config-table th, .vsm-config-table td { border: 1px solid #2a3a4a; padding: 8px 12px; }
         .vsm-config-table th { background: #1a2a3a; color: #ff9900; font-weight: 700; position: sticky; top: 0; z-index: 1;}
@@ -6767,26 +6075,21 @@
         .cfg-del-btn { opacity: 0.6; transition: opacity 0.2s; }
         .cfg-del-btn:hover { opacity: 1; }
     `);
-
             function generateHourOpts(def) {
                 return Array.from({ length: 24 }, (_, i) =>
                     `<option value="${i}"${i === def ? ' selected' : ''}>${String(i).padStart(2, '0')}:00</option>`
                 ).join('');
             }
-
             function renderConfigTable() {
                 const tbody = document.getElementById('config-table-body');
                 if (!tbody) return;
-
                 const rows = [...activeMappings];
-
                 rows.sort((a, b) => {
                     const gA = parseInt(a.group, 10) || 999;
                     const gB = parseInt(b.group, 10) || 999;
                     if (gA !== gB) return gA - gB;
                     return a.route.localeCompare(b.route);
                 });
-
                 let html = '';
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
@@ -6797,9 +6100,7 @@
                 <td style="width: 40px; text-align: center;"><button class="vl-btn-small cfg-del-btn" style="background:#e05;">X</button></td>
             </tr>`;
                 }
-
                 tbody.innerHTML = html;
-
                 tbody.addEventListener('input', () => { configIsDirty = true; });
                 tbody.querySelectorAll('.cfg-del-btn').forEach(btn => {
                     btn.addEventListener('click', e => {
@@ -6807,7 +6108,6 @@
                         configIsDirty = true;
                     });
                 });
-
                 const fTbody = document.getElementById('config-finger-body');
                 if (fTbody) {
                     let fHtml = '';
@@ -6820,7 +6120,6 @@
                 </tr>`;
                     });
                     fTbody.innerHTML = fHtml;
-
                     fTbody.addEventListener('input', () => { configIsDirty = true; });
                     fTbody.querySelectorAll('.cfg-f-del-btn').forEach(btn => {
                         btn.addEventListener('click', e => {
@@ -6829,19 +6128,14 @@
                         });
                     });
                 }
-
                 document.getElementById('cfg-search').dispatchEvent(new Event('input'));
             }
-
             function createPanel() {
                 if (document.getElementById('vl-panel')) return;
-
                 const today = new Date();
                 const todayStr = today.toISOString().slice(0, 10);
-
                 const panel = document.createElement('div');
                 panel.id = 'vl-panel';
-
                 panel.style.display = 'none';
                 panel.innerHTML = `
             <div id="vl-panel-head">
@@ -6851,7 +6145,6 @@
                 </div>
             </div>
             <div id="vl-panel-body" class="tl-morph-target">
-
                 <div class="vl-controls-bar">
                     <div class="vl-ctrl-chip">
                         <label>📊 Exibir:</label>
@@ -6871,14 +6164,12 @@
                         <span id="auto-refresh-status" style="margin-left:4px;"> (desligado)</span>
                     </div>
                 </div>
-
                 <div class="vl-tabs">
                     <button class="vl-tab active" data-tab="hourly">Horas x VSM</button>
                     <button class="vl-tab" data-tab="static">Layout Físico</button>
                     <button class="vl-tab" data-tab="config">⚙️ Configurações</button>
                     <button id="vl-clear-cache-btn" style="background:#e05; color:white; border:none; padding:4px 10px; border-radius:12px; font-size:10px; margin-left:auto; cursor:pointer;" title="Limpa tokens e dados salvos do YMS/Relay">🧹 Limpar Cache</button>
                 </div>
-
                 <div id="tab-hourly" class="vl-tab-content active">
                     <div class="vl-section">
                         <div class="vl-section-title">VRID Único</div>
@@ -6887,7 +6178,6 @@
                             <button class="vl-btn" id="vl-search-btn">Buscar</button>
                         </div>
                     </div>
-
                     <div class="vl-section">
                         <div class="vl-section-title">Por Horário</div>
                         <div class="vl-row">
@@ -6905,7 +6195,6 @@
                         </div>
                         <div class="vl-hint">Máximo 7 dias entre as datas</div>
                     </div>
-
                     <div class="vl-section">
                         <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>🗺 Mapa VSM (Horas x VSM)</span>
@@ -6916,7 +6205,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div id="tab-static" class="vl-tab-content">
                     <div class="vl-section">
                         <div class="vl-section-title">🗺 Layout Físico (Mapa Estático)</div>
@@ -6964,14 +6252,11 @@
                             <div class="vsm-map-empty">Carregando mapa estático...</div>
                         </div>
                     </div>
-
                     <div class="vrid-list-container" id="vrid-list-container">
                         <div class="vsm-map-empty">Carregando lista de VRIDs...</div>
                     </div>
                 </div>
-
                 <div id="tab-config" class="vl-tab-content">
-
                     <div class="vl-section" style="background: #1a2a3a; border-color: #ff9900; padding: 12px 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
@@ -6984,7 +6269,6 @@
                             <button id="cfg-save-btn" class="vl-btn" style="background:#ff9900; color:#0f1923; font-size: 13px; padding: 8px 20px; box-shadow: 0 2px 8px rgba(255,153,0,0.4);">💾 Salvar Todas as Alterações</button>
                         </div>
                     </div>
-
                     <div class="vl-section">
                         <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>Configuração dos Fingers (Agrupamento de Belts)</span>
@@ -7000,7 +6284,6 @@
                             </table>
                         </div>
                     </div>
-
                     <div class="vl-section" style="border-color: #3a6a8a; background: #121822;">
                         <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; color: #aad4ff;">
                             <span>Matriz do Mapa (Layout Físico)</span>
@@ -7016,7 +6299,6 @@
                             <strong>Tags:</strong> <code>[B1]</code> a <code>[B17]</code> (Soma das Belts) | <code>[F1]</code> e <code>[F2]</code> (Soma dos Fingers) | <code>[TS_V]</code> (Total Sortation) | <code>[L_F1]</code>, <code>[L_F2]</code>, <code>[L_TS]</code> (Títulos das seções) | <code>[SKIP]</code> (Pula a renderização da célula)
                         </p>
                     </div>
-
                     <div class="vl-section">
                         <div class="vl-section-title" style="display:flex; flex-direction:column; gap:10px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -7046,17 +6328,14 @@
                         </div>
                     </div>
                 </div>
-
                 <div id="vl-progress">
                     <div class="vl-prog-text"></div>
                     <div class="vl-prog-track"><div class="vl-prog-fill"></div></div>
                 </div>
-
                 <div id="vl-result"></div>
             </div>
         `;
                 document.body.appendChild(panel);
-
                 const nodeInputEl = document.getElementById('cfg-node-input');
                 if (nodeInputEl) {
                     nodeInputEl.addEventListener('input', (e) => {
@@ -7064,7 +6343,6 @@
                         configIsDirty = true;
                     });
                 }
-
                 document.getElementById('cfg-add-btn').addEventListener('click', () => {
                     const tbody = document.getElementById('config-table-body');
                     const tr = document.createElement('tr');
@@ -7082,7 +6360,6 @@
                     tbody.insertBefore(tr, tbody.firstChild);
                     configIsDirty = true;
                 });
-
                 document.getElementById('cfg-add-finger-btn')?.addEventListener('click', () => {
                     const fTbody = document.getElementById('config-finger-body');
                     const tr = document.createElement('tr');
@@ -7100,10 +6377,8 @@
                     fTbody.appendChild(tr);
                     configIsDirty = true;
                 });
-
                 document.getElementById('cfg-save-btn').addEventListener('click', saveConfig);
                 document.getElementById('cfg-reset-btn').addEventListener('click', resetConfigToDefault);
-
                 document.getElementById('cfg-search').addEventListener('input', (e) => {
                     const term = e.target.value.toLowerCase();
                     const rows = document.querySelectorAll('#config-table-body tr.cfg-row');
@@ -7118,7 +6393,6 @@
                         }
                     });
                 });
-
                 document.getElementById('cfg-export-btn').addEventListener('click', () => {
                     if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou. Tente novamente em alguns segundos."); return; }
                     const rows = document.querySelectorAll('#config-table-body tr.cfg-row');
@@ -7135,12 +6409,10 @@
                     XLSX.utils.book_append_sheet(workbook, worksheet, "VSM_Config");
                     XLSX.writeFile(workbook, `Configuracoes_VSM_${new Date().toISOString().slice(0, 10)}.xlsx`);
                 });
-
                 document.getElementById('cfg-import-btn').addEventListener('click', () => {
                     if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou. Tente novamente em alguns segundos."); return; }
                     document.getElementById('cfg-file-input').click();
                 });
-
                 document.getElementById('vl-clear-cache-btn').addEventListener('click', () => {
                     if (confirm("Deseja limpar o cache de tokens (YMS/Relay) e dados salvos dos VRIDs? Isso pode forçar novos popups de validação.")) {
                         const keys = GM_listValues();
@@ -7157,11 +6429,9 @@
                         location.reload();
                     }
                 });
-
                 document.getElementById('cfg-file-input').addEventListener('change', (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
-
                     const reader = new FileReader();
                     reader.onload = function (evt) {
                         try {
@@ -7170,7 +6440,6 @@
                             const firstSheetName = workbook.SheetNames[0];
                             const worksheet = workbook.Sheets[firstSheetName];
                             const json = XLSX.utils.sheet_to_json(worksheet);
-
                             const newMappings = [];
                             json.forEach(row => {
                                 const r = row['Rota'] || row['rota'] || row['route'];
@@ -7180,7 +6449,6 @@
                                     newMappings.push({ route: String(r).trim(), vsm: String(v).trim(), group: String(g).trim() });
                                 }
                             });
-
                             if (newMappings.length > 0) {
                                 activeMappings = newMappings;
                                 GM_setValue('vsm_custom_config', JSON.stringify(activeMappings));
@@ -7200,25 +6468,20 @@
                     };
                     reader.readAsArrayBuffer(file);
                 });
-
                 document.getElementById('cfg-map-export-btn').addEventListener('click', () => {
                     if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou."); return; }
-
                     const worksheet = XLSX.utils.aoa_to_sheet(activeMapMatrix);
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, "Layout_Mapa");
                     XLSX.writeFile(workbook, `Layout_Mapa_VSM_${new Date().toISOString().slice(0, 10)}.xlsx`);
                 });
-
                 document.getElementById('cfg-map-import-btn').addEventListener('click', () => {
                     if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou."); return; }
                     document.getElementById('cfg-map-file-input').click();
                 });
-
                 document.getElementById('cfg-map-file-input').addEventListener('change', (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
-
                     const reader = new FileReader();
                     reader.onload = function (evt) {
                         try {
@@ -7226,9 +6489,7 @@
                             const workbook = XLSX.read(data, { type: 'array' });
                             const firstSheetName = workbook.SheetNames[0];
                             const worksheet = workbook.Sheets[firstSheetName];
-
                             const aoa = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
-
                             if (aoa.length > 0) {
                                 activeMapMatrix = aoa;
                                 GM_setValue('vsm_custom_map_matrix', JSON.stringify(activeMapMatrix));
@@ -7245,7 +6506,6 @@
                     };
                     reader.readAsArrayBuffer(file);
                 });
-
                 document.getElementById('cfg-map-reset-btn').addEventListener('click', () => {
                     if (confirm("Tem certeza que deseja restaurar o layout visual do mapa para o padrão original?")) {
                         activeMapMatrix = structuredClone(DEFAULT_MAP_MATRIX);
@@ -7255,7 +6515,6 @@
                     }
                 });
             }
-
             function checkDirtyConfig() {
                 if (configIsDirty) {
                     if (confirm('Você tem alterações não salvas nas Configurações. Deseja salvar agora?')) {
@@ -7266,19 +6525,15 @@
                     }
                 }
             }
-
             function init() {
                 const toggle = document.createElement('button');
                 toggle.id = 'vl-toggle';
                 toggle.textContent = '🔍 Layout Digital';
-
                 toggle.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-
                     const p = document.getElementById('vl-panel');
                     const isHidden = window.getComputedStyle(p).display === 'none';
-
                     if (!isHidden) {
                         checkDirtyConfig();
                         p.style.display = 'none';
@@ -7289,14 +6544,11 @@
                     }
                 };
                 document.body.appendChild(toggle);
-
                 createPanel();
-
                 const panel = document.getElementById('vl-panel');
                 if (panel) {
                     // Fullscreen disabled by request
                 }
-
                 const staticFingerRateInput = document.getElementById('static-finger-rate');
                 if (staticFingerRateInput) {
                     staticFingerRateInput.addEventListener('change', () => {
@@ -7314,13 +6566,10 @@
                         }
                     });
                 }
-
                 const resultDiv = document.getElementById('vl-result');
                 const progDiv = document.getElementById('vl-progress');
-
                 const modePillGroup = document.getElementById('count-mode-pills');
                 const modeSelect = { value: currentCountMode };
-
                 modePillGroup.addEventListener('click', e => {
                     const btn = e.target.closest('.mode-pill');
                     if (!btn) return;
@@ -7328,15 +6577,12 @@
                     btn.classList.add('active');
                     currentCountMode = btn.dataset.mode;
                     modeSelect.value = currentCountMode;
-
                     renderCardsFromCache();
                     renderVridList();
                     computeAndRenderAll();
                 });
-
                 const autoRefreshToggle = document.getElementById('auto-refresh-toggle');
                 const autoRefreshIntervalSelect = document.getElementById('auto-refresh-interval');
-
                 function updateAutoRefreshState() {
                     if (autoRefreshToggle.checked) {
                         if (lastSearch) {
@@ -7349,19 +6595,14 @@
                         stopAutoRefresh();
                     }
                 }
-
                 autoRefreshToggle.addEventListener('change', updateAutoRefreshState);
                 autoRefreshIntervalSelect.addEventListener('change', updateAutoRefreshState);
-
                 document.getElementById('vl-close-btn').onclick = () => {
                     checkDirtyConfig();
                     const p = document.getElementById('vl-panel');
                     p.style.display = 'none';
                     toggle.style.display = 'block';
                 };
-
-
-
                 const rangeStartDate = document.getElementById('range-start-date');
                 const rangeEndDate = document.getElementById('range-end-date');
                 function clampRangeDates() {
@@ -7376,7 +6617,6 @@
                 rangeStartDate.addEventListener('change', clampRangeDates);
                 rangeEndDate.addEventListener('change', clampRangeDates);
                 clampRangeDates();
-
                 const head = document.getElementById('vl-panel-head');
                 let drag = false, ox, oy;
                 head.addEventListener('mousedown', e => {
@@ -7396,23 +6636,19 @@
                     panel.style.top = (e.clientY - oy) + 'px';
                 });
                 document.addEventListener('mouseup', () => { drag = false; });
-
                 const tabs = document.querySelectorAll('.vl-tab');
                 const contents = {
                     hourly: document.getElementById('tab-hourly'),
                     static: document.getElementById('tab-static'),
                     config: document.getElementById('tab-config')
                 };
-
                 function switchTab(tabId) {
                     const activeTabBefore = document.querySelector('.vl-tab.active')?.dataset.tab;
                     if (activeTabBefore === 'config' && tabId !== 'config') {
                         checkDirtyConfig();
                     }
-
                     const body = document.getElementById('vl-panel-body');
                     body.classList.add('updating');
-
                     setTimeout(() => {
                         tabs.forEach(tab => {
                             if (tab.dataset.tab === tabId) {
@@ -7441,7 +6677,6 @@
                         body.classList.remove('updating');
                     }, 60);
                 }
-
                 tabs.forEach(tab => {
                     tab.addEventListener('click', () => {
                         const tabId = tab.dataset.tab;
@@ -7450,15 +6685,12 @@
                         }
                     });
                 });
-
                 renderConfigTable();
                 renderStaticVsmMap({});
-
                 const staticMaxPkgsInput = document.getElementById('static-max-pkgs');
                 const staticHourPills = document.getElementById('static-hour-pills');
                 const staticCbRateInput = document.getElementById('static-cb-rate');
                 const staticPoRateInput = document.getElementById('static-po-rate');
-
                 staticMaxPkgsInput.addEventListener('change', () => {
                     const v = parseInt(staticMaxPkgsInput.value, 10);
                     if (!isNaN(v) && v > 0) {
@@ -7473,7 +6705,6 @@
                         renderStaticVsmMap(getStaticVsmTotals());
                     }
                 });
-
                 function applyRateInput(inputEl, setter) {
                     const v = parseInt(inputEl.value, 10);
                     if (!isNaN(v) && v > 0) {
@@ -7491,7 +6722,6 @@
                     staticHourPills.querySelectorAll('.hour-pill').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     staticSelectedHour = parseInt(btn.dataset.hour, 10);
-
                     const body = document.getElementById('vl-panel-body');
                     body.classList.add('updating');
                     setTimeout(() => {
@@ -7499,10 +6729,8 @@
                         body.classList.remove('updating');
                     }, 60);
                 });
-
                 const searchBtn = document.getElementById('vl-search-btn');
                 const vridInput = document.getElementById('vl-vrid-input');
-
                 async function doSingleSearchHandler() {
                     const vrid = vridInput.value.trim().toUpperCase();
                     if (!vrid) {
@@ -7524,20 +6752,16 @@
                         resultDiv.style.display = 'none';
                     }
                 }
-
                 searchBtn.addEventListener('click', doSingleSearchHandler);
                 vridInput.addEventListener('keypress', e => { if (e.key === 'Enter') doSingleSearchHandler(); });
-
                 const rangeBtn = document.getElementById('vl-range-btn');
                 const rangeStartHour = document.getElementById('range-start-hour');
                 const rangeEndHour = document.getElementById('range-end-hour');
-
                 async function doRangeSearchHandler() {
                     const startStr = rangeStartDate.value;
                     const endStr = rangeEndDate.value;
                     const startHour = parseInt(rangeStartHour.value, 10);
                     const endHour = parseInt(rangeEndHour.value, 10);
-
                     if (!startStr || !endStr) {
                         resultDiv.innerHTML = '<div class="vl-err">Selecione as datas.</div>';
                         return;
@@ -7552,7 +6776,6 @@
                         resultDiv.innerHTML = '<div class="vl-err">Intervalo máximo de 7 dias.</div>';
                         return;
                     }
-
                     const body = document.getElementById('vl-panel-body');
                     body.classList.add('updating');
                     await doRangeSearch(sd, ed, startHour, endHour);
@@ -7568,10 +6791,8 @@
                         resultDiv.style.display = 'none';
                     }
                 }
-
                 rangeBtn.addEventListener('click', doRangeSearchHandler);
             }
-
             if (_SUITE.isDock) {
                 if (document.readyState === 'loading') {
                     document.addEventListener('DOMContentLoaded', init);
@@ -7581,113 +6802,15 @@
             }
         })();
     }
-
     (function loadModuleCptTracker() {
         if (!_SUITE.isDock) return;
         'use strict';
-
         var BASE = _SUITE.BASE;
-
-        var isStemPage = location.hostname === 'stem-na.corp.amazon.com';
-
         // _csrfToken now reads from the central interceptor set by patchXHR()
         var _csrfToken = '';
         Object.defineProperty(window, '__tlCptCsrf__', {
             get: function () { return _SUITE.antiCsrfToken || _csrfToken; }
         });
-
-        if (isStemPage) {
-            var LSKEY_RESULT = 'obdv_vsm_result';
-            var LSKEY_TS = 'obdv_vsm_ts';
-
-            function injectPageScript() {
-                var node = GM_getValue('obdv_vsm_node', 'CGH7');
-                var asOfTime = String(Date.now());
-                var payload = JSON.stringify([{
-                    operationName: 'VisualSortationMarkers',
-                    variables: { nodeId: node, asOfTime: asOfTime },
-                    query: 'query VisualSortationMarkers($nodeId:String!,$asOfTime:String!){visualSortationMarkers(nodeId:$nodeId,asOfTime:$asOfTime){stackingFilter visualMarkers{visualMarker}}}'
-                }]);
-
-                var code = '(function(){'
-                    + 'var _res="' + LSKEY_RESULT + '";'
-                    + 'var _ts="' + LSKEY_TS + '";'
-                    + 'var _done=false;'
-                    + 'var _payload=' + payload + ';'
-                    + 'var _oFetch=window.fetch;'
-                    + 'window.fetch=function(input,init){'
-                    + 'var hdrs=init&&init.headers||{};'
-                    + 'var tok=typeof hdrs.get==="function"?hdrs.get("anti-csrftoken-a2z"):hdrs["anti-csrftoken-a2z"];'
-                    + 'if(!tok){Object.keys(hdrs).forEach(function(k){if(/anti-csrftoken/i.test(k))tok=hdrs[k];});}'
-                    + 'if(tok&&tok.length>10&&!_done){'
-                    + '_done=true;'
-                    + '_oFetch("https://stem-na.corp.amazon.com/sortcenter/equipmentmanagement/graphql",{'
-                    + 'method:"POST",credentials:"include",'
-                    + 'headers:{"Content-Type":"application/json","anti-csrftoken-a2z":tok,"Accept":"application/json"},'
-                    + 'body:JSON.stringify(_payload)'
-                    + '}).then(function(r){return r.text().then(function(t){'
-                    + 'localStorage.setItem(_res,JSON.stringify({status:r.status,body:t,ts:Date.now()}));'
-                    + 'localStorage.setItem(_ts,Date.now());'
-                    + '});}).catch(function(e){'
-                    + 'localStorage.setItem(_res,JSON.stringify({status:0,body:String(e),ts:Date.now()}));'
-                    + '});'
-                    + '}'
-                    + 'return _oFetch.apply(this,arguments);'
-                    + '};'
-                    + 'var _oSet=XMLHttpRequest.prototype.setRequestHeader;'
-                    + 'XMLHttpRequest.prototype.setRequestHeader=function(n,v){'
-                    + 'if(/anti-csrftoken/i.test(n)&&v&&v.length>10&&!_done){'
-                    + '_done=true;'
-                    + 'var _x=new XMLHttpRequest();'
-                    + '_x.open("POST","https://stem-na.corp.amazon.com/sortcenter/equipmentmanagement/graphql");'
-                    + '_x.setRequestHeader("Content-Type","application/json");'
-                    + '_x.setRequestHeader("anti-csrftoken-a2z",v);'
-                    + '_x.withCredentials=true;'
-                    + '_x.onload=function(){localStorage.setItem(_res,JSON.stringify({status:_x.status,body:_x.responseText,ts:Date.now()}));localStorage.setItem(_ts,Date.now());};'
-                    + '_x.onerror=function(){localStorage.setItem(_res,JSON.stringify({status:0,body:"XHR error",ts:Date.now()}));};'
-                    + '_x.send(JSON.stringify(_payload));'
-                    + '}'
-                    + 'return _oSet.apply(this,arguments);'
-                    + '};'
-                    + '})();';
-                var s = document.createElement('script');
-                s.textContent = code;
-                (document.head || document.documentElement).appendChild(s);
-                try { s.remove(); } catch (e) { }
-            }
-
-            try { localStorage.removeItem(LSKEY_RESULT); } catch (e) { }
-            injectPageScript();
-
-            var attempts = 0;
-            var iv = setInterval(function () {
-                attempts++;
-                try {
-                    var raw = localStorage.getItem(LSKEY_RESULT);
-                    if (raw) {
-                        var parsed = JSON.parse(raw);
-                        if (parsed && parsed.ts && parsed.ts > Date.now() - 30000) {
-                            clearInterval(iv);
-                            GM_setValue('obdv_vsm_body', parsed.body || '');
-                            GM_setValue('obdv_vsm_status', parsed.status === 200 ? 'done' : 'error');
-                            GM_setValue('obdv_vsm_ts', Date.now());
-                            try { localStorage.removeItem(LSKEY_RESULT); } catch (e) { }
-                            setTimeout(function () { try { window.close(); } catch (e) { } }, 300);
-                            return;
-                        }
-                    }
-                } catch (e) { }
-                if (attempts >= 200) {
-                    clearInterval(iv);
-                    GM_setValue('obdv_vsm_status', 'error');
-                    GM_setValue('obdv_vsm_body', 'Timeout: token não capturado');
-                    GM_setValue('obdv_vsm_ts', Date.now());
-                    try { window.close(); } catch (e) { }
-                }
-            }, 200);
-            return;
-        }
-
         function apiWindow(customWin) {
             if (customWin) {
                 return { start: customWin.start - 3 * 3600000, end: customWin.end + 3 * 3600000 };
@@ -7697,14 +6820,12 @@
             var dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 23, 30, 0).getTime();
             return { start: dayStart, end: dayEnd };
         }
-
         function todayWindow() {
             var now = new Date();
             var start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
             var end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 30, 0).getTime();
             return { start: start, end: end };
         }
-
         var MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
         function parseMs(s) {
             if (!s) return null;
@@ -7721,7 +6842,6 @@
             return m ? m[1] + ':' + m[2] : s;
         }
         function cleanRoute(r) { return (r || '').replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || r; }
-
         function splitRoute(route) {
             if (/_MM$/i.test(route)) return [route];
             if (/-(BUS|B)$/i.test(route)) return [route];
@@ -7732,10 +6852,8 @@
             }
             return [route];
         }
-
         var VSM_CACHE_KEY = 'obdv_vsm_cache';
         var VSM_CACHE_TTL = 7 * 24 * 3600 * 1000;
-
         function loadVsmCache() {
             try {
                 var raw = GM_getValue(VSM_CACHE_KEY, '');
@@ -7745,11 +6863,9 @@
                 return parsed.map || {};
             } catch (e) { return {}; }
         }
-
         function saveVsmCache(map) {
             try { GM_setValue(VSM_CACHE_KEY, JSON.stringify({ ts: Date.now(), map: map })); } catch (e) { }
         }
-
         var STATUS_MAP = {
             'outboundscheduled': { label: 'Agendado', color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
             'outboundinprogress': { label: 'Em carregamento', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
@@ -7772,7 +6888,6 @@
             var key = (raw || '').toLowerCase().replace(/[_\s]/g, '');
             return STATUS_MAP[key] || { label: raw || '—', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
         }
-
         var STATUS_PRIORITY = (function () {
             var p = {};
             ['loadinginprogress', 'outboundinprogress'].forEach(function (k) { p[k] = 1; });
@@ -7788,29 +6903,24 @@
             var key = (raw || '').toLowerCase().replace(/_/g, '');
             return STATUS_PRIORITY[key] || 99;
         }
-
         var _vsmMap = loadVsmCache();
-
         var _containerMap = {};
         var _containerFetchQueue = [];
         var _containerFetchActive = 0;
         var _containerFetchGen = 0;
         var MAX_CONTAINER_CONCURRENT = 3;
-
         function _isValidContainerLabel(label) {
             if (!label) return false;
             var vp = ['BAG', 'PALLET', 'GAYLORD', 'XBRA'];
             var u = label.toUpperCase();
             return vp.some(function (p) { return u.indexOf(p) === 0; });
         }
-
         function _sameDay(msA, msB) {
             var a = new Date(msA), b = new Date(msB);
             return a.getFullYear() === b.getFullYear() &&
                 a.getMonth() === b.getMonth() &&
                 a.getDate() === b.getDate();
         }
-
         function _extractContainerTimeMs(container) {
             if (!container) return null;
             var fields = ['scheduleDepartureTime', 'cpt', 'criticalPullTime', 'sdt', 'shipDate',
@@ -7826,7 +6936,6 @@
             }
             return null;
         }
-
         function _countPkgsInNode(node, routeCptMs) {
             var matched = 0, total = 0, foundAnyTime = false;
             function walk(n) {
@@ -7847,23 +6956,19 @@
             if (!foundAnyTime || !routeCptMs) matched = total;
             return { matched: matched, total: total, foundAnyTime: foundAnyTime };
         }
-
         function _palletMatchesRoute(container, routeCptMs) {
             if (!routeCptMs) return true;
             var t = _extractContainerTimeMs(container);
             if (t === null) return true;
             return _sameDay(t, routeCptMs);
         }
-
         function _analyzeContainerNodes(nodes, routeCptMs, routeCode) {
             var palletCount = 0, positionsData = [];
             if (!nodes || !Array.isArray(nodes)) return { palletCount: 0, positionsData: [] };
-
             function _findStackFilter(node, vsmSet) {
                 if (!node) return false;
                 var c = node.container;
                 if (c && c.stackFilter) {
-
                     return vsmSet[c.stackFilter.toUpperCase()] === true;
                 }
                 var children = node.childNodes || [];
@@ -7872,7 +6977,6 @@
                 }
                 return false;
             }
-
             function _hasAnyStackFilter(node) {
                 if (!node) return false;
                 var c = node.container;
@@ -7883,7 +6987,6 @@
                 }
                 return false;
             }
-
             function _palletBelongsToRoute(palletNode) {
                 if (!routeCode) return true;
                 var vsmRaw = _vsmMap[routeCode] || '';
@@ -7893,19 +6996,14 @@
                     if (t) vsmSet[t] = true;
                 });
                 vsmSet[routeCode.toUpperCase()] = true;
-
                 if (!_hasAnyStackFilter(palletNode)) return false;
                 return _findStackFilter(palletNode, vsmSet);
             }
-
             nodes.forEach(function (node) {
                 if (!node.container || !node.container.label) return;
-
                 if (node.container.contType === 'STACKING_AREA') {
-
                     var areaTime = _extractContainerTimeMs(node.container);
                     if (areaTime !== null && routeCptMs && !_sameDay(areaTime, routeCptMs)) return;
-
                     var areaCount = 0;
                     (node.childNodes || []).forEach(function (child) {
                         if (child.container && child.container.label &&
@@ -7914,21 +7012,18 @@
                             areaCount++;
                         }
                     });
-
                     if (areaCount > 0) {
                         palletCount += areaCount;
                         positionsData.push({ label: node.container.label });
                     }
                     return;
                 }
-
                 if (_isValidContainerLabel(node.container.label) && _palletMatchesRoute(node.container, routeCptMs)) {
                     palletCount++;
                 }
             });
             return { palletCount: palletCount, positionsData: positionsData };
         }
-
         function _processContainerQueue(gen, onProgress) {
             while (_containerFetchActive < MAX_CONTAINER_CONCURRENT && _containerFetchQueue.length > 0) {
                 var task = _containerFetchQueue.shift();
@@ -7971,7 +7066,6 @@
                 })(task);
             }
         }
-
         function fetchContainersForRoutes(routes, nodeId, onProgress) {
             _containerFetchGen++;
             var gen = _containerFetchGen;
@@ -7993,68 +7087,28 @@
             });
             _processContainerQueue(gen, onProgress);
         }
-
         var _vsmPending = false;
-
         function fetchVSM(node, onDone) {
-            if (_vsmPending) { onDone(); return; }
-            _vsmPending = true;
-
-            GM_setValue('obdv_vsm_node', node);
-            GM_setValue('obdv_vsm_status', '');
-            GM_setValue('obdv_vsm_body', '');
-            GM_setValue('obdv_vsm_ts', 0);
-
-            var popupUrl = 'https://stem-na.corp.amazon.com/node/' + node + '/equipment';
-            var win = null;
-            try { win = window.open(popupUrl, 'obdv_vsm_popup', 'width=1,height=1,left=-300,top=-300,toolbar=no,menubar=no,scrollbars=no,resizable=no'); } catch (e) { }
-
-            if (!win) {
-                console.warn('[OBDockView] VSM popup bloqueado');
-                _vsmPending = false;
-                onDone();
-                return;
+            _vsmMap = {};
+            // 1. Load Hardcoded Defaults
+            for (var route in _SUITE.DEFAULT_VSM_SEGMENT_MAP) {
+                _vsmMap[route.toUpperCase().trim()] = _SUITE.DEFAULT_VSM_SEGMENT_MAP[route].join(', ');
             }
-
-            var start = Date.now();
-            var iv = setInterval(function () {
-                var status = GM_getValue('obdv_vsm_status', '');
-                var ts = GM_getValue('obdv_vsm_ts', 0);
-                if ((status === 'done' || status === 'error') && ts > start) {
-                    clearInterval(iv);
-                    try { win.close(); } catch (e) { }
-                    _vsmPending = false;
-                    if (status === 'done') {
-                        try {
-                            var body = GM_getValue('obdv_vsm_body', '');
-                            var json = JSON.parse(body);
-                            var arr = Array.isArray(json) ? json : [json];
-                            var vsms = (arr[0] && arr[0].data && arr[0].data.visualSortationMarkers) || [];
-                            _vsmMap = {};
-                            vsms.forEach(function (entry) {
-                                var sf = (entry.stackingFilter || '').trim();
-                                if (!sf) return;
-                                var markers = (entry.visualMarkers || []);
-                                if (markers.length) {
-                                    _vsmMap[sf] = markers.map(function (v) { return v.visualMarker; }).join(', ');
-                                }
-                            });
-                            console.log('[OBDockView] VSM loaded:', Object.keys(_vsmMap).length, 'rotas');
-                        } catch (e) {
-                            console.warn('[OBDockView] VSM parse error:', e.message);
-                        }
+            // 2. Overwrite/Augment with Custom Config from Layout Digital
+            try {
+                var configStr = GM_getValue('vsm_custom_config', '[]');
+                var configArr = JSON.parse(configStr);
+                configArr.forEach(function (item) {
+                    if (item.route && item.vsm) {
+                        _vsmMap[item.route.toUpperCase().trim()] = item.vsm.trim();
                     }
-                    onDone();
-                } else if (Date.now() - start > 45000) {
-                    clearInterval(iv);
-                    try { win.close(); } catch (e) { }
-                    _vsmPending = false;
-                    console.warn('[OBDockView] VSM popup timeout');
-                    onDone();
-                }
-            }, 200);
+                });
+                console.log('[OBDockView] VSM Map combined. Total entries:', Object.keys(_vsmMap).length);
+            } catch (e) {
+                console.error('[OBDockView] Erro ao carregar vsm_custom_config:', e);
+            }
+            onDone();
         }
-
         function injectStyles() {
             if (document.getElementById('obdv-styles')) return;
             var st = document.createElement('style');
@@ -8091,13 +7145,10 @@
         `;
             document.head.appendChild(st);
         }
-
         var _panel = null;
-
         function buildPanel() {
             if (_panel) { _panel.style.display = 'flex'; return; }
             injectStyles();
-
             _panel = document.createElement('div');
             _panel.id = 'tl-dock-view-panel';
             _panel.style.cssText = [
@@ -8107,7 +7158,6 @@
                 'display:flex;flex-direction:column;overflow:hidden;resize:both',
                 'font-family:"Amazon Ember",Arial,sans-serif;z-index:2147483647'
             ].join(';');
-
             var hdr = document.createElement('div');
             hdr.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;cursor:grab;user-select:none;';
             hdr.innerHTML = '<span style="font-size:16px;font-weight:900;color:#f0f6ff;flex:1;letter-spacing:0.5px;">🚛 OB — Rotas, CPT &amp; VSM</span>';
@@ -8122,24 +7172,19 @@
             hdr.addEventListener('mousedown', function (e) { if (e.target.closest('button')) return; dragging = true; var r = _panel.getBoundingClientRect(); _panel.style.position = 'fixed'; _panel.style.top = r.top + 'px'; _panel.style.left = r.left + 'px'; _panel.style.width = r.width + 'px'; _panel.style.height = r.height + 'px'; dX = e.clientX - r.left; dY = e.clientY - r.top; e.preventDefault(); });
             document.addEventListener('mousemove', function (e) { if (!dragging) return; _panel.style.left = (e.clientX - dX) + 'px'; _panel.style.top = (e.clientY - dY) + 'px'; });
             document.addEventListener('mouseup', function () { dragging = false; });
-
             var toolbar = document.createElement('div');
             toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 14px;background:transparent;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;flex-wrap:wrap;';
-
             var nodeInput = document.createElement('input');
             nodeInput.value = detectNode() || 'CGH7';
             nodeInput.style.cssText = 'background:#161b22;border:2px solid #58a6ff;color:#f0f6ff;border-radius:6px;padding:5px 9px;font-size:12px;width:75px;font-family:monospace;outline:none;font-weight:bold;text-align:center;';
-
             var fetchBtn = document.createElement('button');
             fetchBtn.textContent = '🔄 Buscar';
             fetchBtn.style.cssText = 'padding:5px 14px;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:#1f6feb;color:#fff;white-space:nowrap;transition:background 0.15s;';
             fetchBtn.onmouseover = function () { fetchBtn.style.background = '#388bfd'; };
             fetchBtn.onmouseout = function () { fetchBtn.style.background = '#1f6feb'; };
-
             var filterInput = document.createElement('input');
             filterInput.placeholder = '🔍 Filtrar rota ou VSM...';
             filterInput.style.cssText = 'background:#161b22;border:1px solid #30363d;color:#f0f6ff;border-radius:6px;padding:5px 10px;font-size:11px;flex:1;min-width:140px;font-family:monospace;outline:none;';
-
             var hideExpiredBtn = document.createElement('button');
             hideExpiredBtn.textContent = '👁 Mostrar expirados';
             var _hideExp = true;
@@ -8151,25 +7196,20 @@
                 hideExpiredBtn.style.borderColor = _hideExp ? '#58a6ff' : '#30363d';
                 renderCards(filterInput.value.trim());
             };
-
             var routesPanelBtn = document.createElement('button');
             routesPanelBtn.textContent = '⚙ Rotas';
             routesPanelBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
             routesPanelBtn.onmouseover = function () { routesPanelBtn.style.color = '#f0f6ff'; routesPanelBtn.style.borderColor = '#58a6ff'; };
             routesPanelBtn.onmouseout = function () { if (!routePanel.classList.contains('open')) { routesPanelBtn.style.color = '#8b949e'; routesPanelBtn.style.borderColor = '#30363d'; } };
-
             var calBtn = document.createElement('button');
             calBtn.textContent = '📅 Janela';
             calBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
             calBtn.onmouseover = function () { calBtn.style.color = '#f0f6ff'; calBtn.style.borderColor = '#58a6ff'; };
             calBtn.onmouseout = function () { if (!calPanel.classList.contains('open')) { calBtn.style.color = '#8b949e'; calBtn.style.borderColor = '#30363d'; } };
-
             var countEl = document.createElement('span');
             countEl.style.cssText = 'font-size:10px;color:#6e7681;white-space:nowrap;';
-
             var vsmStatusEl = document.createElement('span');
             vsmStatusEl.style.cssText = 'font-size:10px;color:#818cf8;white-space:nowrap;';
-
             toolbar.appendChild(nodeInput);
             toolbar.appendChild(fetchBtn);
             toolbar.appendChild(filterInput);
@@ -8178,13 +7218,11 @@
             toolbar.appendChild(calBtn);
             toolbar.appendChild(countEl);
             toolbar.appendChild(vsmStatusEl);
-
             var routePanel = document.createElement('div');
             routePanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.25s ease;';
             var routePanelInner = document.createElement('div');
             routePanelInner.style.cssText = 'padding:10px 16px;display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto;';
             routePanel.appendChild(routePanelInner);
-
             var DEFAULT_DISABLED = ['XCV9', 'GRU9', 'GRU5', 'SBKP', 'SBGR', 'XBRA', 'XBS1', 'ELP8', 'CNF1', 'CNF5', 'GIG1', 'GIG2', 'POA1'];
             var _disabledRoutes = {};
             function isDefaultDisabled(route) {
@@ -8218,15 +7256,12 @@
                 if (isOpen) { routePanel.style.maxHeight = '0'; routePanel.classList.remove('open'); routesPanelBtn.style.color = '#8b949e'; routesPanelBtn.style.borderColor = '#30363d'; }
                 else { buildRoutePanel(); routePanel.style.maxHeight = '200px'; routePanel.classList.add('open'); routesPanelBtn.style.color = '#58a6ff'; routesPanelBtn.style.borderColor = '#58a6ff'; }
             };
-
             setTimeout(function () { buildRoutePanel(); }, 0);
-
             var calPanel = document.createElement('div');
             calPanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.3s ease;';
             var calInner = document.createElement('div');
             calInner.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:8px;';
             calPanel.appendChild(calInner);
-
             if (!document.getElementById('obdv-cal-styles')) {
                 var _calStyle = document.createElement('style'); _calStyle.id = 'obdv-cal-styles';
                 _calStyle.textContent =
@@ -8262,10 +7297,8 @@
                     + '.obdv-ok{background:#1f6feb;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:10px;font-weight:700;cursor:pointer;}';
                 document.head.appendChild(_calStyle);
             }
-
             var _DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
             var _MON = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
             function _localDate(offsetDays) {
                 var d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offsetDays); return d;
             }
@@ -8276,14 +7309,11 @@
             function _toMs(s) { return new Date(s.y, s.mo, s.d, s.hh, s.mm).getTime(); }
             function _fmt(s) { return ('0' + s.d).slice(-2) + '/' + ('0' + (s.mo + 1)).slice(-2) + '/' + s.y; }
             function _fmtT(s) { return ('0' + s.hh).slice(-2) + ':' + ('0' + s.mm).slice(-2); }
-
             function _allowed(y, mo, d) { var t = new Date(y, mo, d).getTime(); return t === _localDate(0).getTime() || t === _localDate(1).getTime(); }
-
             var _cs = {
                 start: _makeS(0, 0, 0), end: _makeS(1, 23, 30), which: null,
                 viewY: new Date().getFullYear(), viewMo: new Date().getMonth()
             };
-
             function _makeCard(lbl) {
                 var el = document.createElement('div'); el.className = 'obdv-dc';
                 var lb = document.createElement('div'); lb.className = 'obdv-dc-lbl'; lb.textContent = lbl;
@@ -8293,36 +7323,29 @@
                 return { el: el, dd: dd, dt: dt };
             }
             var _sc = _makeCard('Início'), _ec = _makeCard('Fim');
-
             function _refreshCards() {
                 _sc.dd.textContent = _fmt(_cs.start); _sc.dt.textContent = _fmtT(_cs.start);
                 _ec.dd.textContent = _fmt(_cs.end); _ec.dt.textContent = _fmtT(_cs.end);
                 _sc.el.classList.toggle('active', _cs.which === 'start');
                 _ec.el.classList.toggle('active', _cs.which === 'end');
             }
-
             var _pop = document.createElement('div'); _pop.className = 'obdv-pop';
-
             var _ph = document.createElement('div'); _ph.className = 'obdv-pop-hdr';
             var _pv = document.createElement('button'); _pv.className = 'obdv-nav'; _pv.textContent = '‹';
             var _ml = document.createElement('span'); _ml.className = 'obdv-mon-lbl';
             var _pn = document.createElement('button'); _pn.className = 'obdv-nav'; _pn.textContent = '›';
             _ph.appendChild(_pv); _ph.appendChild(_ml); _ph.appendChild(_pn);
-
             var _gw = document.createElement('div'); _gw.className = 'obdv-grid-wrap';
             var _dr = document.createElement('div'); _dr.className = 'obdv-dow';
             _DOW.forEach(function (d) { var s = document.createElement('span'); s.textContent = d; _dr.appendChild(s); });
             var _dg = document.createElement('div'); _dg.className = 'obdv-days';
             _gw.appendChild(_dr); _gw.appendChild(_dg);
-
             var _tr = document.createElement('div'); _tr.className = 'obdv-time-row';
             var _tl = document.createElement('span'); _tl.className = 'obdv-time-lbl';
             var _ti = document.createElement('input'); _ti.type = 'time'; _ti.className = 'obdv-time-inp';
             var _ok = document.createElement('button'); _ok.className = 'obdv-ok'; _ok.textContent = 'OK';
             _tr.appendChild(_tl); _tr.appendChild(_ti); _tr.appendChild(_ok);
-
             _pop.appendChild(_ph); _pop.appendChild(_gw); _pop.appendChild(_tr);
-
             function _renderDays() {
                 _ml.textContent = _MON[_cs.viewMo] + ' ' + _cs.viewY;
                 _dg.innerHTML = '';
@@ -8333,7 +7356,6 @@
                 var today = new Date(); today.setHours(0, 0, 0, 0);
                 var sMs = _toMs(_cs.start), eMs = _toMs(_cs.end);
                 var same = (_cs.start.y === _cs.end.y && _cs.start.mo === _cs.end.mo && _cs.start.d === _cs.end.d);
-
                 for (var i = 0; i < fd; i++) { var s = document.createElement('span'); s.className = 'obdv-d obdv-other'; s.textContent = prev - fd + 1 + i; _dg.appendChild(s); }
                 for (var day = 1; day <= dim; day++) {
                     var sp = document.createElement('span'); sp.className = 'obdv-d';
@@ -8355,7 +7377,6 @@
                 var tot = fd + dim, rem = (Math.ceil(tot / 7) * 7) - tot;
                 for (var j = 1; j <= rem; j++) { var s2 = document.createElement('span'); s2.className = 'obdv-d obdv-other'; s2.textContent = j; _dg.appendChild(s2); }
             }
-
             function _pickDay(day) {
                 if (_cs.which === 'start') { _cs.start.y = _cs.viewY; _cs.start.mo = _cs.viewMo; _cs.start.d = day; }
                 else { _cs.end.y = _cs.viewY; _cs.end.mo = _cs.viewMo; _cs.end.d = day; }
@@ -8365,7 +7386,6 @@
                 }
                 _renderDays(); _refreshCards();
             }
-
             function _openPop(which, anchorEl) {
                 _cs.which = which;
                 var _anchor = which === 'start' ? _cs.start : _cs.end;
@@ -8379,9 +7399,7 @@
                 _pop.style.left = Math.min(r.left, window.innerWidth - 274) + 'px';
                 _pop.style.top = (r.bottom + 6) + 'px';
             }
-
             function _closePop() { _pop.style.display = 'none'; _cs.which = null; _refreshCards(); }
-
             _ok.onclick = function () {
                 var tp = _ti.value.split(':');
                 if (tp.length === 2) {
@@ -8393,25 +7411,19 @@
             };
             _pv.onclick = function (e) { e.stopPropagation(); _cs.viewMo--; if (_cs.viewMo < 0) { _cs.viewMo = 11; _cs.viewY--; } _renderDays(); };
             _pn.onclick = function (e) { e.stopPropagation(); _cs.viewMo++; if (_cs.viewMo > 11) { _cs.viewMo = 0; _cs.viewY++; } _renderDays(); };
-
             document.addEventListener('mousedown', function (e) {
                 if (_pop.style.display === 'block' && !_pop.contains(e.target) && !_sc.el.contains(e.target) && !_ec.el.contains(e.target)) { _closePop(); }
             });
-
             _sc.el.onclick = function () { if (_cs.which === 'start') { _closePop(); } else { _openPop('start', _sc.el); } };
             _ec.el.onclick = function () { if (_cs.which === 'end') { _closePop(); } else { _openPop('end', _ec.el); } };
-
             var calApplyBtn = document.createElement('button');
             calApplyBtn.textContent = '✓ Aplicar';
             calApplyBtn.style.cssText = 'padding:5px 12px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid #1f6feb;background:rgba(31,111,235,0.2);color:#58a6ff;white-space:nowrap;';
-
             var calAutoBtn = document.createElement('button');
             calAutoBtn.textContent = '⟳ Auto';
             calAutoBtn.style.cssText = 'padding:5px 12px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid #22c55e;background:rgba(34,197,94,0.1);color:#22c55e;white-space:nowrap;';
-
             var calStatusLbl = document.createElement('span');
             calStatusLbl.style.cssText = 'font-size:10px;color:#818cf8;';
-
             function updateCalStatus() {
                 if (!_activeWindow) {
                     calStatusLbl.textContent = '● Auto: 22/03 00:00 → 23/03 23:30';
@@ -8429,24 +7441,20 @@
                     calApplyBtn.style.opacity = '1';
                 }
             }
-
             calApplyBtn.onclick = function () {
                 _closePop();
                 var sMs = _toMs(_cs.start), eMs = _toMs(_cs.end);
                 if (eMs <= sMs) { calStatusLbl.textContent = '⚠ Fim deve ser após o início'; calStatusLbl.style.color = '#ef4444'; return; }
                 _activeWindow = { start: sMs, end: eMs }; updateCalStatus(); doFetch();
             };
-
             calAutoBtn.onclick = function () {
                 _closePop(); _activeWindow = null;
                 _cs.start = _makeS(0, 0, 0); _cs.end = _makeS(1, 23, 30);
                 _refreshCards(); updateCalStatus(); doFetch();
             };
-
             var _arr = document.createElement('span'); _arr.textContent = '→'; _arr.style.cssText = 'color:#4b5563;font-size:14px;';
             calInner.appendChild(_sc.el); calInner.appendChild(_arr); calInner.appendChild(_ec.el);
             calInner.appendChild(calApplyBtn); calInner.appendChild(calAutoBtn); calInner.appendChild(calStatusLbl);
-
             calBtn.onclick = function () {
                 var isOpen = calPanel.classList.contains('open');
                 if (isOpen) { _closePop(); calPanel.style.maxHeight = '0'; calPanel.classList.remove('open'); calBtn.style.color = '#8b949e'; calBtn.style.borderColor = '#30363d'; }
@@ -8457,17 +7465,14 @@
                 calPanel.style.maxHeight = '80px'; calPanel.classList.add('open');
                 calBtn.style.color = '#58a6ff'; calBtn.style.borderColor = '#58a6ff';
             }, 50);
-
             var gridWrap = document.createElement('div');
             gridWrap.style.cssText = 'flex:1;overflow-y:auto;padding:14px 16px;background:#0d1117;min-height:0;';
             var grid = document.createElement('div');
             grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:10px;';
             gridWrap.appendChild(grid);
-
             var statusBar = document.createElement('div');
             statusBar.style.cssText = 'padding:5px 14px;font-size:10px;color:#6e7681;border-top:1px solid #21262d;background:#0d1117;flex-shrink:0;';
             statusBar.textContent = 'Pronto — clique em 🔄 Buscar';
-
             _panel.style.cssText = 'position:fixed;inset:0;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(16px);z-index:2147483645;display:none;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Arial,sans-serif;color:#fff;';
             _panel.classList.remove('open'); // Ensure it starts closed
             _panel.appendChild(hdr); _panel.appendChild(toolbar); _panel.appendChild(routePanel);
@@ -8478,37 +7483,30 @@
             document.body.appendChild(_panel);
             _panel.appendChild(_pop);
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _panel) _panel.style.display = 'none'; });
-
             var _routes = [];
             var _vsmLoading = false;
             var _activeWindow = null;
             var _defaultsApplied = false;
-
             function _isCompleted(status) {
                 return ['completed', 'outboundcompleted', 'finishedloading']
                     .indexOf((status || '').toLowerCase().replace(/[_\s]/g, '')) !== -1;
             }
-
             function makeCard(r) {
                 var now = Date.now(), diff = r.cptMs ? r.cptMs - now : null;
                 var isCompleted = _isCompleted(r.status);
                 var expired = (diff !== null && diff < 0) || isCompleted;
                 var urgent = !expired && diff !== null && diff >= 0 && diff < 90 * 60000;
                 var warning = !expired && diff !== null && diff >= 90 * 60000 && diff < 2 * 3600000;
-
                 var card = document.createElement('div');
                 card.className = 'obdv-card' + (urgent ? ' urgent' : warning ? ' warning' : expired ? ' expired' : '');
-
                 var headerBg = expired ? '#1c2128' : urgent ? '#2d0f0f' : warning ? '#2b1d0e' : '#161b22';
                 var hdrDiv = document.createElement('div');
                 hdrDiv.className = 'obdv-card-header';
                 hdrDiv.style.background = headerBg;
-
                 var routeEl = document.createElement('div');
                 routeEl.className = 'obdv-route';
                 routeEl.title = r.route;
                 routeEl.textContent = r.route;
-
                 var vsmEl = document.createElement('div');
                 var isMMRoute = /_MM$/i.test(r.route);
                 var vsm = isMMRoute ? null : _vsmMap[r.route];
@@ -8531,16 +7529,13 @@
                 hdrDiv.appendChild(vsmEl);
                 hdrDiv.appendChild(routeEl);
                 card.appendChild(hdrDiv);
-
                 var body = document.createElement('div');
                 body.className = 'obdv-card-body';
-
                 var cptClass = urgent ? 'urgent' : warning ? 'warning' : expired ? 'expired' : '';
                 var cptEl = document.createElement('div');
                 cptEl.className = 'obdv-cpt-time' + (cptClass ? ' ' + cptClass : '');
                 cptEl.textContent = r.cpt || '—';
                 body.appendChild(cptEl);
-
                 var cptDateEl = document.createElement('div');
                 cptDateEl.className = 'obdv-cpt-date';
                 if (r.cptMs) {
@@ -8552,7 +7547,6 @@
                     cptDateEl.textContent = _isTodayCpt ? 'Hoje' : _isTomorrow ? 'Amanhã' : (('0' + (_cd.getMonth() + 1)).slice(-2) + '/' + ('0' + _cd.getDate()).slice(-2));
                 } else { cptDateEl.textContent = ''; }
                 body.appendChild(cptDateEl);
-
                 var remEl = document.createElement('div');
                 remEl.className = 'obdv-remaining';
                 if (diff === null) { remEl.style.color = '#6e7681'; remEl.textContent = 'Sem CPT'; }
@@ -8561,14 +7555,12 @@
                 else if (warning) { var m3 = Math.round(diff / 60000); remEl.style.color = '#f59e0b'; remEl.textContent = Math.floor(m3 / 60) + 'h ' + (m3 % 60) + 'min'; }
                 else { var m4 = Math.round(diff / 60000); remEl.style.color = '#22c55e'; remEl.textContent = Math.floor(m4 / 60) + 'h ' + (m4 % 60) + 'min'; }
                 body.appendChild(remEl);
-
                 var st = getStatus(r.status);
                 var badge = document.createElement('span');
                 badge.className = 'obdv-status-badge';
                 badge.style.cssText = 'background:' + st.bg + ';color:' + st.color + ';border:1px solid ' + st.color + '44;margin-top:6px;';
                 badge.textContent = st.label;
                 body.appendChild(badge);
-
                 var cdata = _containerMap[r.route + '|' + (r.cptMs || 0)];
                 if (!expired) {
                     if (cdata === undefined) {
@@ -8596,11 +7588,9 @@
                         body.appendChild(csect);
                     }
                 }
-
                 card.appendChild(body);
                 return card;
             }
-
             function renderCards(term, skipMorph) {
                 var now = Date.now();
                 var rows = _routes.filter(function (r) {
@@ -8624,22 +7614,18 @@
                 }
                 countEl.textContent = rows.length + ' / ' + _routes.length + ' rotas';
             }
-
             filterInput.addEventListener('input', function () { renderCards(filterInput.value.trim()); });
             setInterval(function () { if (_routes.length) renderCards(filterInput.value.trim(), true); }, 30000);
-
             function doFetch() {
                 fetchBtn.disabled = true; fetchBtn.textContent = '⏳ Buscando...';
                 statusBar.textContent = 'Consultando API OB...';
                 grid.innerHTML = '<div style="padding:24px;color:#6e7681;font-size:13px;grid-column:1/-1;text-align:center;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:obdv-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Carregando rotas OB...</div>';
                 _routes = []; _vsmLoading = false; countEl.textContent = ''; vsmStatusEl.textContent = '';
-
                 var node = (nodeInput.value || 'CGH7').trim().toUpperCase();
                 var win = apiWindow(_activeWindow);
                 var params = ['entity=getOutboundDockView', 'nodeId=' + encodeURIComponent(node), 'startDate=' + win.start, 'endDate=' + win.end,
                     'loadCategories=outboundScheduled,outboundInProgress,outboundReadyToDepart,outboundDeparted,outboundCancelled',
                     'shippingPurposeType=TRANSSHIPMENT,NON-TRANSSHIPMENT,SHIP_WITH_AMAZON'].join('&');
-
                 GM_xmlhttpRequest({
                     method: 'POST', url: BASE + 'ssp/dock/hrz/ob/fetchdata',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
@@ -8650,10 +7636,8 @@
                         var data; try { data = JSON.parse(resp.responseText.replace(/^\uFEFF/, '')); } catch (e) { statusBar.textContent = '⚠ JSON parse error'; grid.innerHTML = ''; return; }
                         var aaData = data && data.ret && data.ret.aaData;
                         if (!Array.isArray(aaData)) { statusBar.textContent = '⚠ aaData não encontrado'; grid.innerHTML = ''; return; }
-
                         var routeMap = {};
                         var _win = _activeWindow || todayWindow(), _winStart = _win.start, _winEnd = _win.end;
-
                         aaData.forEach(function (item) {
                             var load = item.load || {};
                             var rawRoute = cleanRoute(load.route || item.route || '');
@@ -8678,23 +7662,18 @@
                                 }
                             });
                         });
-
                         _routes = Object.values(routeMap).sort(function (a, b) {
                             if (!a.cptMs && !b.cptMs) return a.route.localeCompare(b.route);
                             if (!a.cptMs) return 1; if (!b.cptMs) return -1; return a.cptMs - b.cptMs;
                         });
-
                         if (!_defaultsApplied) {
                             _defaultsApplied = true;
                             _routes.forEach(function (r) { if (isDefaultDisabled(r.route)) _disabledRoutes[r.route] = true; });
                         }
-
                         var hasVsm = Object.keys(_vsmMap).length > 0;
                         _vsmLoading = !hasVsm;
-
                         renderCards(filterInput.value.trim());
                         if (routePanel.classList.contains('open')) buildRoutePanel();
-
                         var now0 = Date.now();
                         var activeRoutes = _routes.filter(function (r) {
                             return !_isCompleted(r.status) && (!r.cptMs || r.cptMs >= now0);
@@ -8702,11 +7681,9 @@
                         fetchContainersForRoutes(activeRoutes, node, function () {
                             renderCards(filterInput.value.trim(), true);
                         });
-
                         var ts = new Date().toLocaleTimeString('pt-BR', { hour12: false });
                         var _wFmt = function (ms) { var d = new Date(ms); var today = new Date(); var isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); var day = isToday ? '' : ((d.getMonth() + 1) + '/' + d.getDate() + ' '); return day + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
                         var _winLabel = ' · Janela ' + _wFmt(_winStart) + '→' + _wFmt(_winEnd);
-
                         if (hasVsm) {
                             var vsmCount0 = Object.keys(_vsmMap).length;
                             statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' rotas · ' + vsmCount0 + ' VSMs' + _winLabel;
@@ -8714,7 +7691,6 @@
                         } else {
                             statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' rotas — Buscando VSM...' + _winLabel;
                             vsmStatusEl.textContent = '⏳ VSM...';
-
                             fetchVSM(node, function () {
                                 _vsmLoading = false;
                                 saveVsmCache(_vsmMap);
@@ -8731,17 +7707,13 @@
                     ontimeout: function () { fetchBtn.disabled = false; fetchBtn.textContent = '🔄 Buscar'; statusBar.textContent = '⚠ Timeout (20s)'; grid.innerHTML = ''; }
                 });
             }
-
             fetchBtn.onclick = doFetch;
             setTimeout(doFetch, 100);
-
             var _autoRefreshIv = setInterval(function () {
                 if (!fetchBtn.disabled && _panel && _panel.style.display !== 'none') doFetch();
             }, 5 * 60 * 1000);
         }
-
         var detectNode = _SUITE.utils.detectNode;
-
         function injectToggle() {
             if (document.getElementById('ob-dock-view-toggle')) return;
             var btn = document.createElement('button');
@@ -8756,19 +7728,14 @@
             };
             document.body.appendChild(btn);
         }
-
         if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', injectToggle); }
         else { setTimeout(injectToggle, 500); }
-
     })();
-
     _onReady(function () {
         (function loadModuleTPH() {
             if (!_SUITE.isDock) return;
             'use strict';
-
             if (location.pathname.includes('/yms/')) return;
-
             const CONFIG = {
                 baseUrls: {
                     fe: 'https://trans-logistics-fe.amazon.com/',
@@ -8790,9 +7757,7 @@
                     downColor: '#f87171'
                 }
             };
-
             const BASE = _SUITE.BASE;
-
             let CURRENT_NODE = GM_getValue('tl_v5_chart_node', _SUITE.utils.detectNode());
             let GOAL_5MIN = GM_getValue('tl_v5_chart_goal', 800);
             let REFRESH_MS = GM_getValue('tl_v5_refresh_ms', 5 * 60 * 1000);
@@ -8802,23 +7767,19 @@
             let PAUSA2_START = GM_getValue('tl_v5_pausa2_start', '15:00');
             let PAUSA2_END = GM_getValue('tl_v5_pausa2_end', '15:15');
             let AUTO_REFRESH_ON = GM_getValue('tl_v5_auto_on', true);
-
             let chartInstance = null;
             let timeBlocks = [];
             let isFetching = false;
             let isManualSearch = false;
             let countdownInterval = null;
             let nextRefreshTime = 0;
-
             function pad(n) { return n < 10 ? '0' + n : n; }
             function fmtDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
             function fmtTime(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-
             function getMsFromInputs(dateEl, timeEl) {
                 if (!dateEl.value || !timeEl.value) return null;
                 return new Date(`${dateEl.value}T${timeEl.value}:00`).getTime();
             }
-
             function getPauseDuration(startStr, endStr) {
                 const [h1, m1] = startStr.split(':').map(Number);
                 const [h2, m2] = endStr.split(':').map(Number);
@@ -8826,7 +7787,6 @@
                 if (diff < 0) diff += 24 * 60;
                 return diff;
             }
-
             function isPauseBlock(blockStartMs, startStr, endStr) {
                 const d = new Date(blockStartMs);
                 const blockTime = pad(d.getHours()) + ':' + pad(d.getMinutes());
@@ -8836,7 +7796,6 @@
                     return blockTime >= startStr || blockTime < endStr;
                 }
             }
-
             function isAnyPauseBlock(blockStartMs) {
                 const p1s = inputs.pausaStart.value || '11:00';
                 const p1e = inputs.pausaEnd.value || '12:15';
@@ -8844,7 +7803,6 @@
                 const p2e = inputs.pausa2End.value || '15:15';
                 return isPauseBlock(blockStartMs, p1s, p1e) || isPauseBlock(blockStartMs, p2s, p2e);
             }
-
             function getTotalPauseMinutes() {
                 const p1s = inputs.pausaStart.value || '11:00';
                 const p1e = inputs.pausaEnd.value || '12:15';
@@ -8852,91 +7810,71 @@
                 const p2e = inputs.pausa2End.value || '15:15';
                 return getPauseDuration(p1s, p1e) + getPauseDuration(p2s, p2e);
             }
-
             GM_addStyle(`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');
-
         #tl-v5-fab { position:fixed; bottom:24px; left:24px; z-index:99999; width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:22px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s; }
         #tl-v5-fab:hover { transform:scale(1.1); box-shadow:0 12px 30px rgba(168,157,255,0.3); }
-
         #tl-v5-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99998; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
         #tl-v5-overlay.open { display:block; opacity:1; }
-
         #tl-v5-popup { position:fixed; inset:0; z-index:99999; background:rgba(10, 22, 40, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:none; transition:none; color:#fff; overflow:hidden; }
         #tl-v5-popup.open { display:flex; }
-
         .tl-v5-header { padding:12px 20px; cursor:grab; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02); user-select:none; }
         .tl-v5-header:active { cursor:grabbing; }
         .tl-v5-header-title { font-family:'Syne', sans-serif; font-weight:600; font-size:15px; color:#fff; display:flex; align-items:center; gap:8px; }
         .tl-v5-header-actions { display:flex; gap:12px; align-items:center; }
         .tl-v5-btn-icon { background:none; border:none; color:rgba(255,255,255,0.4); font-size:16px; cursor:pointer; transition:color 0.2s; }
         .tl-v5-btn-icon:hover { color:#fff; }
-
         .tl-v5-rh { position:absolute; z-index:100000; }
         .tl-v5-rh-e { right:-4px; top:0; bottom:0; width:8px; cursor:e-resize; }
         .tl-v5-rh-s { bottom:-4px; left:0; right:0; height:8px; cursor:s-resize; }
         .tl-v5-rh-se { bottom:-4px; right:-4px; width:16px; height:16px; cursor:se-resize; }
         #tl-v5-popup.fullscreen .tl-v5-rh { display:none; }
-
         .tl-v5-body { padding:20px; flex:1; display:flex; flex-direction:column; overflow:hidden; position:relative; }
-
         .tl-v5-controls-bar { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:1.5rem; background:rgba(255,255,255,0.03); padding:12px 16px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); }
         .tl-v5-inp-group { display:flex; flex-direction:column; gap:4px; }
         .tl-v5-inp-label { font-size:10px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:0.5px; }
         .tl-v5-inp-label.label-green { color:${CONFIG.ui.needColor}; }
         .tl-v5-inp-label.label-red { color:${CONFIG.ui.metaColor}; }
-
         .tl-v5-inp { background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:6px; padding:6px 10px; font-size:12px; font-family:'Space Mono', monospace; outline:none; transition:border 0.2s; }
         .tl-v5-inp:focus { border-color:${CONFIG.ui.realColor}; }
         .tl-v5-inp[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor:pointer; }
-
         .tl-v5-btn-primary { background:${CONFIG.ui.realColor}; color:#000; border:none; border-radius:6px; padding:6px 16px; font-weight:600; font-size:12px; font-family:'DM Sans', sans-serif; cursor:pointer; height:29px; transition:opacity 0.2s; }
         .tl-v5-btn-primary:hover { opacity:0.8; }
-
         .tl-v5-toggle { position:relative; width:36px; height:20px; border:none; background:none; padding:0; cursor:pointer; flex-shrink:0; }
         .tl-v5-toggle .track { position:absolute; inset:0; border-radius:10px; background:rgba(255,255,255,0.1); transition:background .25s; }
         .tl-v5-toggle.on .track { background:${CONFIG.ui.realColor}; }
         .tl-v5-toggle .thumb { position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .25s; }
         .tl-v5-toggle.on .thumb { left:19px; }
-
         .tl-v5-timer-wrap { display:flex; align-items:center; gap:8px; background:rgba(0,0,0,0.2); padding:4px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.05); height: 29px; }
         .tl-v5-timer-text { font-family:'Space Mono', monospace; font-size:12px; color:${CONFIG.ui.realColor}; font-weight:bold; min-width:40px; }
         .tl-v5-refresh-select { background:transparent; border:none; color:rgba(255,255,255,0.6); font-size:10px; cursor:pointer; outline:none; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 6px; font-family:'DM Sans', sans-serif; }
-
         .tl-v5-metrics { display:flex; gap:1rem; margin-bottom:1rem; flex-shrink:0; justify-content: space-between; }
         .tl-v5-metric { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px 14px; flex:1; min-width: 0; }
         .tl-v5-metric-label { font-size:0.65rem; color:rgba(255,255,255,0.4); margin-bottom:4px; text-transform:uppercase; display:block; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tl-v5-metric-val { font-size:1.6rem; font-weight:700; color:#fff; display:block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
         .tl-v5-canvas-container { position:relative; flex:1; width:100%; overflow-x:auto; overflow-y:hidden; min-height:250px; border-radius:8px; opacity:1; transition:opacity 0.2s, transform 0.2s; }
         .tl-v5-canvas-container.updating { opacity:0; transform:translateY(4px); }
         .tl-v5-canvas-container::-webkit-scrollbar { height: 8px; }
         .tl-v5-canvas-container::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
         .tl-v5-canvas-container::-webkit-scrollbar-thumb { background: rgba(168,157,255,0.3); border-radius: 4px; }
         .tl-v5-canvas-inner { position:relative; height:100%; min-width:100%; transition:width 0.2s; }
-
         #tl-v5-loader { position:absolute; inset:0; background:rgba(10,22,40,0.8); z-index:10; display:none; flex-direction:column; align-items:center; justify-content:center; backdrop-filter:blur(5px); color:#fff; }
         .tl-v5-loader-text { font-family:'DM Sans', sans-serif; font-size:14px; font-weight:bold; margin-bottom:15px; color:${CONFIG.ui.realColor}; text-align:center; }
         .tl-v5-loader-bar { width:200px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden; }
         .tl-v5-loader-fill { height:100%; background:${CONFIG.ui.realColor}; width:0%; transition:width 0.1s linear; }
-
         .sep-line { width: 1px; height: 30px; background: rgba(255,255,255,0.1); margin: 0 4px; }
     `);
-
             const fab = document.createElement('button');
             fab.id = 'tl-v5-fab';
             fab.title = 'Painel Gráfico Global V5';
             fab.innerHTML = '📈';
             document.body.appendChild(fab);
-
             const overlay = document.createElement('div');
             overlay.id = 'tl-v5-overlay';
             document.body.appendChild(overlay);
-
             const coeff = CONFIG.time.blockMs;
             const endRoundedDate = new Date(Math.floor(Date.now() / CONFIG.time.blockMs) * CONFIG.time.blockMs);
             const startRoundedDate = new Date(endRoundedDate.getTime() - 3600000);
-
             const popup = document.createElement('div');
             popup.id = 'tl-v5-popup';
             popup.innerHTML = `
@@ -8946,15 +7884,12 @@
                 <button class="tl-v5-btn-icon" id="tl-v5-btn-close" title="Fechar">✕</button>
             </div>
         </div>
-
         <div class="tl-v5-rh tl-v5-rh-e"></div><div class="tl-v5-rh tl-v5-rh-s"></div><div class="tl-v5-rh tl-v5-rh-se"></div>
-
         <div class="tl-v5-body">
             <div id="tl-v5-loader">
                 <span class="tl-v5-loader-text" id="tl-v5-loader-msg">Aguardando...</span>
                 <div class="tl-v5-loader-bar" id="tl-v5-loader-wrap"><div class="tl-v5-loader-fill" id="tl-v5-loader-fill"></div></div>
             </div>
-
             <div class="tl-v5-controls-bar">
                 <div class="tl-v5-inp-group">
                     <label class="tl-v5-inp-label">Node</label>
@@ -8974,9 +7909,7 @@
                         <input type="text" id="tl-v5-time-end" class="tl-v5-inp" value="${fmtTime(endRoundedDate)}" placeholder="HH:MM" maxlength="5" style="width:55px; text-align:center;">
                     </div>
                 </div>
-
                 <div class="sep-line"></div>
-
                 <div class="tl-v5-inp-group">
                     <label class="tl-v5-inp-label label-green">Volume Total</label>
                     <input type="number" id="tl-v5-vol" class="tl-v5-inp" value="${VOL_TOTAL}" style="width:75px;">
@@ -9001,7 +7934,6 @@
                     <label class="tl-v5-inp-label label-red">Meta Fixa</label>
                     <input type="number" id="tl-v5-goal" class="tl-v5-inp" value="${GOAL_5MIN}" style="width:65px;">
                 </div>
-
                 <div class="tl-v5-inp-group" style="padding-bottom:1px; margin-left: auto; display:flex; flex-direction:row; align-items:center; gap: 10px;">
                     <div class="tl-v5-timer-wrap">
                         <div style="display:flex; align-items:center; gap:4px; border-right: 1px solid rgba(255,255,255,0.1); padding-right: 6px;">
@@ -9020,7 +7952,6 @@
                     <button class="tl-v5-btn-primary" id="tl-v5-btn-search">Buscar Dados</button>
                 </div>
             </div>
-
             <div class="tl-v5-metrics">
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">Total do Período</span><span class="tl-v5-metric-val" id="tl-v5-val-total">--</span></div>
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">Média / Hora</span><span class="tl-v5-metric-val" id="tl-v5-val-avg-hr">--</span></div>
@@ -9028,14 +7959,12 @@
                 <div class="tl-v5-metric" style="border-color:${CONFIG.ui.needColor}44;"><span class="tl-v5-metric-label" style="color:${CONFIG.ui.needColor};">Nec. Atual / 5 min</span><span class="tl-v5-metric-val" id="tl-v5-val-need">--</span></div>
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">Atingimento (vs Nec.)</span><span class="tl-v5-metric-val" id="tl-v5-val-achv" style="color:${CONFIG.ui.realColor};">--%</span></div>
             </div>
-
             <div class="tl-v5-canvas-container" id="tl-v5-container">
                 <div class="tl-v5-canvas-inner" id="tl-v5-canvas-inner"></div>
             </div>
         </div>
     `;
             document.body.appendChild(popup);
-
             const inputs = {
                 node: document.getElementById('tl-v5-node'),
                 dateStart: document.getElementById('tl-v5-date-start'),
@@ -9052,9 +7981,7 @@
                 autoToggle: document.getElementById('tl-v5-auto-toggle'),
                 refresh: document.getElementById('tl-v5-refresh-select')
             };
-
             inputs.refresh.value = REFRESH_MS;
-
             const ui = {
                 loader: document.getElementById('tl-v5-loader'),
                 loaderFill: document.getElementById('tl-v5-loader-fill'),
@@ -9064,7 +7991,6 @@
                 container: document.getElementById('tl-v5-container'),
                 timerText: document.getElementById('tl-v5-timer')
             };
-
             function applyTimeMask(inputEl) {
                 inputEl.addEventListener('input', function () {
                     let v = this.value.replace(/\D/g, '');
@@ -9081,10 +8007,8 @@
             applyTimeMask(inputs.pausaEnd);
             applyTimeMask(inputs.pausa2Start);
             applyTimeMask(inputs.pausa2End);
-
             let isDragging = false, isResizing = false;
             let startX, startY, startW, startH, currentHandle;
-
             document.getElementById('tl-v5-header').addEventListener('mousedown', (e) => {
                 if (e.target.closest('button') || popup.classList.contains('fullscreen')) return;
                 isDragging = true;
@@ -9092,7 +8016,6 @@
                 startX = e.clientX - rect.left; startY = e.clientY - rect.top;
                 popup.style.transform = 'none'; popup.style.left = rect.left + 'px'; popup.style.top = rect.top + 'px';
             });
-
             document.querySelectorAll('.tl-v5-rh').forEach(handle => {
                 handle.addEventListener('mousedown', (e) => {
                     if (popup.classList.contains('fullscreen')) return;
@@ -9104,7 +8027,6 @@
                     e.preventDefault();
                 });
             });
-
             let tphraf = null;
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging && !isResizing) return;
@@ -9119,23 +8041,18 @@
                     tphraf = null;
                 });
             });
-
             document.addEventListener('mouseup', () => {
                 isDragging = false; isResizing = false;
                 if (tphraf) { cancelAnimationFrame(tphraf); tphraf = null; }
             });
-
-
             function startCountdownTimer() {
                 clearInterval(countdownInterval);
                 nextRefreshTime = Date.now() + REFRESH_MS;
-
                 countdownInterval = setInterval(() => {
                     const timeLeft = Math.max(0, Math.floor((nextRefreshTime - Date.now()) / 1000));
                     const m = String(Math.floor(timeLeft / 60)).padStart(2, '0');
                     const s = String(timeLeft % 60).padStart(2, '0');
                     ui.timerText.innerText = `${m}:${s}`;
-
                     if (timeLeft === 0) {
                         nextRefreshTime = Date.now() + REFRESH_MS;
                         if (AUTO_REFRESH_ON) {
@@ -9144,18 +8061,14 @@
                     }
                 }, 1000);
             }
-
             function generateTimeBlocks() {
                 let startTime = getMsFromInputs(inputs.dateStart, inputs.timeStart);
                 let endTime = getMsFromInputs(inputs.dateEnd, inputs.timeEnd);
-
                 if (!startTime || !endTime) { alert("Preencha Data e Hora de Início e Fim."); return null; }
                 if (endTime <= startTime) { alert("Erro: A data/hora final deve ser MAIOR que a inicial."); return null; }
-
                 const coeff = CONFIG.time.blockMs;
                 startTime = Math.floor(startTime / coeff) * coeff;
                 endTime = Math.floor(endTime / coeff) * coeff;
-
                 const blocks = [];
                 for (let t = startTime; t <= endTime; t += coeff) {
                     const d = new Date(t);
@@ -9163,7 +8076,6 @@
                 }
                 return blocks;
             }
-
             function fetchSingleBlock(node, token, startMs, endMs) {
                 return new Promise((resolve, reject) => {
                     const payload = {
@@ -9172,7 +8084,6 @@
                         startTime: startMs, endTime: endMs,
                         metricsData: { nodeId: node, pageType: 'OUTBOUND', refreshType: '', device: 'DESKTOP', nodeType: 'SC', userAction: 'FAILED_MOVES_SUBMIT_CLICK' }
                     };
-
                     GM_xmlhttpRequest({
                         method: 'POST',
                         url: BASE + 'sortcenter/vista/controller/getQualityMetricDetails',
@@ -9194,7 +8105,6 @@
                     });
                 });
             }
-
             function showError(msg) {
                 ui.loaderMsg.innerHTML = `⚠️<br><br>` + _SUITE.utils.esc(msg);
                 ui.loaderMsg.style.color = '#f87171';
@@ -9202,34 +8112,27 @@
                 ui.loader.style.display = 'flex';
                 isFetching = false;
             }
-
             async function syncData(manualClick = true) {
                 if (isFetching) return;
                 isManualSearch = manualClick;
-
                 const newBlocks = generateTimeBlocks();
                 if (!newBlocks || newBlocks.length === 0) return;
-
                 isFetching = true;
                 timeBlocks = newBlocks;
                 CURRENT_NODE = inputs.node.value.trim().toUpperCase() || (typeof CURRENT_NODE !== 'undefined' ? CURRENT_NODE : GM_getValue('tl_node', 'CGH7'));
                 GM_setValue('tl_v5_chart_node', CURRENT_NODE);
-
                 GM_setValue('tl_v5_vol_total', parseInt(inputs.vol.value) || 0);
                 GM_setValue('tl_v5_pausa_start', inputs.pausaStart.value || '11:00');
                 GM_setValue('tl_v5_pausa_end', inputs.pausaEnd.value || '12:15');
                 GM_setValue('tl_v5_pausa2_start', inputs.pausa2Start.value || '15:00');
                 GM_setValue('tl_v5_pausa2_end', inputs.pausa2End.value || '15:15');
-
                 ui.loaderMsg.innerHTML = `Buscando ${timeBlocks.length} blocos...`;
                 ui.loaderMsg.style.color = CONFIG.ui.realColor;
                 ui.loaderBarWrap.style.display = 'block';
                 ui.loaderFill.style.width = '0%';
                 ui.loader.style.display = 'flex';
-
                 _SUITE.utils.fetchAntiCsrfToken(async (token) => {
                     if (!token) return showError('Falha ao obter Token. Recarregue a página.');
-
                     try {
                         let completed = 0;
                         const requests = timeBlocks.map((block, index) => {
@@ -9246,7 +8149,6 @@
                                 resolve();
                             });
                         });
-
                         await Promise.all(requests);
                         ui.loader.style.display = 'none';
                         isFetching = false;
@@ -9258,7 +8160,6 @@
                     }
                 });
             }
-
             const labelsPlugin = {
                 id: 'alwaysShowLabels',
                 afterDatasetsDraw(chart) {
@@ -9268,7 +8169,6 @@
                     const needMeta = needDataset
                         ? chart.getDatasetMeta(data.datasets.indexOf(needDataset))
                         : null;
-
                     ctx.save();
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
@@ -9276,59 +8176,46 @@
                     ctx.shadowBlur = 3;
                     ctx.shadowOffsetX = 1;
                     ctx.shadowOffsetY = 1;
-
                     metaReal.data.forEach((point, index) => {
                         const val = data.datasets[0].data[index];
                         if (val > 0) {
-
                             ctx.font = 'bold 16px "DM Sans", sans-serif';
                             ctx.fillStyle = '#fff';
                             ctx.fillText(val, point.x, point.y - 12);
-
                             let target = GOAL_5MIN;
                             if (needDataset && needDataset.data[index] > 0) {
                                 target = needDataset.data[index];
                             }
-
                             if (target > 0) {
                                 const diffPct = ((val - target) / target) * 100;
                                 const diffRounded = Math.round(diffPct);
                                 let pctText = '', pctColor = '';
-
                                 if (diffRounded > 0) { pctText = `▲ ${diffRounded}%`; pctColor = CONFIG.ui.upColor; }
                                 else if (diffRounded < 0) { pctText = `▼ ${Math.abs(diffRounded)}%`; pctColor = CONFIG.ui.downColor; }
                                 else { pctText = `- 0%`; pctColor = 'rgba(255,255,255,0.4)'; }
-
                                 ctx.font = 'bold 13px "DM Sans", sans-serif';
                                 ctx.fillStyle = pctColor;
                                 ctx.fillText(pctText, point.x, point.y - 30);
                             }
                         }
                     });
-
                     if (needDataset && needMeta) {
                         needMeta.data.forEach((point, index) => {
                             const needVal = needDataset.data[index];
                             const realVal = data.datasets[0].data[index];
-
                             if (needVal > 0) {
-
                                 const yPos = point.y + 18;
-
                                 ctx.font = 'bold 13px "DM Sans", sans-serif';
                                 ctx.fillStyle = CONFIG.ui.needColor;
                                 ctx.textBaseline = 'top';
                                 ctx.fillText(needVal, point.x, yPos);
-
                                 if (realVal > 0) {
                                     const diffPct = ((realVal - needVal) / needVal) * 100;
                                     const diffRounded = Math.round(diffPct);
                                     let pctText = '', pctColor = '';
-
                                     if (diffRounded > 0) { pctText = `▲ ${diffRounded}%`; pctColor = CONFIG.ui.upColor; }
                                     else if (diffRounded < 0) { pctText = `▼ ${Math.abs(diffRounded)}%`; pctColor = CONFIG.ui.downColor; }
                                     else { pctText = `- 0%`; pctColor = 'rgba(255,255,255,0.4)'; }
-
                                     ctx.font = 'bold 11px "DM Sans", sans-serif';
                                     ctx.fillStyle = pctColor;
                                     ctx.fillText(pctText, point.x, yPos + 16);
@@ -9337,11 +8224,9 @@
                             }
                         });
                     }
-
                     ctx.restore();
                 }
             };
-
             function renderChart() {
                 ui.container.classList.add('updating');
                 setTimeout(() => {
@@ -9349,95 +8234,70 @@
                     ui.container.classList.remove('updating');
                 }, 60);
             }
-
             function executeChartRender() {
                 const labels = timeBlocks.map(b => b.label);
                 const dataValues = timeBlocks.map(b => b.value);
                 const metaValues = Array(labels.length).fill(GOAL_5MIN);
-
                 const initialVol = parseInt(inputs.vol.value) || 0;
                 const pMin = getTotalPauseMinutes();
-
                 const startTimeMs = getMsFromInputs(inputs.dateStart, inputs.timeStart);
                 const endTimeMs = getMsFromInputs(inputs.dateEnd, inputs.timeEnd);
                 const turnoTotalMin = startTimeMs && endTimeMs
                     ? Math.max(0, (endTimeMs - startTimeMs) / 60000)
                     : 0;
-
                 const totalNonPauseBlocks = Math.floor((turnoTotalMin - pMin) / 5);
                 const averageNeed = totalNonPauseBlocks > 0 ? Math.round(initialVol / totalNonPauseBlocks) : 0;
-
                 let needValues = [];
                 let currentNeedMetric = averageNeed;
                 const nowMs = Date.now();
                 const isShiftActive = (nowMs >= startTimeMs && nowMs <= endTimeMs);
-
                 let dynamicRemVol = initialVol;
                 let dynamicRemBlocks = totalNonPauseBlocks;
-
                 for (let i = 0; i < timeBlocks.length; i++) {
                     let block = timeBlocks[i];
                     let isP = isAnyPauseBlock(block.start);
-
                     if (isP) {
                         needValues.push(0);
                     } else {
                         if (isShiftActive) {
-                            // Se o turno está ativo, usa a lógica de rebalanceamento (catch-up) para a linha
                             let currentNeed = dynamicRemBlocks > 0 ? Math.round(dynamicRemVol / dynamicRemBlocks) : averageNeed;
                             if (currentNeed < 0) currentNeed = 0;
                             needValues.push(currentNeed);
-
                             if (block.start <= nowMs && block.end > nowMs) {
                                 currentNeedMetric = currentNeed;
                             }
                         } else {
-                            // Se o turno já encerrou (ou é futuro), usamos a média equilibrada fixa
                             needValues.push(averageNeed);
                         }
-
                         if (block.end <= nowMs) {
                             dynamicRemVol -= dataValues[i];
                             dynamicRemBlocks -= 1;
                         }
                     }
                 }
-
-                // Se o período já encerrou, garante que o box mostre a média
                 if (endTimeMs < nowMs) {
                     currentNeedMetric = averageNeed;
                 }
-
-
-
                 const totalPkgs = dataValues.reduce((a, b) => a + b, 0);
                 const validValues = dataValues.filter(v => v > 0);
                 const avg = validValues.length > 0 ? Math.round(validValues.reduce((a, b) => a + b, 0) / validValues.length) : 0;
                 const avgHr = avg * 12;
-
                 const comparisonTarget = currentNeedMetric > 0 ? currentNeedMetric : GOAL_5MIN;
                 const achv = comparisonTarget > 0 ? Math.round((avg / comparisonTarget) * 100) : 0;
-
                 document.getElementById('tl-v5-val-total').innerText = totalPkgs.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg-hr').innerText = avgHr.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg').innerText = avg.toLocaleString('pt-BR');
-
                 const needEl = document.getElementById('tl-v5-val-need');
                 if (needEl) needEl.innerText = currentNeedMetric > 0 ? currentNeedMetric.toLocaleString('pt-BR') : '--';
-
                 document.getElementById('tl-v5-val-achv').innerText = achv + '%';
-
                 const achvEl = document.getElementById('tl-v5-val-achv');
                 if (achv >= 95) achvEl.style.color = '#60a5fa'; else if (achv >= 80) achvEl.style.color = '#34d399';
                 else if (achv >= 50) achvEl.style.color = '#fcd34d'; else achvEl.style.color = '#f87171';
-
                 const neededWidth = timeBlocks.length * CONFIG.ui.pixelsPerPoint;
                 ui.canvasInner.style.minWidth = `max(100%, ${neededWidth}px)`;
-
                 if (chartInstance) { chartInstance.destroy(); }
                 ui.canvasInner.innerHTML = '<canvas id="tl-v5-c5"></canvas>';
                 const ctx = document.getElementById('tl-v5-c5').getContext('2d');
-
                 const datasets = [
                     {
                         label: 'Real', data: dataValues, borderColor: CONFIG.ui.realColor, borderWidth: 3, pointRadius: 5, fill: true, tension: 0.3, pointBackgroundColor: CONFIG.ui.realColor,
@@ -9453,15 +8313,12 @@
                         label: 'Meta Fixa', data: metaValues, borderColor: CONFIG.ui.metaColor, borderWidth: 3, borderDash: [], pointRadius: 0, fill: false
                     }
                 ];
-
                 if (currentNeedMetric > 0 || initialVol !== 0) {
                     datasets.splice(1, 0, {
                         label: 'Necessidade', data: needValues, borderColor: CONFIG.ui.needColor, borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false
                     });
                 }
-
                 const bottomPadding = (currentNeedMetric > 0 || initialVol !== 0) ? 55 : 10;
-
                 chartInstance = new Chart(ctx, {
                     type: 'line',
                     data: { labels, datasets },
@@ -9477,7 +8334,6 @@
                         }
                     }
                 });
-
                 setTimeout(() => {
                     if (isManualSearch) {
                         ui.container.scrollLeft = 0;
@@ -9490,28 +8346,22 @@
                     }
                 }, 100);
             }
-
             fab.addEventListener('click', () => {
                 popup.classList.add('open'); overlay.classList.add('open');
                 if (ui.loaderMsg.style.color === 'rgb(248, 113, 113)') ui.loader.style.display = 'none';
                 if (timeBlocks.length === 0) syncData(false);
             });
-
             document.getElementById('tl-v5-btn-close').addEventListener('click', () => { popup.classList.remove('open'); overlay.classList.remove('open'); });
             overlay.addEventListener('click', () => { popup.classList.remove('open'); overlay.classList.remove('open'); });
-
             inputs.search.addEventListener('click', (e) => { e.preventDefault(); syncData(true); });
-
             inputs.autoToggle.addEventListener('click', function (e) {
                 e.preventDefault(); AUTO_REFRESH_ON = !AUTO_REFRESH_ON;
                 GM_setValue('tl_v5_auto_on', AUTO_REFRESH_ON); this.classList.toggle('on', AUTO_REFRESH_ON);
             });
-
             inputs.refresh.addEventListener('change', () => {
                 REFRESH_MS = parseInt(inputs.refresh.value);
                 GM_setValue('tl_v5_refresh_ms', REFRESH_MS); startCountdownTimer();
             });
-
             [inputs.goal, inputs.vol, inputs.pausaStart, inputs.pausaEnd, inputs.pausa2Start, inputs.pausa2End].forEach(el => {
                 el.addEventListener('change', () => {
                     GOAL_5MIN = parseInt(inputs.goal.value) || 800;
@@ -9520,31 +8370,24 @@
                     PAUSA_END = inputs.pausaEnd.value || '12:15';
                     PAUSA2_START = inputs.pausa2Start.value || '15:00';
                     PAUSA2_END = inputs.pausa2End.value || '15:15';
-
                     GM_setValue('tl_v5_chart_goal', GOAL_5MIN);
                     GM_setValue('tl_v5_vol_total', VOL_TOTAL);
                     GM_setValue('tl_v5_pausa_start', PAUSA_START);
                     GM_setValue('tl_v5_pausa_end', PAUSA_END);
                     GM_setValue('tl_v5_pausa2_start', PAUSA2_START);
                     GM_setValue('tl_v5_pausa2_end', PAUSA2_END);
-
                     if (chartInstance) renderChart();
                 });
             });
         })();
     });
-
     _onReady(function () {
         (function loadModulePainelProd() {
             if (!_SUITE.isDock) return;
             'use strict';
-
             if (location.pathname.includes('/yms/')) return;
-
             var BASE = _SUITE.BASE;
-
             var CURRENT_NODE = GM_getValue('tl_node', _SUITE.utils.detectNode()) || 'CGH7';
-
             var AUTO_INTERVALS = [
                 { label: '1 min', ms: 1 * 60 * 1000 },
                 { label: '2 min', ms: 2 * 60 * 1000 },
@@ -9561,23 +8404,15 @@
             var autoRefreshTimer = null;
             var countdownTimer = null;
             var nextRefreshAt = 0;
-
             var blurErrors = GM_getValue('tl_blur_errors', false);
-
             var goalPph = GM_getValue('tl_goal_pph', 300);
-
             var fetchAntiCsrfToken = _SUITE.utils.fetchAntiCsrfToken;
-
             GM_addStyle([
-
                 '#tl-prod-fab{position:fixed;bottom:20px;right:20px;z-index:99999;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%);color:#a89dff;font-size:20px;border:2px solid rgba(255,255,255,0.1);cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;transition:box-shadow .2s,transform .2s;padding:0}',
                 '#tl-prod-fab:hover{box-shadow:0 6px 20px rgba(168,157,255,0.3);transform:scale(1.07)}',
-
                 '#tl-prod-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:none;backdrop-filter:blur(4px);opacity:0;transition:opacity .22s ease}',
                 '#tl-prod-overlay.open{display:block;opacity:1}',
-
                 '#tl-prod-popup{position:fixed;inset:0;z-index:99999;width:100vw;height:100vh;background:rgba(10, 22, 40, 0.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;flex-direction:column;overflow:hidden;font-family:"Amazon Ember",Helvetica,Arial,sans-serif;font-size:13px;border:none;transition:none;color:#fff}',
-
                 '.tl-rh{position:absolute;z-index:100000}',
                 '.tl-rh-n{top:-4px;left:8px;right:8px;height:8px;cursor:n-resize}',
                 '.tl-rh-s{bottom:-4px;left:8px;right:8px;height:8px;cursor:s-resize}',
@@ -9587,7 +8422,6 @@
                 '.tl-rh-ne{top:-4px;right:-4px;width:16px;height:16px;cursor:ne-resize}',
                 '.tl-rh-sw{bottom:-4px;left:-4px;width:16px;height:16px;cursor:sw-resize}',
                 '.tl-rh-se{bottom:-4px;right:-4px;width:16px;height:16px;cursor:se-resize}',
-
                 '#tl-prod-header{background:rgba(255,255,255,0.03);color:#fff;padding:14px 16px 0;flex-shrink:0;cursor:grab;user-select:none;border-bottom:1px solid rgba(255,255,255,0.1)}',
                 '#tl-prod-header:active{cursor:grabbing}',
                 '#tl-prod-header-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}',
@@ -9599,9 +8433,6 @@
                 '#tl-prod-close:hover{background:rgba(255,255,255,0.1);color:#fff}',
                 '#tl-node-input{font-size:12px;font-weight:700;padding:3px 7px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);width:68px;text-align:center;text-transform:uppercase;cursor:text}',
                 '#tl-node-input:focus{outline:none;border-color:#1a56db;background:rgba(0,0,0,0.3)}',
-
-
-
                 '#tl-custom-row{display:flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
                 '#tl-custom-row.hidden{display:none}',
                 '#tl-time-start,#tl-time-end{font-size:12px;padding:4px 7px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);width:80px;height:28px;box-sizing:border-box}',
@@ -9610,7 +8441,6 @@
                 '.tl-arrow{color:#6b7280;font-size:13px}',
                 '#tl-apply-btn{font-size:11px;font-weight:700;padding:4px 12px;border-radius:6px;border:none;background:#2563eb;color:#fff;cursor:pointer;margin-left:4px}',
                 '#tl-apply-btn:hover{background:#1d4ed8}',
-
                 '#tl-auto-bar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
                 '#tl-auto-label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
                 '#tl-auto-toggle{position:relative;width:34px;height:19px;border:none;background:none;padding:0;cursor:pointer;flex-shrink:0}',
@@ -9629,15 +8459,12 @@
                 '#tl-goal-unit{font-size:13px;color:#9ca3af;flex-shrink:0}',
                 '#tl-goal-legend{margin-left:12px;display:flex;gap:12px;align-items:center}',
                 '.tl-goal-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap}',
-
                 '#tl-prod-body{overflow:auto;flex:1;min-height:0;background:transparent}',
                 '#tl-prod-body table{width:100%;border-collapse:collapse;border-spacing:0}',
-
                 '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(255,255,255,0.2);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
                 '#tl-prod-body thead th:hover{color:#fff;background:rgba(51, 65, 85, 0.95)}',
                 '#tl-prod-body thead th.sort-asc::after{content:" ▴"}',
                 '#tl-prod-body thead th.sort-desc::after{content:" ▾"}',
-
                 '#tl-prod-body tbody tr{border-bottom:1.5px solid rgba(255,255,255,0.2);transition:background .15s ease}',
                 '#tl-prod-body tbody td{padding:8px 12px;font-size:13px;color:#f1f5f9;text-align:center;border:1.5px solid rgba(255,255,255,0.2)}',
                 '#tl-prod-body tbody td.td-label{font-weight:700;color:#fff!important;white-space:nowrap;font-size:14px;text-align:left;border-right:2px solid rgba(255,255,255,0.3)}',
@@ -9645,26 +8472,20 @@
                 '#tl-prod-body tbody td.td-err{font-weight:700;color:#f87171}',
                 '#tl-prod-body tbody td.td-na{color:#64748b;font-style:italic}',
                 '#tl-prod-body tbody td.td-pph{font-weight:800;border-radius:0}',
-
                 'td.tier-top{background:rgba(21, 128, 61, 0.45);color:#fff!important}',
                 'td.tier-good{background:rgba(234, 179, 8, 0.45);color:#000!important}',
                 'td.tier-mid{background:rgba(220, 38, 38, 0.45);color:#fff!important}',
                 'td.tier-low{background:rgba(0, 0, 0, 0.85);color:#fff!important}',
                 'td.tier-none{background:transparent}',
-
                 '#tl-prod-footer{padding:12px 20px;font-size:14px;color:#94a3b8;border-top:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}',
-
                 '.tl-prod-loading{padding:48px;text-align:center;color:#94a3b8;font-size:16px}',
                 '.tl-prod-error{padding:20px 24px;color:#f87171;font-size:14px;line-height:1.8}',
                 '.tl-prod-error a{color:#60a5fa;font-weight:700}',
-
                 'body.tl-blur-errors .tl-err-col{filter:blur(6px);color:#64748b!important;transition:filter .2s ease,color .2s ease;cursor:default;user-select:none}',
                 'body.tl-blur-errors .tl-err-col:hover{filter:none;color:inherit!important}',
-
                 '#tl-blur-toggle{background:none;border:1.5px solid #d1d5db;color:#d1d5db;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px;transition:all .15s}',
                 '#tl-blur-toggle:hover{border-color:#3b82f6;color:#3b82f6;background:rgba(59,130,246,0.1)}',
                 '#tl-blur-toggle.on{background:#fef3c7;border-color:#f59e0b;color:#92400e}',
-
                 '#tl-hourly-summary{display:none}',
                 '.tl-matrix-col{text-align:center!important;font-family:monospace;font-size:13px;color:#cbd5e1;min-width:64px!important;border-left:1px solid rgba(255,255,255,0.08);padding:6px 2px!important}',
                 '.tl-hour-label{font-size:13px;font-weight:900;color:#fff!important;margin-bottom:6px;white-space:nowrap;letter-spacing:-0.4px;text-shadow:0 1px 2px rgba(0,0,0,0.8)}',
@@ -9677,37 +8498,30 @@
                 '.tl-matrix-col-header.active::after{opacity:1}',
                 '.tl-matrix-cell{color:#f1f5f9;font-weight:700;border-radius:4px;transition:background 0.3s, color 0.3s}',
                 '.tl-matrix-cell.zero{color:rgba(255,255,255,0.03);font-weight:400}',
-
                 '#tl-prod-body tr{opacity:1;transition:opacity 0.2s, transform 0.2s}',
                 '#tl-prod-body.updating tr{opacity:0;transform:translateY(4px)}',
                 '.tl-row-anim{animation:tl-row-fade-in 0.3s ease-out backwards}',
                 '@keyframes tl-row-fade-in{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}',
                 '@keyframes tl-popup-in{from{opacity:0;transform:scale(0.98)}to{opacity:1;transform:scale(1)}}',
-
                 '.tl-morph-target{opacity:1;transition:opacity 0.2s, transform 0.2s}',
                 '.tl-morph-target.updating{opacity:0;transform:translateY(4px)}',
-
                 '.tl-as-group{display:flex;align-items:center;gap:6px;margin-left:15px;border-left:1.5px solid rgba(255,255,255,0.1);padding-left:15px}',
                 '.tl-as-inp{width:42px;height:22px;background:rgba(0,0,0,0.2);border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;text-align:center;font-size:11px;font-weight:700}',
                 '.tl-as-slider{width:70px;accent-color:#3b82f6;cursor:pointer;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.1);border-radius:2px}',
                 '.tl-as-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#3b82f6;border-radius:50%;cursor:pointer;box-shadow:0 0 5px rgba(0,0,0,0.5)}',
                 '.tl-as-label{font-size:10px;color:#9ca3af;text-transform:uppercase;font-weight:800;letter-spacing:0.02em}',
             ].join(''));
-
             var fab = document.createElement('button');
             fab.id = 'tl-prod-fab';
             fab.type = 'button';
             fab.title = 'Produtividade';
             fab.textContent = '👥';
             document.body.appendChild(fab);
-
             var overlay = document.createElement('div');
             overlay.id = 'tl-prod-overlay';
             document.body.appendChild(overlay);
-
             var popup = document.createElement('div');
             popup.id = 'tl-prod-popup';
-
             ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'].forEach(function (dir) {
                 var h = document.createElement('div');
                 h.className = 'tl-rh tl-rh-' + dir;
@@ -9731,12 +8545,9 @@
                 });
                 popup.appendChild(h);
             });
-
             var header = document.createElement('div');
             header.id = 'tl-prod-header';
-
             var customMode = true;
-
             header.innerHTML =
                 '<div id="tl-prod-header-row">' +
                 '<span id="tl-prod-icon">👥</span>' +
@@ -9745,9 +8556,7 @@
                 '<span id="tl-prod-status"></span>' +
                 '<button id="tl-prod-close" type="button" title="Fechar">✕</button>' +
                 '</div>';
-
             popup.appendChild(header);
-
             var dragX = 0, dragY = 0, dragging = false;
             header.addEventListener('mousedown', function (e) {
                 if (e.target.closest('button') || e.target.closest('.tl-tab') || e.target.closest('input')) return;
@@ -9765,16 +8574,13 @@
                 }
             });
             document.addEventListener('mouseup', function () { dragging = false; });
-
             function getDateLimits() {
                 var today = new Date();
                 var min = new Date(today); min.setDate(today.getDate() - 6);
                 var fmt = function (d) { return d.toISOString().slice(0, 10); };
                 return { min: fmt(min), max: fmt(today), today: fmt(today) };
             }
-
             var dl = getDateLimits();
-
             var customRow = document.createElement('div');
             customRow.id = 'tl-custom-row';
             customRow.className = '';
@@ -9789,15 +8595,12 @@
                 '<input type="text" id="tl-time-end" value="18:00" placeholder="HH:MM" maxlength="5" style="width:45px; text-align:center; border:1px solid #d1d5db; border-radius:4px; padding:2px 4px; font-size:12px;">' +
                 '<button type="button" id="tl-apply-btn">▶ Aplicar</button>';
             popup.appendChild(customRow);
-
             var autoBar = document.createElement('div');
             autoBar.id = 'tl-auto-bar';
-
             var selectOpts = AUTO_INTERVALS.map(function (iv) {
                 var sel = iv.ms === autoRefreshInterval ? ' selected' : '';
                 return '<option value="' + iv.ms + '"' + sel + '>' + iv.label + '</option>';
             }).join('');
-
             autoBar.innerHTML =
                 '<span id="tl-auto-label">Auto Refresh</span>' +
                 '<button type="button" id="tl-auto-toggle" class="' + (autoRefreshOn ? 'on' : '') + '" title="Ligar/desligar atualização automática">' +
@@ -9815,7 +8618,6 @@
                 '</div>' +
                 '<button type="button" id="tl-refresh-btn">↺ Atualizar</button>';
             popup.appendChild(autoBar);
-
             var goalBar = document.createElement('div');
             goalBar.id = 'tl-goal-bar';
             goalBar.innerHTML =
@@ -9831,24 +8633,19 @@
                 '<span class="tl-goal-chip" style="background:rgba(0, 0, 0, 0.4);border:1px solid #333;color:#999">&lt;40%</span>' +
                 '</div>';
             popup.appendChild(goalBar);
-
             var hourlySummary = document.createElement('div');
             hourlySummary.id = 'tl-hourly-summary';
             hourlySummary.style.display = 'none';
             popup.appendChild(hourlySummary);
-
             var body = document.createElement('div');
             body.id = 'tl-prod-body';
             body.innerHTML = '<div class="tl-prod-loading">Selecione um período e clique em ↺ Atualizar.</div>';
             popup.appendChild(body);
-
             var footer = document.createElement('div');
             footer.id = 'tl-prod-footer';
             footer.innerHTML = '<span id="tl-prod-range"></span><span id="tl-prod-total"></span>';
             popup.appendChild(footer);
-
             document.body.appendChild(popup);
-
             var popupOpen = false;
             var sortCol = 'successfulScans';
             var sortAsc = false;
@@ -9857,12 +8654,9 @@
             var currentSlots = [];
             var selectedHour = 'total';
             var searchQuery = '';
-
-            // --- Auto-scroll logic ---
             var autoScrollInterval = null;
             var autoTimer = null;
-            var scrollDirection = 1; // 1 = down, -1 = up
-
+            var scrollDirection = 1;
             function stopAutoScroll() {
                 if (autoScrollInterval) {
                     clearInterval(autoScrollInterval);
@@ -9873,7 +8667,6 @@
                     autoTimer = null;
                 }
             }
-
             function startAutoScroll() {
                 stopAutoScroll();
                 autoScrollInterval = setInterval(function () {
@@ -9882,25 +8675,18 @@
                         stopAutoScroll();
                         return;
                     }
-
                     var maxScroll = bodyEl.scrollHeight - bodyEl.clientHeight;
-
-                    // Limit scroll to the defined row if it exists
                     var rows = bodyEl.querySelectorAll('tbody tr');
                     if (rows.length >= autoScrollLimit) {
                         var targetRow = rows[autoScrollLimit - 1];
-                        // Calculate scroll position to keep the target row visible at the bottom
                         var limit = targetRow.offsetTop + targetRow.offsetHeight - bodyEl.clientHeight + 10;
                         if (limit < maxScroll) maxScroll = limit;
                     }
-
-                    if (maxScroll <= 5) { // No need to scroll if it's too small
+                    if (maxScroll <= 5) {
                         stopAutoScroll();
                         return;
                     }
-
-                    bodyEl.scrollTop += scrollDirection; // Slow scroll
-
+                    bodyEl.scrollTop += scrollDirection;
                     if (bodyEl.scrollTop >= maxScroll) {
                         scrollDirection = -1;
                     } else if (bodyEl.scrollTop <= 0) {
@@ -9908,7 +8694,6 @@
                     }
                 }, Math.round(35 / autoScrollSpeed));
             }
-
             function resetAutoScrollTimer(delay) {
                 stopAutoScroll();
                 if (!popupOpen) return;
@@ -9916,34 +8701,25 @@
                     if (popupOpen) startAutoScroll();
                 }, delay || 15000);
             }
-
             function handleUserInteraction() {
                 if (!popupOpen) return;
                 resetAutoScrollTimer(15000);
             }
-
-
             document.getElementById('tl-prod-search').addEventListener('input', function (e) {
                 searchQuery = e.target.value.toLowerCase().trim();
                 renderTable();
             });
-
             function getTimeRange() {
-
                 var startInput = document.getElementById('tl-time-start');
                 var endInput = document.getElementById('tl-time-end');
                 var datePick = document.getElementById('tl-date-pick');
                 var datePickEnd = document.getElementById('tl-date-pick-end');
-
                 var dStart = datePick && datePick.value ? datePick.value : new Date().toISOString().slice(0, 10);
                 var dEnd = datePickEnd && datePickEnd.value ? datePickEnd.value : dStart;
-
                 var startMs = new Date(dStart + 'T' + (startInput ? startInput.value : '06:00') + ':00').getTime();
                 var endMs = new Date(dEnd + 'T' + (endInput ? endInput.value : '18:00') + ':00').getTime();
-
                 return { start: startMs, end: endMs };
             }
-
             function stopAutoRefresh() {
                 clearInterval(autoRefreshTimer);
                 clearInterval(countdownTimer);
@@ -9952,16 +8728,13 @@
                 var cd = document.getElementById('tl-auto-countdown');
                 if (cd) cd.textContent = '';
             }
-
             function startAutoRefresh() {
                 stopAutoRefresh();
                 nextRefreshAt = Date.now() + autoRefreshInterval;
-
                 autoRefreshTimer = setInterval(function () {
                     nextRefreshAt = Date.now() + autoRefreshInterval;
                     fetchProductivity();
                 }, autoRefreshInterval);
-
                 countdownTimer = setInterval(function () {
                     var cd = document.getElementById('tl-auto-countdown');
                     if (!cd) return;
@@ -9971,7 +8744,6 @@
                     cd.textContent = m + ':' + s;
                 }, 1000);
             }
-
             function applyAutoRefresh() {
                 var toggle = document.getElementById('tl-auto-toggle');
                 if (autoRefreshOn) {
@@ -9982,19 +8754,16 @@
                     stopAutoRefresh();
                 }
             }
-
             function applyBlurErrors() {
                 if (blurErrors) document.body.classList.add('tl-blur-errors');
                 else document.body.classList.remove('tl-blur-errors');
                 var btn = document.getElementById('tl-blur-toggle');
                 if (btn) btn.classList.toggle('on', blurErrors);
             }
-
             GM_addStyle([
                 '@keyframes tl-shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}',
                 '.tl-sk{background:linear-gradient(90deg,rgba(255,255,255,0.05) 25%,rgba(255,255,255,0.1) 50%,rgba(255,255,255,0.05) 75%);background-size:800px 100%;animation:tl-shimmer 1.4s infinite linear;border-radius:4px}',
             ].join(''));
-
             function showSkeleton() {
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (!bodyEl) return;
@@ -10017,29 +8786,23 @@
                 html += '</tbody></table>';
                 bodyEl.innerHTML = html;
             }
-
             function fetchProductivity() {
                 var nodeInp = document.getElementById('tl-node-input');
                 if (nodeInp && nodeInp.value.trim()) CURRENT_NODE = nodeInp.value.trim().toUpperCase();
-
                 showSkeleton();
                 var statusEl = document.getElementById('tl-prod-status');
                 var bodyEl = document.getElementById('tl-prod-body');
                 var summaryEl = document.getElementById('tl-hourly-summary');
                 if (statusEl) statusEl.textContent = '⏳ buscando...';
-
                 var range = getTimeRange();
                 var start = range.start, end = range.end;
-
                 var slots = [];
                 var cursor = new Date(start);
                 cursor.setMinutes(0, 0, 0);
                 if (cursor.getTime() < start) cursor.setTime(cursor.getTime() + 3600000);
-
                 if (start < cursor.getTime()) {
                     slots.push({ s: start, e: Math.min(cursor.getTime(), end), label: 'Início' });
                 }
-
                 while (cursor.getTime() < end) {
                     var next = new Date(cursor.getTime() + 3600000);
                     slots.push({
@@ -10050,10 +8813,8 @@
                     cursor = next;
                 }
                 currentSlots = slots.map(function (s) { return s.label; });
-
                 _SUITE.utils.fetchAntiCsrfToken(function (token) {
                     if (!token) return;
-
                     var totalPayload = {
                         nodeId: CURRENT_NODE, nodeType: 'SC',
                         entity: 'getQualityMetricDetails',
@@ -10062,7 +8823,6 @@
                         startTime: start, endTime: end,
                         metricsData: { nodeId: CURRENT_NODE, pageType: 'OUTBOUND', refreshType: '', device: 'DESKTOP', nodeType: 'SC', userAction: 'FAILED_MOVES_SUBMIT_CLICK' }
                     };
-
                     var tasks = [];
                     tasks.push(new Promise(function (resolve) {
                         GM_xmlhttpRequest({
@@ -10088,7 +8848,6 @@
                             onerror: function () { resolve(); }
                         });
                     }));
-
                     hourlyData = {};
                     if (slots.length > 1) {
                         slots.forEach(function (slot) {
@@ -10119,7 +8878,6 @@
                             }));
                         });
                     }
-
                     Promise.all(tasks).then(function () {
                         if (statusEl) statusEl.textContent = '';
                         var fmt = function (ms) { return new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false }); };
@@ -10130,7 +8888,6 @@
                     });
                 });
             }
-
             var LOWER_WORDS = { de: 1, da: 1, do: 1, das: 1, dos: 1, e: 1, em: 1 };
             function normalizeName(raw) {
                 if (!raw || raw === '—') return raw;
@@ -10144,7 +8901,6 @@
                         return word.charAt(0).toUpperCase() + word.slice(1);
                     });
             }
-
             function tierClass(pph) {
                 if (!pph || !goalPph) return 'tier-none';
                 var ratio = pph / goalPph;
@@ -10153,7 +8909,6 @@
                 if (ratio >= 0.40) return 'tier-mid';
                 return 'tier-low';
             }
-
             function renderTable() {
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (!bodyEl) return;
@@ -10164,7 +8919,6 @@
                     resetAutoScrollTimer(5000);
                 }, 60);
             }
-
             function executeRender(bodyEl) {
                 var pphTotal = 0, pkgTotal = 0, errTotal = 0, workTotal = 0;
                 lastData.forEach(function (d) {
@@ -10172,8 +8926,6 @@
                     errTotal += (d.errorScans || 0);
                     workTotal += (d.workInSeconds || 0);
                 });
-
-                // Pre-index hourly data for Matrix lookup
                 var hourlyMaps = {};
                 currentSlots.forEach(function (h) {
                     hourlyMaps[h] = {};
@@ -10181,11 +8933,9 @@
                         hourlyMaps[h][r.login || r.userLogin || r.userName] = r;
                     });
                 });
-
                 var totalsPerSlot = {};
                 var maxSlotVol = 0;
                 var minSlotVol = Infinity;
-
                 currentSlots.forEach(function (h) {
                     var vol = 0;
                     Object.values(hourlyMaps[h]).forEach(function (r) { vol += (r.successfulScans || 0); });
@@ -10193,24 +8943,20 @@
                     if (vol > maxSlotVol) maxSlotVol = vol;
                     if (vol < minSlotVol) minSlotVol = vol;
                 });
-
                 function getHeatColor(val) {
                     if (maxSlotVol === minSlotVol) return 'rgba(56, 189, 248, 0.4)';
-                    // Usar escala não-linear para maior distinção entre picos
                     var ratio = Math.pow((val - minSlotVol) / (maxSlotVol - minSlotVol), 1.2);
                     var hue = ratio * 125;
                     return 'hsla(' + hue + ', 90%, 38%, 1)';
                 }
-
                 function getTierColor(pph) {
                     if (!pph || !goalPph) return 'transparent';
                     var ratio = pph / goalPph;
-                    if (ratio >= 0.90) return 'hsla(142, 69%, 36%, 1)'; // Verde (Ex-Azul)
-                    if (ratio >= 0.75) return 'hsla(48, 96%, 43%, 1)';  // Amarelo (Ex-Verde)
-                    if (ratio >= 0.40) return 'hsla(0, 72%, 41%, 1)';   // Vermelho (Ex-Amarelo)
-                    return 'hsla(0, 0%, 10%, 1)';                      // Preto (Ex-Vermelho)
+                    if (ratio >= 0.90) return 'hsla(142, 69%, 36%, 1)';
+                    if (ratio >= 0.75) return 'hsla(48, 96%, 43%, 1)';
+                    if (ratio >= 0.40) return 'hsla(0, 72%, 41%, 1)';
+                    return 'hsla(0, 0%, 10%, 1)';
                 }
-
                 var html = '<table><thead><tr>' +
                     '<th style="width:34px">#</th>' +
                     '<th style="text-align:left!important;min-width:360px">ASSOCIADO</th>' +
@@ -10221,7 +8967,6 @@
                     '</div>' +
                     '</th>' +
                     '<th style="width:100px">Rating</th>';
-
                 if (selectedHour === 'total' && currentSlots.length > 0) {
                     currentSlots.forEach(function (h) {
                         var vol = totalsPerSlot[h];
@@ -10229,7 +8974,6 @@
                         var startH = h.split(':')[0];
                         var endH = (parseInt(startH, 10) + 1).toString().padStart(2, '0');
                         var label = startH + 'h->' + endH + 'h';
-
                         html += '<th class="tl-matrix-col">' +
                             '<div class="tl-hour-label">' + label + '</div>' +
                             '<div class="tl-matrix-col-header ' + (selectedHour === h ? 'active' : '') + '" data-hour="' + h + '" style="background:' + bg + ';border-color:rgba(255,255,255,0.3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1)">' +
@@ -10238,24 +8982,19 @@
                             '</th>';
                     });
                 }
-
                 var winners = { total: 0 };
                 currentSlots.forEach(function (h) { winners[h] = 0; });
-
                 lastData.forEach(function (d) {
                     var login = d.login || d.userLogin || d.userName;
                     var total = d.successfulScans || 0;
                     if (total > winners.total) winners.total = total;
-
                     currentSlots.forEach(function (h) {
                         var hr = hourlyMaps[h][login];
                         var pkgs = hr ? (hr.successfulScans || 0) : 0;
                         if (pkgs > winners[h]) winners[h] = pkgs;
                     });
                 });
-
                 html += '</tr></thead><tbody>';
-
                 var sorted = lastData.slice().filter(function (d) {
                     if (!searchQuery) return true;
                     var name = (d.userName || '').toLowerCase();
@@ -10270,20 +9009,16 @@
                     var va = Number(a[ka]) || 0, vb = Number(b[ka]) || 0;
                     return sortAsc ? va - vb : vb - va;
                 });
-
                 sorted.forEach(function (d, i) {
                     var login = d.login || d.userLogin || d.userName;
                     var name = normalizeName(d.userName || login);
-
                     var totalPkgs = d.successfulScans || 0;
                     var totalErr = d.errorScans || 0;
                     var totalWork = d.workInSeconds || 0;
-
                     var shownPkgs = totalPkgs;
                     var shownErr = totalErr;
                     var shownWork = totalWork;
                     var isFilteredOut = false;
-
                     if (selectedHour !== 'total') {
                         var hr = (hourlyMaps[selectedHour] && hourlyMaps[selectedHour][login]);
                         if (!hr) {
@@ -10294,21 +9029,17 @@
                             shownWork = hr.workInSeconds || 0;
                         }
                     }
-
                     if (!isFilteredOut) {
                         var pph = shownWork > 0 ? Math.round(shownPkgs / (shownWork / 3600)) : (shownPkgs > 0 ? shownPkgs : null);
                         var pphCell = pph !== null
                             ? '<td class="td-pph" style="background:' + getTierColor(pph) + ';color:#fff;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.5)">' + pph.toLocaleString('pt-BR') + '</td>'
                             : '<td class="td-na">—</td>';
-
                         var errCell = shownErr > 0
                             ? '<td class="td-err tl-err-col">' + shownErr + '</td>'
                             : '<td class="td-num tl-err-col" style="color:#64748b">0</td>';
-
                         var delay = Math.min(i * 12, 220);
                         var totalPct = winners.total > 0 ? (shownPkgs / winners.total) * 100 : 0;
                         var totalStyle = 'font-weight:900;color:#fff;font-size:15px;position:relative;background:linear-gradient(90deg, rgba(59, 130, 246, 0.25) ' + totalPct + '%, transparent ' + totalPct + '%)';
-
                         html += '<tr class="tl-row-anim" style="animation-delay:' + delay + 'ms">' +
                             '<td style="color:#64748b;font-size:12px;width:34px">' + (i + 1) + '</td>' +
                             '<td class="td-label">' +
@@ -10320,14 +9051,12 @@
                             shownPkgs.toLocaleString('pt-BR') + (shownPkgs > 0 && shownPkgs === winners.total ? ' <span title="Melhor Total" style="filter:drop-shadow(0 0 2px gold)">🥇</span>' : '') +
                             '</td>' +
                             pphCell;
-
                         if (selectedHour === 'total' && currentSlots.length > 0) {
                             currentSlots.forEach(function (h) {
                                 var slotRec = hourlyMaps[h][login];
                                 var slotPkgs = slotRec ? (slotRec.successfulScans || 0) : 0;
                                 var slotSecs = slotRec ? (slotRec.workInSeconds || 0) : 0;
                                 var slotPph = slotSecs > 0 ? Math.round(slotPkgs / (slotSecs / 3600)) : (slotPkgs > 0 ? slotPkgs : null);
-
                                 var cellBg = slotPkgs > 0 ? getTierColor(slotPph) : 'transparent';
                                 var isWinner = slotPkgs > 0 && slotPkgs === winners[h];
                                 var cellShadow = slotPkgs > 0 ? 'text-shadow:0 1px 2px rgba(0,0,0,0.5);font-weight:800;color:#fff' : 'color:rgba(255,255,255,0.05)';
@@ -10338,13 +9067,10 @@
                         html += '</tr>';
                     }
                 });
-
                 html += '</tbody></table>';
                 bodyEl.innerHTML = html;
-
                 var totalEl = document.getElementById('tl-prod-total');
                 if (totalEl) totalEl.textContent = sorted.length + ' associados · ' + pkgTotal.toLocaleString('pt-BR') + ' pkgs';
-
                 bodyEl.querySelectorAll('thead th').forEach(function (th) {
                     th.addEventListener('click', function (e) {
                         var badge = e.target.closest('.tl-matrix-col-header');
@@ -10363,9 +9089,7 @@
                     });
                 });
             }
-
             var lastSorted = [];
-
             function openPopup() {
                 popupOpen = true;
                 overlay.classList.add('open');
@@ -10374,19 +9098,16 @@
                 if (!lastData.length) fetchProductivity();
                 applyAutoRefresh();
             }
-
             function closePopup() {
                 popupOpen = false;
                 overlay.classList.remove('open');
                 popup.style.display = 'none';
                 stopAutoScroll();
             }
-
             popup.addEventListener('click', function (e) { e.stopPropagation(); });
             popup.addEventListener('mousedown', function (e) { e.stopPropagation(); handleUserInteraction(); });
             popup.addEventListener('mousemove', handleUserInteraction);
             popup.addEventListener('wheel', handleUserInteraction);
-
             fab.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
             fab.addEventListener('click', function (e) {
                 e.preventDefault(); e.stopPropagation();
@@ -10397,12 +9118,9 @@
                 if (e.key === 'Escape' && popupOpen) closePopup();
                 else if (popupOpen) handleUserInteraction();
             });
-
             setTimeout(function () {
-
                 var closeBtn = document.getElementById('tl-prod-close');
                 if (closeBtn) closeBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); closePopup(); });
-
                 var refreshBtn = document.getElementById('tl-refresh-btn');
                 if (refreshBtn) refreshBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
@@ -10413,15 +9131,11 @@
                         startAutoRefresh();
                     }
                 });
-
-
-
                 var applyBtn = document.getElementById('tl-apply-btn');
                 if (applyBtn) applyBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
                     fetchProductivity();
                 });
-
                 function applyTimeMask(el) {
                     if (!el) return;
                     el.addEventListener('input', function () {
@@ -10437,7 +9151,6 @@
                 }
                 applyTimeMask(document.getElementById('tl-time-start'));
                 applyTimeMask(document.getElementById('tl-time-end'));
-
                 var nodeInput = document.getElementById('tl-node-input');
                 if (nodeInput) {
                     nodeInput.addEventListener('change', function () {
@@ -10450,7 +9163,6 @@
                         nodeInput.value = CURRENT_NODE;
                     });
                 }
-
                 var datePick = document.getElementById('tl-date-pick');
                 var datePickEnd = document.getElementById('tl-date-pick-end');
                 if (datePick || datePickEnd) {
@@ -10458,21 +9170,18 @@
                     if (datePick) { datePick.min = dl2.min; datePick.max = dl2.max; }
                     if (datePickEnd) { datePickEnd.min = dl2.min; datePickEnd.max = dl2.max; }
                 }
-
                 var goalInp = document.getElementById('tl-goal-input');
                 if (goalInp) goalInp.addEventListener('input', function () {
                     var v = parseInt(this.value);
                     if (v > 0) {
                         goalPph = v;
                         GM_setValue('tl_goal_pph', goalPph);
-                        // Debounce renderTable to avoid flicker while typing
                         if (this._timer) clearTimeout(this._timer);
                         this._timer = setTimeout(function () {
                             if (lastData.length) renderTable();
                         }, 500);
                     }
                 });
-
                 var toggle = document.getElementById('tl-auto-toggle');
                 if (toggle) toggle.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
@@ -10480,7 +9189,6 @@
                     GM_setValue('tl_auto_on', autoRefreshOn);
                     applyAutoRefresh();
                 });
-
                 var blurBtn = document.getElementById('tl-blur-toggle');
                 if (blurBtn) blurBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
@@ -10488,7 +9196,6 @@
                     GM_setValue('tl_blur_errors', blurErrors);
                     applyBlurErrors();
                 });
-
                 function applyProdTimeMask(inputEl) {
                     if (!inputEl) return;
                     inputEl.addEventListener('input', function () {
@@ -10498,14 +9205,12 @@
                     });
                     inputEl.addEventListener('blur', function () {
                         if (this.value && !/^([0-1]\d|2[0-3]):([0-5]\d)$/.test(this.value)) {
-
                             if (this.value.length > 5) this.value = "12:00";
                         }
                     });
                 }
                 applyProdTimeMask(document.getElementById('tl-time-start'));
                 applyProdTimeMask(document.getElementById('tl-time-end'));
-
                 var sel = document.getElementById('tl-auto-select');
                 if (sel) sel.addEventListener('change', function () {
                     autoRefreshInterval = parseInt(sel.value);
@@ -10515,7 +9220,6 @@
                         startAutoRefresh();
                     }
                 });
-
                 var asLimit = document.getElementById('tl-as-limit');
                 if (asLimit) asLimit.addEventListener('change', function () {
                     var v = parseInt(this.value);
@@ -10525,11 +9229,9 @@
                         if (popupOpen) stopAutoScroll(); resetAutoScrollTimer(5000);
                     }
                 });
-
                 var asSpeed = document.getElementById('tl-as-speed');
                 if (asSpeed) asSpeed.addEventListener('input', function () {
                     var v = parseInt(this.value);
-                    // 0 = Slow (0.66x), 1 = Normal (1.0x), 2 = Fast (1.5x)
                     autoScrollSpeed = v === 0 ? 0.66 : (v === 2 ? 1.5 : 1.0);
                     GM_setValue('tl_as_speed', autoScrollSpeed);
                     if (popupOpen) {
@@ -10537,20 +9239,14 @@
                         startAutoScroll();
                     }
                 });
-
             }, 0);
-
             popup.style.display = 'none';
-
             if (autoRefreshOn) {
                 setTimeout(function () { applyAutoRefresh(); }, 100);
             }
-
             if (blurErrors) applyBlurErrors();
-
         })();
     });
-
     var updateFabVisibility = function () {
         const panels = [
             document.getElementById('tl-dock-view-panel'),
@@ -10558,14 +9254,10 @@
             document.getElementById('tl-prod-popup'),
             document.getElementById('vl-panel')
         ];
-
         const anyOpen = panels.some(function (p) {
             if (!p) return false;
-            // Checagem universal e imune a CSS complexo: 
-            // se o elemento ou seu pai imediato estiver display:none, offsetWidth é 0.
             return p.isConnected && p.offsetWidth > 0 && p.offsetHeight > 0;
         });
-
         let fabLeft = document.getElementById('tl-fab-left');
         if (!fabLeft) {
             fabLeft = document.createElement('div');
@@ -10573,7 +9265,6 @@
             fabLeft.style.cssText = 'position:fixed; bottom:24px; left:24px; display:flex; gap:14px; align-items:center; z-index:2147483646; transition:opacity 0.3s ease, transform 0.3s ease; transform-origin:bottom left;';
             document.body.appendChild(fabLeft);
         }
-
         let fabRight = document.getElementById('tl-fab-right');
         if (!fabRight) {
             fabRight = document.createElement('div');
@@ -10581,17 +9272,14 @@
             fabRight.style.cssText = 'position:fixed; bottom:24px; right:24px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:flex-end; z-index:2147483646; transition:opacity 0.3s ease, transform 0.3s ease; transform-origin:bottom right;';
             document.body.appendChild(fabRight);
         }
-
         const btnLeft = [
             document.getElementById('tl-v5-fab'),
             document.getElementById('tl-prod-fab')
         ];
-
         const btnRight = [
             document.getElementById('vl-toggle'),
             document.getElementById('ob-dock-view-toggle')
         ];
-
         function assignBtns(btns, container) {
             btns.forEach(function (btn) {
                 if (btn && btn.parentElement !== container) {
@@ -10608,10 +9296,8 @@
                 }
             });
         }
-
         assignBtns(btnLeft, fabLeft);
         assignBtns(btnRight, fabRight);
-
         if (anyOpen) {
             fabLeft.style.opacity = '0';
             fabLeft.style.pointerEvents = 'none';
@@ -10628,22 +9314,15 @@
             fabRight.style.transform = 'scale(1) translateY(0)';
         }
     };
-
-    // Replace 300ms interval with a MutationObserver to react only when it matters
     var _tlFabObserver = new MutationObserver(function (mutations) {
-        // Debounce slightly to avoid triggering 100 times during an animation
         if (_tlFabObserver._timer) clearTimeout(_tlFabObserver._timer);
         _tlFabObserver._timer = setTimeout(updateFabVisibility, 50);
     });
-
     _tlFabObserver.observe(document.body, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ['style', 'class']
     });
-
-    // Initial evaluation
     setTimeout(updateFabVisibility, 500);
-
 })();
