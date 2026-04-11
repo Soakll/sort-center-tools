@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.14
+// @version      1.1.15
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.14";
+    const VERSION = "1.1.15";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -254,6 +254,172 @@
             // ── CPT Tracker module ──
             cptStartLabel: 'Início',
             cptEndLabel: 'Fim',
+
+            // ── Update modal ──
+            updateCheckFail: 'TL-Suite: Falha ao verificar atualizações. Verifique sua conexão ou se há bloqueios de rede.',
+            updateDefaultMsg: 'Novas melhorias e correções no TL-Suite.',
+            updateUpToDate: 'TL-Suite: Você já usa a versão mais recente! 😁',
+            updateNewVersion: 'Nova Versão Disponível:',
+            updateNow: 'Atualizar Agora',
+            updateLater: 'Depois',
+
+            // ── XLSX export headers ──
+            xlsxPackages: 'Pacotes',
+            xlsxArrivalDelay: 'Atraso Chegada',
+            xlsxDocks: 'Doca(s)',
+            xlsxIbStart: 'Início Descarreg.',
+            xlsxIbEnd: 'Fim Descarreg.',
+            xlsxObStart: 'Início Carreg.',
+            xlsxObEnd: 'Fim Carreg.',
+            xlsxDepartureDelay: 'Atraso Saída',
+            xlsxRoute: 'Rota',
+            xlsxTotalPkgs: 'Total Pkgs',
+            xlsxTotalPct: 'Total %',
+            xlsxRemainingPkgs: 'Restante Pkgs',
+            xlsxRemainingPct: 'Restante %',
+            xlsxCptPkgs: 'CPT Pkgs',
+            xlsxCptPctRoute: '% do CPT na Rota',
+            xlsxCptRemaining: 'CPT Restante',
+            xlsxRoutes: 'Rotas',
+            xlsxNoData: '(nenhum dado coletado ainda)',
+
+            // ── CSV headers ──
+            csvDock: 'Doca',
+            csvRoute: 'Rota',
+            csvPackages: 'Pacotes',
+
+            // ── Table headers ──
+            thDock: 'Doca',
+            thRoute: 'Rota',
+            thPackages: 'Pacotes',
+
+            // ── Status labels (OB dock view) ──
+            statusScheduled: 'Agendado',
+            statusLoading: 'Em carregamento',
+            statusInDock: 'Em doca',
+            statusDeparted: 'Partiu',
+            statusFinished: 'Finalizado',
+            statusCancelled: 'Cancelado',
+            statusWaiting: 'Em espera',
+            statusProcessing: 'Em processamento',
+            statusDone: 'Concluído',
+            statusNotProcessed: 'Não proc.',
+
+            // ── OB Dock View panel ──
+            obRoutesTitle: '🚛 OB — Rotas, CPT & VSM',
+            obFilterPlaceholder: '🔍 Filtrar rota ou VSM...',
+            obRoutesBtn: '⚙ Rotas',
+            obCalendarBtn: '📅 Janela',
+            obLoadingPositions: '⏳ Carregando posições...',
+            obLoadingRoutes: 'Carregando rotas OB...',
+            obQueryingApi: 'Consultando API OB...',
+            obAaDataNotFound: '⚠ aaData não encontrado',
+            obUpdated: 'Atualizado',
+            obVsmNoData: '⚠ VSM sem dados',
+            obWindowLabel: 'Janela',
+
+            // ── VRID lookup / VSM module ──
+            vsmMapTitle: '🔍 VRID Lookup — Mapa VSM',
+            vsmDisplay: '📊 Exibir:',
+            vsmNotProcessed: 'Não proc.',
+            vsmAutoRefreshOff: '(desligado)',
+            vsmHoursXVsm: 'Horas x VSM',
+            vsmPhysicalLayout: 'Layout Físico',
+            vsmClearCache: '🧹 Limpar Cache',
+            vsmClearCacheTitle: 'Limpa tokens e dados salvos do YMS/Relay',
+            vsmSingleVrid: 'VRID Único',
+            vsmTypeVrid: 'Digite o VRID…',
+            vsmUntil: 'até',
+            vsmMaxDays: 'Máximo 7 dias entre as datas',
+            vsmMapHoursLabel: '🗺 Mapa VSM (Horas x VSM)',
+            vsmExportCsv: '📥 Exportar VRIDs (CSV)',
+            vsmLoadVridsToView: 'Carregue VRIDs para visualizar o mapa.',
+            vsmPhysicalLayoutTitle: '🗺 Layout Físico (Mapa Estático)',
+            vsmGoalPkgsH: '🎯 Meta pkgs/h:',
+            vsmRateFinger: '✋ Rate Finger:',
+            vsmRateCB: '🏗 Rate CB:',
+            vsmRatePO: '🔄 Rate PO:',
+            vsmMinLabel: '(mín. 17)',
+            vsmHourLabel: '🕐 Hora',
+            vsmLoadingStaticMap: 'Carregando mapa estático...',
+            vsmLoadingVridList: 'Carregando lista de VRIDs...',
+            vsmMapMatrix: 'Matriz do Mapa (Layout Físico)',
+            vsmDownloadMap: '📥 Baixar Mapa (.xlsx)',
+            vsmUploadMap: '📤 Subir Mapa (.xlsx)',
+            vsmMapTagsHelp: 'Ao baixar o mapa, você verá TAGS especiais para as somas. Edite no Excel e faça upload novamente.',
+            vsmTagsLabel: 'Tags:',
+            vsmBeltSum: '(Soma das Belts)',
+            vsmFingerSum: '(Soma dos Fingers)',
+            vsmTotalSortation: '(Total Sortation)',
+            vsmSectionTitles: '(Títulos das seções)',
+            vsmSkipRender: '(Pula a renderização da célula)',
+            vsmDownloadMapping: '📥 Baixar Mapeamento (.xlsx)',
+            vsmUploadMapping: '📤 Subir Mapeamento (.xlsx)',
+            vsmSearchRoutePlaceholder: '🔍 Pesquisar Rota, VSM ou Grupo...',
+            vsmNewRow: '+ Nova Linha',
+            vsmSaveAll: '💾 Salvar Todas as Alterações',
+            vsmFingerConfig: 'Configuração dos Fingers (Agrupamento de Belts)',
+            vsmNewFinger: '+ Novo Finger',
+            vsmFingerId: 'ID (Ex: pra Tag [F3] use 3)',
+            vsmFingerDisplayName: 'Nome de Exibição',
+            vsmFingerBelts: 'Belts (Separe por vírgula)',
+            vsmAction: 'Ação',
+            vsmGroupBelt: 'Grupo de VSMs (Belt)',
+            vsmRoutePlaceholder: 'Rota',
+            vsmGroupIdPlaceholder: 'ID Grupo',
+            vsmNewRoute: 'NOVA_ROTA',
+            vsmNewVsm: 'NOVA_VSM',
+            vsmFingerName: 'Nome do Finger',
+            vsmXlsxNotLoaded: 'A biblioteca XLSX ainda não carregou. Tente novamente em alguns segundos.',
+            vsmNoExportData: 'Não há dados para exportar.',
+            vsmClearCacheConfirm: 'Deseja limpar o cache de tokens (YMS/Relay) e dados salvos dos VRIDs? Isso pode forçar novos popups de validação.',
+            vsmImportSuccess: 'Sucesso! {0} mapeamentos importados.',
+            vsmImportInvalid: 'Nenhum dado válido encontrado no arquivo. Certifique-se de manter as colunas "Rota", "VSM" e "Grupo".',
+            vsmMapImportSuccess: 'Layout do mapa importado e atualizado com sucesso!',
+            vsmMapEmpty: 'Arquivo de mapa vazio ou inválido.',
+            vsmMapRestored: 'Mapa restaurado para o padrão.',
+            vsmUnsavedChanges: 'Você tem alterações não salvas nas Configurações. Deseja salvar agora?',
+            vsmSelectDates: 'Selecione as datas.',
+            vsmNoDataMap: 'Nenhum dado disponível para o mapa.',
+            vsmNoDataLayout: 'Nenhum dado disponível para o layout físico.',
+            vsmDigitalLayout: '🔍 Layout Digital',
+            vsmPlanIdUnavailable: 'Plan ID não disponível.',
+
+            // ── VRID list buttons ──
+            vridAll: 'Todos',
+            vridProcessing: 'Processamento',
+            vridNotProcessed: 'Não proc.',
+            vridCompleted: 'Concluídos',
+            vridHideZeros: 'Ocultar zeros',
+            vridDetailed: 'Detalhado',
+            vridConsolidated: 'Consolidar',
+            vridDetailedTitle: '📦 Detalhado:',
+            vridConsolidatedTitle: '📦 Consolidado por rota:',
+
+            // ── Truck / CPT ──
+            truckInDock: '🚛 Em doca',
+            truckInDockReason: 'Caminhão ainda em doca (trailerId virtual "{0}") — disponível apenas após liberação',
+            truckEmptyTrailer: 'trailerId vazio — disponível apenas após liberação do caminhão',
+            noLoadGroupId: '⚠ Sem loadGroupId',
+
+            // ── YMS ──
+            ymsWaitingToken: '[YMS] Aguardando token do YMS (popup aberto)...',
+            ymsTokenCaptured: '[YMS] Token capturado com sucesso.',
+            ymsTokenTimeout: '[YMS] Timeout ao aguardar token do YMS.',
+            ymsSearching: 'Buscando VRID:',
+            ymsNoDataFound: 'Nenhum dado YMS encontrado para este VRID.',
+            ymsRefreshBtn: '🔄 Atualizar YMS',
+            ymsReloading: 'Recarregando...',
+            ymsSearchingVrids: 'Buscando VRIDs…',
+            ymsSessionExpired: '🔐 Sessão expirada.',
+            ymsReloadPage: 'Recarregue a página',
+            ymsErrorFetchVrids: 'Erro ao buscar VRIDs:',
+            ymsApiTokenError: 'Erro: Token de segurança não encontrado. Recarregue a página.',
+            ymsParseError: 'Parse error — resposta inesperada da API',
+
+            // ── Misc ──
+            routesTabLabel: '📊 Rotas',
+            updatedLabel: 'Atualizado:',
         },
         en: {
             // ── Shared / Global ──
@@ -450,6 +616,172 @@
             // ── CPT Tracker module ──
             cptStartLabel: 'Start',
             cptEndLabel: 'End',
+
+            // ── Update modal ──
+            updateCheckFail: 'TL-Suite: Failed to check for updates. Check your connection or network blocks.',
+            updateDefaultMsg: 'New improvements and fixes in TL-Suite.',
+            updateUpToDate: 'TL-Suite: You are already up to date! 😁',
+            updateNewVersion: 'New Version Available:',
+            updateNow: 'Update Now',
+            updateLater: 'Later',
+
+            // ── XLSX export headers ──
+            xlsxPackages: 'Packages',
+            xlsxArrivalDelay: 'Arrival Delay',
+            xlsxDocks: 'Dock(s)',
+            xlsxIbStart: 'Unload Start',
+            xlsxIbEnd: 'Unload End',
+            xlsxObStart: 'Load Start',
+            xlsxObEnd: 'Load End',
+            xlsxDepartureDelay: 'Departure Delay',
+            xlsxRoute: 'Route',
+            xlsxTotalPkgs: 'Total Pkgs',
+            xlsxTotalPct: 'Total %',
+            xlsxRemainingPkgs: 'Remaining Pkgs',
+            xlsxRemainingPct: 'Remaining %',
+            xlsxCptPkgs: 'CPT Pkgs',
+            xlsxCptPctRoute: 'CPT % in Route',
+            xlsxCptRemaining: 'CPT Remaining',
+            xlsxRoutes: 'Routes',
+            xlsxNoData: '(no data collected yet)',
+
+            // ── CSV headers ──
+            csvDock: 'Dock',
+            csvRoute: 'Route',
+            csvPackages: 'Packages',
+
+            // ── Table headers ──
+            thDock: 'Dock',
+            thRoute: 'Route',
+            thPackages: 'Packages',
+
+            // ── Status labels (OB dock view) ──
+            statusScheduled: 'Scheduled',
+            statusLoading: 'Loading',
+            statusInDock: 'In dock',
+            statusDeparted: 'Departed',
+            statusFinished: 'Finished',
+            statusCancelled: 'Cancelled',
+            statusWaiting: 'Waiting',
+            statusProcessing: 'Processing',
+            statusDone: 'Done',
+            statusNotProcessed: 'Not proc.',
+
+            // ── OB Dock View panel ──
+            obRoutesTitle: '🚛 OB — Routes, CPT & VSM',
+            obFilterPlaceholder: '🔍 Filter route or VSM...',
+            obRoutesBtn: '⚙ Routes',
+            obCalendarBtn: '📅 Window',
+            obLoadingPositions: '⏳ Loading positions...',
+            obLoadingRoutes: 'Loading OB routes...',
+            obQueryingApi: 'Querying OB API...',
+            obAaDataNotFound: '⚠ aaData not found',
+            obUpdated: 'Updated',
+            obVsmNoData: '⚠ VSM no data',
+            obWindowLabel: 'Window',
+
+            // ── VRID lookup / VSM module ──
+            vsmMapTitle: '🔍 VRID Lookup — VSM Map',
+            vsmDisplay: '📊 Display:',
+            vsmNotProcessed: 'Not proc.',
+            vsmAutoRefreshOff: '(off)',
+            vsmHoursXVsm: 'Hours x VSM',
+            vsmPhysicalLayout: 'Physical Layout',
+            vsmClearCache: '🧹 Clear Cache',
+            vsmClearCacheTitle: 'Clears saved YMS/Relay tokens and data',
+            vsmSingleVrid: 'Single VRID',
+            vsmTypeVrid: 'Enter VRID…',
+            vsmUntil: 'to',
+            vsmMaxDays: 'Maximum 7 days between dates',
+            vsmMapHoursLabel: '🗺 VSM Map (Hours x VSM)',
+            vsmExportCsv: '📥 Export VRIDs (CSV)',
+            vsmLoadVridsToView: 'Load VRIDs to view the map.',
+            vsmPhysicalLayoutTitle: '🗺 Physical Layout (Static Map)',
+            vsmGoalPkgsH: '🎯 Goal pkgs/h:',
+            vsmRateFinger: '✋ Rate Finger:',
+            vsmRateCB: '🏗 Rate CB:',
+            vsmRatePO: '🔄 Rate PO:',
+            vsmMinLabel: '(min. 17)',
+            vsmHourLabel: '🕐 Hour',
+            vsmLoadingStaticMap: 'Loading static map...',
+            vsmLoadingVridList: 'Loading VRID list...',
+            vsmMapMatrix: 'Map Matrix (Physical Layout)',
+            vsmDownloadMap: '📥 Download Map (.xlsx)',
+            vsmUploadMap: '📤 Upload Map (.xlsx)',
+            vsmMapTagsHelp: 'When downloading the map, you will see special TAGS for sums. Edit in Excel and upload again.',
+            vsmTagsLabel: 'Tags:',
+            vsmBeltSum: '(Belt Sum)',
+            vsmFingerSum: '(Finger Sum)',
+            vsmTotalSortation: '(Total Sortation)',
+            vsmSectionTitles: '(Section Titles)',
+            vsmSkipRender: '(Skips cell rendering)',
+            vsmDownloadMapping: '📥 Download Mapping (.xlsx)',
+            vsmUploadMapping: '📤 Upload Mapping (.xlsx)',
+            vsmSearchRoutePlaceholder: '🔍 Search Route, VSM or Group...',
+            vsmNewRow: '+ New Row',
+            vsmSaveAll: '💾 Save All Changes',
+            vsmFingerConfig: 'Finger Configuration (Belt Grouping)',
+            vsmNewFinger: '+ New Finger',
+            vsmFingerId: 'ID (e.g.: for Tag [F3] use 3)',
+            vsmFingerDisplayName: 'Display Name',
+            vsmFingerBelts: 'Belts (Comma separated)',
+            vsmAction: 'Action',
+            vsmGroupBelt: 'VSM Group (Belt)',
+            vsmRoutePlaceholder: 'Route',
+            vsmGroupIdPlaceholder: 'Group ID',
+            vsmNewRoute: 'NEW_ROUTE',
+            vsmNewVsm: 'NEW_VSM',
+            vsmFingerName: 'Finger Name',
+            vsmXlsxNotLoaded: 'XLSX library not loaded yet. Try again in a few seconds.',
+            vsmNoExportData: 'No data to export.',
+            vsmClearCacheConfirm: 'Clear token cache (YMS/Relay) and saved VRID data? This may force new validation popups.',
+            vsmImportSuccess: 'Success! {0} mappings imported.',
+            vsmImportInvalid: 'No valid data found in the file. Make sure to keep the columns "Route", "VSM" and "Group".',
+            vsmMapImportSuccess: 'Map layout imported and updated successfully!',
+            vsmMapEmpty: 'Map file empty or invalid.',
+            vsmMapRestored: 'Map restored to default.',
+            vsmUnsavedChanges: 'You have unsaved changes in Settings. Save now?',
+            vsmSelectDates: 'Select the dates.',
+            vsmNoDataMap: 'No data available for the map.',
+            vsmNoDataLayout: 'No data available for the physical layout.',
+            vsmDigitalLayout: '🔍 Digital Layout',
+            vsmPlanIdUnavailable: 'Plan ID not available.',
+
+            // ── VRID list buttons ──
+            vridAll: 'All',
+            vridProcessing: 'Processing',
+            vridNotProcessed: 'Not proc.',
+            vridCompleted: 'Completed',
+            vridHideZeros: 'Hide zeros',
+            vridDetailed: 'Detailed',
+            vridConsolidated: 'Consolidate',
+            vridDetailedTitle: '📦 Detailed:',
+            vridConsolidatedTitle: '📦 Consolidated by route:',
+
+            // ── Truck / CPT ──
+            truckInDock: '🚛 In dock',
+            truckInDockReason: 'Truck still in dock (virtual trailerId "{0}") — available only after release',
+            truckEmptyTrailer: 'trailerId empty — available only after truck release',
+            noLoadGroupId: '⚠ No loadGroupId',
+
+            // ── YMS ──
+            ymsWaitingToken: '[YMS] Waiting for YMS token (popup open)...',
+            ymsTokenCaptured: '[YMS] Token captured successfully.',
+            ymsTokenTimeout: '[YMS] Timeout waiting for YMS token.',
+            ymsSearching: 'Searching VRID:',
+            ymsNoDataFound: 'No YMS data found for this VRID.',
+            ymsRefreshBtn: '🔄 Refresh YMS',
+            ymsReloading: 'Reloading...',
+            ymsSearchingVrids: 'Searching VRIDs…',
+            ymsSessionExpired: '🔐 Session expired.',
+            ymsReloadPage: 'Reload the page',
+            ymsErrorFetchVrids: 'Error fetching VRIDs:',
+            ymsApiTokenError: 'Error: Security token not found. Reload the page.',
+            ymsParseError: 'Parse error — unexpected API response',
+
+            // ── Misc ──
+            routesTabLabel: '📊 Routes',
+            updatedLabel: 'Updated:',
         }
     };
     _SUITE.L = function (key) { return (_SUITE.LANG[_SUITE._lang] || _SUITE.LANG.pt)[key] || (_SUITE.LANG.pt)[key] || key; };
@@ -532,7 +864,7 @@
         const now = Date.now();
         GM_setValue("suite_last_check_ts", now);
         const fail = () => {
-            if (manual) alert("TL-Suite: Falha ao verificar atualizações. Verifique sua conexão ou se há bloqueios de rede.");
+            if (manual) alert(_SUITE.L("updateCheckFail"));
             if (cb) cb();
         };
         GM_xmlhttpRequest({
@@ -541,7 +873,7 @@
             timeout: 8000,
             onload: function (resp) {
                 let latestVer = VERSION;
-                let commitMsg = "Novas melhorias e correções no TL-Suite.";
+                let commitMsg = _SUITE.L("updateDefaultMsg");
                 try {
                     const json = JSON.parse(resp.responseText);
                     commitMsg = json.commit.message || commitMsg;
@@ -559,7 +891,7 @@
                             showUpdateModal(latestVer, commitMsg);
                         } else if (manual) {
                             const isPt = GM_getValue('rd_lang', 'pt') === 'pt';
-                            alert("TL-Suite: " + (isPt ? "Você já usa a versão mais recente! 😁" : "You are already up to date! 😁"));
+                            alert(_SUITE.L("updateUpToDate"));
                         }
                         if (cb) cb();
                     },
@@ -579,14 +911,14 @@
         modal.innerHTML = `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
                 <span style="font-size:24px;">🚀</span>
-                <b style="font-size:16px;">Nova Versão Disponível: ` + _SUITE.utils.esc(newVer) + `</b>
+                <b style="font-size:16px;">` + _SUITE.L("updateNewVersion") + ` ` + _SUITE.utils.esc(newVer) + `</b>
             </div>
             <div style="background:rgba(255,255,255,0.05);padding:10px;border-radius:6px;font-size:12px;margin-bottom:15px;max-height:150px;overflow-y:auto;line-height:1.4;color:#ccc;">
                 ` + _SUITE.utils.esc(msg).replace(/\n/g, '<br>') + `
             </div>
             <div style="display:flex;gap:10px;">
-                <button id="update-now" style="flex:1;background:#FF9900;border:none;color:white;padding:10px;border-radius:6px;cursor:pointer;font-weight:700;">Atualizar Agora</button>
-                <button id="update-later" style="background:transparent;border:1px solid #444;color:#888;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;">Depois</button>
+                <button id="update-now" style="flex:1;background:#FF9900;border:none;color:white;padding:10px;border-radius:6px;cursor:pointer;font-weight:700;">` + _SUITE.L("updateNow") + `</button>
+                <button id="update-later" style="background:transparent;border:1px solid #444;color:#888;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;">` + _SUITE.L("updateLater") + `</button>
             </div>
         `;
         document.body.appendChild(modal);
@@ -1183,13 +1515,13 @@
             var currentLane = '';
             function vpDownloadCSV() {
                 if (!currentContainers.length) return;
-                var csv = ['Scannable ID,Rota,Doca,CPT,Pacotes,Volume (ft3)'];
+                var csv = ['Scannable ID,' + L('csvRoute') + ',' + L('csvDock') + ',CPT,' + L('csvPackages') + ',Volume (ft3)'];
                 currentContainers.sort(function (a, b) {
                     var docaA = (a.locationLabel || '').toUpperCase();
                     var docbB = (b.locationLabel || '').toUpperCase();
                     return docaA.localeCompare(docbB) || (a.scannableId || '').localeCompare(b.scannableId || '');
                 }).forEach(function (c) {
-                    var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '') : '—';
+                    var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '') : '—';
                     var pkgs = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
                     var vol = c.packageVolume ? cm3ToFt3(c.packageVolume) : '0';
                     var row = [
@@ -1235,7 +1567,7 @@
                     return;
                 }
                 var html = '<table><thead><tr>' +
-                    '<th>Doca</th><th>Rota</th><th>Scannable ID</th><th>CPT</th><th>Pacotes</th><th>Volume (ft\u00B3)</th>' +
+                    '<th>' + L('thDock') + '</th><th>' + L('thRoute') + '</th><th>Scannable ID</th><th>CPT</th><th>' + L('thPackages') + '</th><th>Volume (ft\u00B3)</th>' +
                     '</tr></thead><tbody>';
                 Object.keys(docas).sort().forEach(function (doca) {
                     var group = docas[doca];
@@ -1247,7 +1579,7 @@
                         '</tr>';
                     group.containers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); });
                     group.containers.forEach(function (c) {
-                        var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+                        var cpt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
                         var pkgs = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
                         var vol = c.packageVolume ? cm3ToFt3(c.packageVolume) : '\u2014';
                         html += '<tr>' +
@@ -1287,7 +1619,7 @@
                     }
                     vpRenderTable(containers, lane);
                     if (status) status.textContent = '';
-                    if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString('pt-BR', { hour12: false });
+                    if (info) info.textContent = L('updatedAt') + ': ' + new Date().toLocaleTimeString('en-GB', { hour12: false });
                 });
             }
             function addVistaButtons() {
@@ -1673,8 +2005,8 @@
                     return widths.map(w => ({ wch: w + 2 }));
                 }
                 const infoHeaders = isIB
-                    ? ['VRID', 'Pacotes', 'CuFt', 'Cube (ft³/pkg)', 'Check-In', 'Atraso Chegada', 'TDR-Dock', 'Doca(s)', 'Início Descarreg.', 'Fim Descarreg.', 'Check-Out']
-                    : ['VRID', 'Pacotes', 'CuFt', 'Check-In', 'TDR-Dock', 'Doca(s)', 'Início Carreg.', 'Fim Carreg.', 'Check-Out', 'Atraso Saída'];
+                    ? ['VRID', L('xlsxPackages'), 'CuFt', 'Cube (ft³/pkg)', 'Check-In', L('xlsxArrivalDelay'), 'TDR-Dock', L('xlsxDocks'), L('xlsxIbStart'), L('xlsxIbEnd'), 'Check-Out']
+                    : ['VRID', L('xlsxPackages'), 'CuFt', 'Check-In', 'TDR-Dock', L('xlsxDocks'), L('xlsxObStart'), L('xlsxObEnd'), 'Check-Out', L('xlsxDepartureDelay')];
                 const infoRows = [infoHeaders];
                 Object.values(infoStore).sort((a, b) => (a.vrid || '').localeCompare(b.vrid || '')).forEach(d => {
                     const cubeVal = (d.cube !== null && d.cube !== '' && d.cube !== undefined)
@@ -1708,7 +2040,7 @@
                         ]);
                     }
                 });
-                if (infoRows.length === 1) infoRows.push(['(nenhum dado coletado ainda)']);
+                if (infoRows.length === 1) infoRows.push([L('xlsxNoData')]);
                 const wsInfo = XLSX.utils.aoa_to_sheet(infoRows);
                 wsInfo['!cols'] = autoColWidths(infoRows);
                 wsInfo['!freeze'] = { xSplit: 0, ySplit: 1 };
@@ -1716,8 +2048,8 @@
                 const hasRoutes = Object.keys(routeStore).length > 0;
                 if (hasRoutes) {
                     const routeHeaders = [
-                        'Rota', 'Total Pkgs', 'Total %', 'Restante Pkgs', 'Restante %',
-                        'CPT', 'CPT Pkgs', '% do CPT na Rota', 'CPT Restante'
+                        _SUITE.L('xlsxRoute'), _SUITE.L('xlsxTotalPkgs'), _SUITE.L('xlsxTotalPct'), _SUITE.L('xlsxRemainingPkgs'), _SUITE.L('xlsxRemainingPct'),
+                        'CPT', _SUITE.L('xlsxCptPkgs'), _SUITE.L('xlsxCptPctRoute'), _SUITE.L('xlsxCptRemaining')
                     ];
                     const routeRows = [routeHeaders];
                     const allRoutes = Object.entries(routeStore).map(([route, v]) => ({
@@ -1750,7 +2082,7 @@
                     const wsRoutes = XLSX.utils.aoa_to_sheet(routeRows);
                     wsRoutes['!cols'] = autoColWidths(routeRows);
                     wsRoutes['!freeze'] = { xSplit: 0, ySplit: 1 };
-                    XLSX.utils.book_append_sheet(wb, wsRoutes, 'Rotas');
+                    XLSX.utils.book_append_sheet(wb, wsRoutes, L('xlsxRoutes'));
                 }
                 const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', 'h').replace(':', 'm');
                 const name = `${isIB ? 'IB' : 'OB'}_export_${ts}.xlsx`;
@@ -1972,18 +2304,18 @@
                     _ymsQueue.splice(0).forEach(function (c) { c(''); });
                     return;
                 }
-                console.log('[YMS] Aguardando token do YMS (popup aberto)...');
+                console.log(_SUITE.L('ymsWaitingToken'));
                 var start = Date.now();
                 var iv = setInterval(function () {
                     var t2 = _SUITE.ymsToken || GM_getValue('yms_token', '');
                     if (t2 && t2.length > 20) {
-                        console.log('[YMS] Token capturado com sucesso.');
+                        console.log(_SUITE.L('ymsTokenCaptured'));
                         clearInterval(iv); try { win.close(); } catch (e) { }
                         _SUITE.ymsToken = t2; _ymsPending = false;
                         _ymsQueue.splice(0).forEach(function (c) { c(t2); });
                     } else if (Date.now() - start > 15000) {
                         clearInterval(iv); try { win.close(); } catch (e) { }
-                        console.warn('[YMS] Timeout ao aguardar token do YMS.');
+                        console.warn(_SUITE.L('ymsTokenTimeout'));
                         _ymsPending = false;
                         _ymsQueue.splice(0).forEach(function (c) { c(''); });
                     }
@@ -2097,7 +2429,7 @@
                         toDate = Math.floor(range.toDate / 1000);
                     }
                 }
-                console.log('[YMS-API] Buscando VRID:', vrid, 'em:', yard, 'Range:', fromDate, '-', toDate);
+                console.log('[YMS-API] ' + _SUITE.L('ymsSearching'), vrid, 'em:', yard, 'Range:', fromDate, '-', toDate);
                 var payload = JSON.stringify({
                     firstRow: 0, rowCount: 1000, yard: yard,
                     loadIdentifier: vrid, loadIdentifierType: 'VRID',
@@ -2147,13 +2479,13 @@
                                     } else {
                                         const msg = document.getElementById('yms-status-msg-' + vrid);
                                         if (msg) {
-                                            msg.innerHTML = '<span style="color:#ff4444">Nenhum dado YMS encontrado para este VRID. </span>' +
-                                                '<button id="retry-yms-' + vrid + '" style="background:#FF9900;border:none;color:white;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:10px;">🔄 Atualizar YMS</button>';
+                                            msg.innerHTML = '<span style="color:#ff4444">' + _SUITE.L('ymsNoDataFound') + ' </span>' +
+                                                '<button id="retry-yms-' + vrid + '" style="background:#FF9900;border:none;color:white;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:10px;">' + _SUITE.L('ymsRefreshBtn') + '</button>';
                                             const btn = document.getElementById('retry-yms-' + vrid);
                                             if (btn) btn.onclick = function () {
                                                 btn.disabled = true; btn.textContent = '...';
                                                 GM_setValue('yms_token', ''); _SUITE.ymsToken = '';
-                                                ensureYmsToken(function (t) { msg.textContent = 'Recarregando...'; doPost(t); });
+                                                ensureYmsToken(function (t) { msg.textContent = _SUITE.L('ymsReloading'); doPost(t); });
                                             };
                                         }
                                         throw new Error('no match');
@@ -3419,7 +3751,7 @@
                     }
                     const tabDefs = [
                         { label: '🔍 Info', pane: paneInfo, color: '#0d47a1', enabled: true },
-                        { label: '📊 Rotas', pane: paneRoutes, color: '#2e7d32', enabled: hasLink },
+                        { label: L('routesTabLabel'), pane: paneRoutes, color: '#2e7d32', enabled: hasLink },
                     ];
                     function activateTabIb(idx) {
                         tabBar.querySelectorAll('.rd-tab-btn').forEach(function (b, i) {
@@ -3506,7 +3838,7 @@
                             paneRoutes.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
                             const rHdr = document.createElement('div');
                             rHdr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 14px;background:' + (isDark ? '#252535' : '#f9f9f9') + ';border-bottom:1px solid ' + (isDark ? '#3a3a5e' : '#e0e0e0') + ';flex-shrink:0;flex-wrap:wrap;';
-                            rHdr.innerHTML = '<span style="font-size:11px;font-weight:700;color:' + (isDark ? '#d0d0e8' : '#333') + ';">' + esc(vrid) + ' — ' + esc(laneText) + ' · ' + routes.length + ' rotas · ' + totPkgs.toLocaleString('en-US') + ' pkgs</span>';
+                            rHdr.innerHTML = '<span style="font-size:11px;font-weight:700;color:' + (isDark ? '#d0d0e8' : '#333') + ';">' + esc(vrid) + ' — ' + esc(laneText) + ' · ' + routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + totPkgs.toLocaleString('en-US') + ' pkgs</span>';
                             const xlBtn = document.createElement('button');
                             xlBtn.className = 'tl-btn tl-btn-green';
                             xlBtn.textContent = '⬇ Excel';
@@ -3857,12 +4189,12 @@
                             var tbl = document.createElement('table');
                             tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:11px;';
                             var thBg = isDark ? '#1e0e00' : '#fbe9e7', thBorder = isDark ? '#5a2800' : '#ffccbc';
-                            tbl.innerHTML = '<thead><tr style="background:' + thBg + ';"><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Doca</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Rota</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Scannable ID</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">CPT</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Pacotes</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Volume (ft³)</th></tr></thead><tbody></tbody>';
+                            tbl.innerHTML = '<thead><tr style="background:' + thBg + ';"><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">' + L('thDock') + '</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">' + L('thRoute') + '</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Scannable ID</th><th style="position:sticky;top:0;padding:7px 10px;text-align:left;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">CPT</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">' + L('thPackages') + '</th><th style="position:sticky;top:0;padding:7px 10px;text-align:right;font-weight:700;color:#e65100;border-bottom:2px solid ' + thBorder + ';background:' + thBg + ';">Volume (ft³)</th></tr></thead><tbody></tbody>';
                             var tbody = tbl.querySelector('tbody');
                             var rowBase = isDark ? 'color:#d0d0e8;border-bottom:1px solid #2e2e45;' : 'border-bottom:1px solid #e0e0e0;';
                             var rowAlt = isDark ? 'background:#1e0e00;' : 'background:#fff8f5;';
                             dockContainers.sort(function (a, b) { return (a.scannableId || '').localeCompare(b.scannableId || ''); }).forEach(function (c, ci) {
-                                var cptFmt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+                                var cptFmt = c.cpt ? new Date(Number(c.cpt)).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
                                 var pkgs2 = (c.contentCountMap && c.contentCountMap.PACKAGE) || 0;
                                 var vol2 = c.packageVolume ? cm3ToFt3(c.packageVolume) : '—';
                                 var tr = document.createElement('tr');
@@ -3874,7 +4206,7 @@
                             paneCuft.appendChild(tblWrap);
                             var footer = document.createElement('div');
                             footer.style.cssText = 'padding:6px 14px;font-size:11px;color:' + (isDark ? '#8080a0' : '#757575') + ';border-top:1px solid ' + (isDark ? '#2e2e45' : '#e0e0e0') + ';background:' + (isDark ? '#16213e' : '#fafafa') + ';display:flex;justify-content:space-between;flex-shrink:0;';
-                            footer.innerHTML = '<span>Atualizado: ' + new Date().toLocaleTimeString('pt-BR', { hour12: false }) + '</span><span>' + dockContainers.length + ' ' + L('containerIn') + ' ' + esc(dock) + '</span>';
+                            footer.innerHTML = '<span>' + L('updatedLabel') + ' ' + new Date().toLocaleTimeString('en-GB', { hour12: false }) + '</span><span>' + dockContainers.length + ' ' + L('containerIn') + ' ' + esc(dock) + '</span>';
                             paneCuft.appendChild(footer);
                         });
                     }
@@ -3915,7 +4247,7 @@
         }
         var _logLines = [];
         function log(msg, level) {
-            var ts = new Date().toLocaleTimeString('pt-BR', { hour12: false });
+            var ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
             _logLines.push({ ts: ts, msg: msg, level: level || 'info' });
             if (_logLines.length > 400) _logLines.shift();
             console.log('[LPD ' + ts + '] ' + msg);
@@ -4442,7 +4774,7 @@
             log('loadGroupId="' + p.loadGroupId + '" trailerId="' + p.trailerId + '" planId="' + p.planId + '" truckCpt="' + (truckCptTime ? truckCptTime.toLocaleString() : 'null') + '"', 'info');
             if (!p.loadGroupId) {
                 log('loadGroupId vazio — XHR não capturado', 'warn');
-                btn.textContent = '⚠ Sem loadGroupId';
+                btn.textContent = _SUITE.L('noLoadGroupId');
                 btn.style.background = '#e65100';
                 btn.disabled = false;
                 setTimeout(function () { btn.textContent = '📦 CPT'; btn.style.background = '#7b1fa2'; }, 4000);
@@ -4450,10 +4782,10 @@
             }
             if (!p.trailerId || /^OTHR/i.test(p.trailerId)) {
                 var reason = /^OTHR/i.test(p.trailerId)
-                    ? 'Caminhão ainda em doca (trailerId virtual "' + p.trailerId + '") — disponível apenas após liberação'
-                    : 'trailerId vazio — disponível apenas após liberação do caminhão';
+                    ? _SUITE.L('truckInDockReason').replace('{0}', p.trailerId)
+                    : _SUITE.L('truckEmptyTrailer');
                 log(reason, 'warn');
-                btn.textContent = '🚛 Em doca';
+                btn.textContent = _SUITE.L('truckInDock');
                 btn.style.background = '#546e7a';
                 btn.disabled = false;
                 setTimeout(function () { btn.textContent = '📦 CPT'; btn.style.background = '#7b1fa2'; }, 3000);
@@ -5227,7 +5559,7 @@
                 const mapContainer = document.getElementById('vsm-map-container');
                 if (mapContainer) {
                     if (!filtered.length) {
-                        mapContainer.innerHTML = '<div class="vsm-map-empty">Nenhum dado disponível para o mapa.</div>';
+                        mapContainer.innerHTML = '<div class="vsm-map-empty">' + _SUITE.L('vsmNoDataMap') + '</div>';
                     } else {
                         renderVsmHourlyTable(matrix, mapContainer);
                     }
@@ -5332,7 +5664,7 @@
                 const vsmTotalsLocal = vsmTotals || getStaticVsmTotals();
                 const croppedMatrix = cropWithMargin(activeMapMatrix, 1);
                 if (!croppedMatrix.length) {
-                    container.innerHTML = '<div class="vsm-map-empty">Nenhum dado disponível para o layout físico.</div>';
+                    container.innerHTML = '<div class="vsm-map-empty">' + _SUITE.L('vsmNoDataLayout') + '</div>';
                     return;
                 }
                 const allVsmsSet = new Set(ALL_VSMS);
@@ -5497,8 +5829,8 @@
             function getStatusInfo(percent) {
                 if (percent === undefined || percent === null) return { text: 'N/A', color: '#aaa', order: 4 };
                 if (percent <= 2) return { text: 'Não processado', color: '#ff6b6b', order: 2 };
-                if (percent < 93) return { text: 'Em processamento', color: '#aad4ff', order: 1 };
-                return { text: 'Concluído', color: '#88cc99', order: 3 };
+                if (percent < 93) return { text: _SUITE.L('statusProcessing'), color: '#aad4ff', order: 1 };
+                return { text: _SUITE.L('statusDone'), color: '#88cc99', order: 3 };
             }
             function renderVridList() {
                 const container = document.getElementById('vrid-list-container');
@@ -5519,13 +5851,13 @@
                 });
                 let html = `
             <div class="vrid-list-controls" style="flex-wrap: wrap;">
-                <input type="text" id="vrid-search-input" placeholder="Filtrar por VRID, rota ou horário..." class="vrid-search" style="min-width: 150px;">
+                <input type="text" id="vrid-search-input" placeholder="${_SUITE.L('vsmFilterPlaceholder')}" class="vrid-search" style="min-width: 150px;">
                 <div style="display:flex; gap:6px; flex-wrap: wrap;">
-                    <button id="btn-sel-all" class="vl-btn-small">Todos</button>
-                    <button id="btn-sel-proc" class="vl-btn-small" style="background:#1a2a4a; color:#aad4ff; border: 1px solid #2a4a6a;">Processamento</button>
-                    <button id="btn-sel-unproc" class="vl-btn-small" style="background:#4a0a14; color:#ff8888; border: 1px solid #8a1a2a;">Não proc.</button>
-                    <button id="btn-sel-done" class="vl-btn-small" style="background:#1a3a2a; color:#88cc99; border: 1px solid #2a5a3a;">Concluídos</button>
-                    <button id="toggle-zero-pkgs-btn" class="vl-btn-small" style="background: ${hideZeroPkgs ? '#ff9900' : '#2a3a4a'}; color: ${hideZeroPkgs ? '#0f1923' : '#99a'};">Ocultar zeros ${hideZeroPkgs ? '✔' : '✘'}</button>
+                    <button id="btn-sel-all" class="vl-btn-small">${_SUITE.L('vridAll')}</button>
+                    <button id="btn-sel-proc" class="vl-btn-small" style="background:#1a2a4a; color:#aad4ff; border: 1px solid #2a4a6a;">${_SUITE.L('vridProcessing')}</button>
+                    <button id="btn-sel-unproc" class="vl-btn-small" style="background:#4a0a14; color:#ff8888; border: 1px solid #8a1a2a;">${_SUITE.L('vsmNotProcessed')}</button>
+                    <button id="btn-sel-done" class="vl-btn-small" style="background:#1a3a2a; color:#88cc99; border: 1px solid #2a5a3a;">${_SUITE.L('vridCompleted')}</button>
+                    <button id="toggle-zero-pkgs-btn" class="vl-btn-small" style="background: ${hideZeroPkgs ? '#ff9900' : '#2a3a4a'}; color: ${hideZeroPkgs ? '#0f1923' : '#99a'};">${_SUITE.L('vridHideZeros')} ${hideZeroPkgs ? '✔' : '✘'}</button>
                 </div>
             </div>
             <div id="vrid-list-items" class="vrid-badge-grid">
@@ -5628,7 +5960,7 @@
             function renderContainersWithControls(containerData, containerDiv, totalsSpan) {
                 const containers = containerData.ret && containerData.ret.inboundCDTContainerCount ? Object.values(containerData.ret.inboundCDTContainerCount)[0] : null;
                 if (!containers || containers.length === 0) {
-                    containerDiv.innerHTML = '<small>Nenhum container encontrado.</small>';
+                    containerDiv.innerHTML = '<small>' + _SUITE.L('noContainersFound') + '</small>';
                     if (totalsSpan) totalsSpan.innerText = ' (P:0, C:0)';
                     return;
                 }
@@ -5643,7 +5975,7 @@
                 function refreshDisplay() {
                     let html = '';
                     if (mode === 'detailed') {
-                        html += '<div><strong>📦 Detalhado:</strong></div>';
+                        html += '<div><strong>' + _SUITE.L('vridDetailedTitle') + '</strong></div>';
                         for (const c of containers) {
                             const lane = simplifyLane(c.lane || 'N/A');
                             const counts = getCounts(c);
@@ -5654,13 +5986,13 @@
                         }
                     } else {
                         const consolidated = consolidateContainers(containers);
-                        html += '<div><strong>📦 Consolidado por rota:</strong></div>';
+                        html += '<div><strong>' + _SUITE.L('vridConsolidatedTitle') + '</strong></div>';
                         for (const entry of consolidated) {
                             const suffix = entry.hasXdock ? ' - Xdock' : '';
                             html += `<div style="margin-left:12px; font-size:11px;">🚚 ${entry.lane} | 📦 ${entry.P} P / ${entry.C} C${suffix}</div>`;
                         }
                     }
-                    html += `<div class="container-control"><button class="toggle-mode-btn">${mode === 'detailed' ? 'Consolidar' : 'Detalhado'}</button></div>`;
+                    html += `<div class="container-control"><button class="toggle-mode-btn">${mode === 'detailed' ? _SUITE.L('vridConsolidated') : _SUITE.L('vridDetailed')}</button></div>`;
                     containerDiv.innerHTML = html;
                     const btn = containerDiv.querySelector('.toggle-mode-btn');
                     if (btn) {
@@ -5827,7 +6159,7 @@
                         const planId = v.planId;
                         if (!planId) {
                             countEl.innerHTML = `<span class="badge-err">sem Plan ID</span>`;
-                            bodyEl.innerHTML = `<div class="vl-err">Plan ID não disponível.</div>`;
+                            bodyEl.innerHTML = `<div class="vl-err">${_SUITE.L('vsmPlanIdUnavailable')}</div>`;
                             done++;
                             setProgress(done, `Processando VRIDs… ${done} / ${total}`);
                             continue;
@@ -5924,7 +6256,7 @@
                     });
                 } catch (e) {
                     let msg = esc(String(e));
-                    if (e === 'SESSAO_EXPIRADA') msg = '🔐 Sessão expirada. <a href="' + location.href + '" style="color:#388bfd">Recarregue a página</a>.';
+                    if (e === 'SESSAO_EXPIRADA') msg = '🔐 Sessão expirada. <a href="' + location.href + '" style="color:#388bfd">' + _SUITE.L('ymsReloadPage') + '</a>.';
                     resultDiv.innerHTML = `<div class="vl-err">${_SUITE.L('vsmErrorFetch')}: ${msg}</div>`;
                     progDiv.style.display = 'none';
                     return;
@@ -5974,7 +6306,7 @@
                     });
                 } catch (e) {
                     let msg = esc(String(e));
-                    if (e === 'SESSAO_EXPIRADA') msg = '🔐 Sessão expirada. <a href="' + location.href + '" style="color:#388bfd">Recarregue a página</a>.';
+                    if (e === 'SESSAO_EXPIRADA') msg = '🔐 Sessão expirada. <a href="' + location.href + '" style="color:#388bfd">' + _SUITE.L('ymsReloadPage') + '</a>.';
                     resultDiv.innerHTML = `<div class="vl-err">${_SUITE.L('vsmErrorFetch')}: ${msg}</div>`;
                     progDiv.style.display = 'none';
                     return;
@@ -6317,9 +6649,9 @@
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     html += `<tr class="cfg-row">
-                <td><input type="text" class="cfg-input cfg-route" value="${esc(row.route)}" placeholder="Rota"></td>
+                <td><input type="text" class="cfg-input cfg-route" value="${esc(row.route)}" placeholder="${_SUITE.L('vsmRoutePlaceholder')}"></td>
                 <td><input type="text" class="cfg-input cfg-vsm-input" value="${esc(row.vsm)}" placeholder="VSM"></td>
-                <td style="width: 100px;"><input type="number" class="cfg-input cfg-group" value="${esc(row.group)}" placeholder="ID Grupo"></td>
+                <td style="width: 100px;"><input type="number" class="cfg-input cfg-group" value="${esc(row.group)}" placeholder="${_SUITE.L('vsmGroupIdPlaceholder')}"></td>
                 <td style="width: 40px; text-align: center;"><button class="vl-btn-small cfg-del-btn" style="background:#e05;">X</button></td>
             </tr>`;
                 }
@@ -6362,7 +6694,7 @@
                 panel.style.display = 'none';
                 panel.innerHTML = `
             <div id="vl-panel-head">
-                <h3>🔍 <span>VRID</span> Lookup — Mapa VSM</h3>
+                <h3>${_SUITE.L('vsmMapTitle')}</h3>
                 <div id="vl-head-actions">
                     <button class="vl-head-btn" id="vl-close-btn" title="Minimizar">−</button>
                 </div>
@@ -6370,10 +6702,10 @@
             <div id="vl-panel-body" class="tl-morph-target">
                 <div class="vl-controls-bar">
                     <div class="vl-ctrl-chip">
-                        <label>📊 Exibir:</label>
+                        <label>${_SUITE.L('vsmDisplay')}</label>
                         <div class="mode-pill-group" id="count-mode-pills">
                             <button class="mode-pill active" data-mode="totalCount">Total</button>
-                            <button class="mode-pill" data-mode="inTrailerCount">Não proc.</button>
+                            <button class="mode-pill" data-mode="inTrailerCount">${_SUITE.L('vsmNotProcessed')}</button>
                         </div>
                     </div>
                     <div class="vl-ctrl-chip">
@@ -6384,20 +6716,19 @@
                             <option value="10">10 min</option>
                             <option value="15">15 min</option>
                         </select>
-                        <span id="auto-refresh-status" style="margin-left:4px;"> (desligado)</span>
+                        <span id="auto-refresh-status" style="margin-left:4px;">${_SUITE.L('vsmAutoRefreshOff')}</span>
                     </div>
                 </div>
                 <div class="vl-tabs">
-                    <button class="vl-tab active" data-tab="hourly">Horas x VSM</button>
-                    <button class="vl-tab" data-tab="static">Layout Físico</button>
+                    <button class="vl-tab active" data-tab="hourly">${_SUITE.L('vsmHoursXVsm')}</button>
+                    <button class="vl-tab" data-tab="static">${_SUITE.L('vsmPhysicalLayout')}</button>
                     <button class="vl-tab" data-tab="config">${_SUITE.L('settings')}</button>
-                    <button id="vl-clear-cache-btn" style="background:#e05; color:white; border:none; padding:4px 10px; border-radius:12px; font-size:10px; margin-left:auto; cursor:pointer;" title="Limpa tokens e dados salvos do YMS/Relay">🧹 Limpar Cache</button>
                 </div>
                 <div id="tab-hourly" class="vl-tab-content active">
                     <div class="vl-section">
-                        <div class="vl-section-title">VRID Único</div>
+                        <div class="vl-section-title">${_SUITE.L('vsmSingleVrid')}</div>
                         <div class="vl-row">
-                            <input id="vl-vrid-input" type="text" placeholder="Digite o VRID…">
+                            <input id="vl-vrid-input" type="text" placeholder="${_SUITE.L('vsmTypeVrid')}">
                             <button class="vl-btn" id="vl-search-btn">${_SUITE.L('search')}</button>
                         </div>
                     </div>
@@ -6405,50 +6736,50 @@
                         <div class="vl-section-title">${_SUITE.L('vsmByTime')}</div>
                         <div class="vl-row">
                             <input type="date" id="range-start-date" value="${todayStr}">
-                            <span>até</span>
+                            <span>${_SUITE.L('vsmUntil')}</span>
                             <input type="date" id="range-end-date"   value="${todayStr}">
                         </div>
                         <div class="vl-row">
                             <select id="range-start-hour">${generateHourOpts(0)}</select>
-                            <span>até</span>
+                            <span>${_SUITE.L('vsmUntil')}</span>
                             <select id="range-end-hour">${generateHourOpts(23)}</select>
                         </div>
                         <div class="vl-row">
                             <button class="vl-btn vl-btn-full" id="vl-range-btn">${_SUITE.L('vsmSearchVrids')}</button>
                         </div>
-                        <div class="vl-hint">Máximo 7 dias entre as datas</div>
+                        <div class="vl-hint">${_SUITE.L('vsmMaxDays')}</div>
                     </div>
                     <div class="vl-section">
                         <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                            <span>🗺 Mapa VSM (Horas x VSM)</span>
-                            <button class="vl-btn" id="vl-vsm-export-csv-btn" style="padding: 2px 8px; font-size: 11px; margin: 0;">📥 Exportar VRIDs (CSV)</button>
+                            <span>${_SUITE.L('vsmMapHoursLabel')}</span>
+                            <button class="vl-btn" id="vl-vsm-export-csv-btn" style="padding: 2px 8px; font-size: 11px; margin: 0;">${_SUITE.L('vsmExportCsv')}</button>
                         </div>
                         <div id="vsm-map-container">
-                            <div class="vsm-map-empty">Carregue VRIDs para visualizar o mapa.</div>
+                            <div class="vsm-map-empty">${_SUITE.L('vsmLoadVridsToView')}</div>
                         </div>
                     </div>
                 </div>
                 <div id="tab-static" class="vl-tab-content">
                     <div class="vl-section">
-                        <div class="vl-section-title">🗺 Layout Físico (Mapa Estático)</div>
+                        <div class="vl-section-title">${_SUITE.L('vsmPhysicalLayoutTitle')}</div>
                         <div class="vsm-static-controls">
                             <div class="vl-ctrl-chip">
-                                <label>🎯 Meta pkgs/h:</label>
+                                <label>${_SUITE.L('vsmGoalPkgsH')}</label>
                                 <input type="number" id="static-max-pkgs" class="vsm-meta-input" value="400" min="1" max="99999">
                                 <span style="font-size:11px;color:#667;">pkgs/h</span>
                             </div>
                             <div class="vl-ctrl-chip">
-                                <label>✋ Rate Finger:</label>
+                                <label>${_SUITE.L('vsmRateFinger')}</label>
                                 <input type="number" id="static-finger-rate" class="vsm-meta-input" value="4000" min="1" max="99999">
                                 <span style="font-size:11px;color:#667;">pkgs/h</span>
                             </div>
                             <div class="vl-ctrl-chip">
-                                <label>🏗 Rate CB:</label>
+                                <label>${_SUITE.L('vsmRateCB')}</label>
                                 <input type="number" id="static-cb-rate" class="vsm-meta-input" value="500" min="1" max="99999">
                                 <span style="font-size:11px;color:#667;">/h</span>
                             </div>
                             <div class="vl-ctrl-chip">
-                                <label>🔄 Rate PO:</label>
+                                <label>${_SUITE.L('vsmRatePO')}</label>
                                 <input type="number" id="static-po-rate" class="vsm-meta-input" value="1000" min="1" max="99999">
                                 <span style="font-size:11px;color:#667;">/h</span>
                             </div>
@@ -6457,26 +6788,26 @@
                             <div class="need-card need-cb">
                                 <span class="need-val" id="need-cb-total">—</span>
                                 <span class="need-label">Container Builders</span>
-                                <span class="need-sub">(mín. 17)</span>
+                                <span class="need-sub">${_SUITE.L('vsmMinLabel')}</span>
                             </div>
                             <div class="need-card need-po">
                                 <span class="need-val" id="need-po-total">—</span>
                                 <span class="need-label">Pickoffs</span>
-                                <span class="need-sub">(mín. 17)</span>
+                                <span class="need-sub">${_SUITE.L('vsmMinLabel')}</span>
                             </div>
                         </div>
-                        <div class="vl-section-title" style="margin-top:10px;">🕐 Hora</div>
+                        <div class="vl-section-title" style="margin-top:10px;">${_SUITE.L('vsmHourLabel')}</div>
                         <div class="hour-pill-group" id="static-hour-pills">
                             <button class="hour-pill active" data-hour="-1">Total</button>
                             ${Array.from({ length: 24 }, (_, i) => `<button class="hour-pill" data-hour="${i}">${String(i).padStart(2, '0')}</button>`).join('')}
                             <button class="hour-pill" data-hour="24" id="pill-next-day" style="display:none; min-width: 60px;">00h (+1)</button>
                         </div>
                         <div id="vsm-layout-container">
-                            <div class="vsm-map-empty">Carregando mapa estático...</div>
+                            <div class="vsm-map-empty">${_SUITE.L('vsmLoadingStaticMap')}</div>
                         </div>
                     </div>
                     <div class="vrid-list-container" id="vrid-list-container">
-                        <div class="vsm-map-empty">Carregando lista de VRIDs...</div>
+                        <div class="vsm-map-empty">${_SUITE.L('vsmLoadingVridList')}</div>
                     </div>
                 </div>
                 <div id="tab-config" class="vl-tab-content">
@@ -6489,18 +6820,18 @@
                                     <input type="text" id="cfg-node-input" class="vsm-meta-input" style="text-transform: uppercase; width: 75px; font-weight: 700; border: 1px solid #ff9900;" value="${activeNodeId || 'CGH7'}" maxlength="8">
                                 </div>
                             </div>
-                            <button id="cfg-save-btn" class="vl-btn" style="background:#ff9900; color:#0f1923; font-size: 13px; padding: 8px 20px; box-shadow: 0 2px 8px rgba(255,153,0,0.4);">💾 Salvar Todas as Alterações</button>
+                            <button id="cfg-save-btn" class="vl-btn" style="background:#ff9900; color:#0f1923; font-size: 13px; padding: 8px 20px; box-shadow: 0 2px 8px rgba(255,153,0,0.4);">${_SUITE.L('vsmSaveAll')}</button>
                         </div>
                     </div>
                     <div class="vl-section">
                         <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                            <span>Configuração dos Fingers (Agrupamento de Belts)</span>
-                            <button id="cfg-add-finger-btn" class="vl-btn-small" style="background:#2d8a4e;">+ Novo Finger</button>
+                            <span>${_SUITE.L('vsmFingerConfig')}</span>
+                            <button id="cfg-add-finger-btn" class="vl-btn-small" style="background:#2d8a4e;">${_SUITE.L('vsmNewFinger')}</button>
                         </div>
                         <div class="vsm-tbl-wrap" style="max-height: 25vh;">
                             <table class="vsm-config-table">
                                 <thead>
-                                    <tr><th>ID (Ex: pra Tag [F3] use 3)</th><th>Nome de Exibição</th><th>Belts (Separe por vírgula)</th><th>Ação</th></tr>
+                                    <tr><th>${_SUITE.L('vsmFingerId')}</th><th>${_SUITE.L('vsmFingerDisplayName')}</th><th>${_SUITE.L('vsmFingerBelts')}</th><th>${_SUITE.L('vsmAction')}</th></tr>
                                 </thead>
                                 <tbody id="config-finger-body">
                                 </tbody>
@@ -6509,17 +6840,17 @@
                     </div>
                     <div class="vl-section" style="border-color: #3a6a8a; background: #121822;">
                         <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; color: #aad4ff;">
-                            <span>Matriz do Mapa (Layout Físico)</span>
+                            <span>${_SUITE.L('vsmMapMatrix')}</span>
                             <div style="display:flex; gap: 8px;">
-                                <button id="cfg-map-export-btn" class="vl-btn-small" style="background:#1a4a2a; color:#aaffaa; border: 1px solid #2a6a3a;">📥 Baixar Mapa (.xlsx)</button>
-                                <button id="cfg-map-import-btn" class="vl-btn-small" style="background:#2a4a6a; color:#aad4ff; border: 1px solid #3a6a8a;">📤 Subir Mapa (.xlsx)</button>
+                                <button id="cfg-map-export-btn" class="vl-btn-small" style="background:#1a4a2a; color:#aaffaa; border: 1px solid #2a6a3a;">${_SUITE.L('vsmDownloadMap')}</button>
+                                <button id="cfg-map-import-btn" class="vl-btn-small" style="background:#2a4a6a; color:#aad4ff; border: 1px solid #3a6a8a;">${_SUITE.L('vsmUploadMap')}</button>
                                 <input type="file" id="cfg-map-file-input" accept=".xlsx, .xls" style="display:none;">
                                 <button id="cfg-map-reset-btn" class="vl-btn-small" style="background:#4a5a6a; color:#fff;">${_SUITE.L('vsmRestoreMap')}</button>
                             </div>
                         </div>
                         <p style="font-size: 11px; color: #889; margin: 0; line-height: 1.5;">
-                            Ao baixar o mapa, você verá TAGS especiais para as somas. Edite no Excel e faça upload novamente. <br>
-                            <strong>Tags:</strong> <code>[B1]</code> a <code>[B17]</code> (Soma das Belts) | <code>[F1]</code> e <code>[F2]</code> (Soma dos Fingers) | <code>[TS_V]</code> (Total Sortation) | <code>[L_F1]</code>, <code>[L_F2]</code>, <code>[L_TS]</code> (Títulos das seções) | <code>[SKIP]</code> (Pula a renderização da célula)
+                            ${_SUITE.L('vsmMapTagsHelp')} <br>
+                            <strong>${_SUITE.L('vsmTagsLabel')}</strong> <code>[B1]</code> a <code>[B17]</code> ${_SUITE.L('vsmBeltSum')} | <code>[F1]</code> e <code>[F2]</code> ${_SUITE.L('vsmFingerSum')} | <code>[TS_V]</code> ${_SUITE.L('vsmTotalSortation')} | <code>[L_F1]</code>, <code>[L_F2]</code>, <code>[L_TS]</code> ${_SUITE.L('vsmSectionTitles')} | <code>[SKIP]</code> ${_SUITE.L('vsmSkipRender')}
                         </p>
                     </div>
                     <div class="vl-section">
@@ -6527,15 +6858,15 @@
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                                 <span>${_SUITE.L('vsmMappingBase')}</span>
                                 <div style="display:flex; gap: 8px;">
-                                    <button id="cfg-export-btn" class="vl-btn-small" style="background:#1a4a2a; color:#aaffaa; border: 1px solid #2a6a3a;">📥 Baixar Mapeamento (.xlsx)</button>
-                                    <button id="cfg-import-btn" class="vl-btn-small" style="background:#2a4a6a; color:#aad4ff; border: 1px solid #3a6a8a;">📤 Subir Mapeamento (.xlsx)</button>
+                                    <button id="cfg-export-btn" class="vl-btn-small" style="background:#1a4a2a; color:#aaffaa; border: 1px solid #2a6a3a;">${_SUITE.L('vsmDownloadMapping')}</button>
+                                    <button id="cfg-import-btn" class="vl-btn-small" style="background:#2a4a6a; color:#aad4ff; border: 1px solid #3a6a8a;">${_SUITE.L('vsmUploadMapping')}</button>
                                     <input type="file" id="cfg-file-input" accept=".xlsx, .xls" style="display:none;">
                                 </div>
                             </div>
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                                <input type="text" id="cfg-search" class="cfg-input" style="width:280px;" placeholder="🔍 Pesquisar Rota, VSM ou Grupo...">
+                                <input type="text" id="cfg-search" class="cfg-input" style="width:280px;" placeholder="${_SUITE.L('vsmSearchRoutePlaceholder')}">
                                 <div style="display:flex; gap: 8px;">
-                                    <button id="cfg-add-btn" class="vl-btn-small" style="background:#2d8a4e;">+ Nova Linha</button>
+                                    <button id="cfg-add-btn" class="vl-btn-small" style="background:#2d8a4e;">${_SUITE.L('vsmNewRow')}</button>
                                     <button id="cfg-reset-btn" class="vl-btn-small" style="background:#4a5a6a; color:#fff;">${_SUITE.L('vsmRestoreMapping')}</button>
                                 </div>
                             </div>
@@ -6543,7 +6874,7 @@
                         <div class="vsm-tbl-wrap" style="max-height: 45vh;">
                             <table class="vsm-config-table">
                                 <thead>
-                                    <tr><th>Rota</th><th>VSM</th><th>Grupo de VSMs (Belt)</th><th>Ação</th></tr>
+                                    <tr><th>${_SUITE.L('vsmRoutePlaceholder')}</th><th>VSM</th><th>${_SUITE.L('vsmGroupBelt')}</th><th>${_SUITE.L('vsmAction')}</th></tr>
                                 </thead>
                                 <tbody id="config-table-body">
                                 </tbody>
@@ -6571,9 +6902,9 @@
                     const tr = document.createElement('tr');
                     tr.className = 'cfg-row';
                     tr.innerHTML = `
-                <td><input type="text" class="cfg-input cfg-route" value="" placeholder="NOVA_ROTA"></td>
-                <td><input type="text" class="cfg-input cfg-vsm-input" value="" placeholder="NOVA_VSM"></td>
-                <td style="width: 100px;"><input type="number" class="cfg-input cfg-group" value="99" placeholder="ID Grupo"></td>
+                <td><input type="text" class="cfg-input cfg-route" value="" placeholder="${_SUITE.L('vsmNewRoute')}"></td>
+                <td><input type="text" class="cfg-input cfg-vsm-input" value="" placeholder="${_SUITE.L('vsmNewVsm')}"></td>
+                <td style="width: 100px;"><input type="number" class="cfg-input cfg-group" value="99" placeholder="${_SUITE.L('vsmGroupIdPlaceholder')}"></td>
                 <td style="width: 40px; text-align: center;"><button class="vl-btn-small cfg-del-btn" style="background:#e05;">X</button></td>
             `;
                     tr.querySelector('.cfg-del-btn').addEventListener('click', e => {
@@ -6589,7 +6920,7 @@
                     tr.className = 'cfg-finger-row';
                     tr.innerHTML = `
                 <td style="width: 120px;"><input type="number" class="cfg-input cfg-f-id" value="" placeholder="ID"></td>
-                <td><input type="text" class="cfg-input cfg-f-name" value="" placeholder="Nome do Finger"></td>
+                <td><input type="text" class="cfg-input cfg-f-name" value="" placeholder="${_SUITE.L('vsmFingerName')}"></td>
                 <td><input type="text" class="cfg-input cfg-f-belts" value="" placeholder="1,2,3..."></td>
                 <td style="width: 40px; text-align: center;"><button class="vl-btn-small cfg-f-del-btn" style="background:#e05;">X</button></td>
             `;
@@ -6617,41 +6948,26 @@
                     });
                 });
                 document.getElementById('cfg-export-btn').addEventListener('click', () => {
-                    if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou. Tente novamente em alguns segundos."); return; }
+                    if (typeof XLSX === 'undefined') { alert(_SUITE.L("vsmXlsxNotLoaded")); return; }
                     const rows = document.querySelectorAll('#config-table-body tr.cfg-row');
                     const exportData = [];
                     rows.forEach(row => {
                         const r = row.querySelector('.cfg-route').value.trim();
                         const v = row.querySelector('.cfg-vsm-input').value.trim();
                         const g = row.querySelector('.cfg-group').value.trim();
-                        if (r && v && g) exportData.push({ "Rota": r, "VSM": v, "Grupo": g });
+                        if (r && v && g) exportData.push({ [_SUITE.L("xlsxRoute")]: r, "VSM": v, [_SUITE.L("xlsxRoute") === "Route" ? "Group" : "Grupo"]: g });
                     });
-                    if (exportData.length === 0) { alert("Não há dados para exportar."); return; }
+                    if (exportData.length === 0) { alert(_SUITE.L("vsmNoExportData")); return; }
                     const worksheet = XLSX.utils.json_to_sheet(exportData);
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, "VSM_Config");
                     XLSX.writeFile(workbook, `Configuracoes_VSM_${new Date().toISOString().slice(0, 10)}.xlsx`);
                 });
                 document.getElementById('cfg-import-btn').addEventListener('click', () => {
-                    if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou. Tente novamente em alguns segundos."); return; }
+                    if (typeof XLSX === 'undefined') { alert(_SUITE.L("vsmXlsxNotLoaded")); return; }
                     document.getElementById('cfg-file-input').click();
                 });
-                document.getElementById('vl-clear-cache-btn').addEventListener('click', () => {
-                    if (confirm("Deseja limpar o cache de tokens (YMS/Relay) e dados salvos dos VRIDs? Isso pode forçar novos popups de validação.")) {
-                        const keys = GM_listValues();
-                        let count = 0;
-                        keys.forEach(k => {
-                            if (k.startsWith('yms_') || k.startsWith('relay_') || k.startsWith('cuft_')) {
-                                GM_deleteValue(k);
-                                count++;
-                            }
-                        });
-                        _SUITE.ymsToken = '';
-                        _SUITE.antiCsrfToken = '';
-                        alert(`Cache limpo! ${count} itens removidos. Recarregue a página.`);
-                        location.reload();
-                    }
-                });
+
                 document.getElementById('cfg-file-input').addEventListener('change', (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
@@ -6679,27 +6995,27 @@
                                 configIsDirty = false;
                                 renderConfigTable();
                                 if (lastExportData.length > 0) computeAndRenderAll();
-                                alert(`Sucesso! ${newMappings.length} mapeamentos importados.`);
+                                alert(_SUITE.L("vsmImportSuccess").replace("{0}", newMappings.length));
                             } else {
-                                alert('Nenhum dado válido encontrado no arquivo. Certifique-se de manter as colunas "Rota", "VSM" e "Grupo".');
+                                alert(_SUITE.L("vsmImportInvalid"));
                             }
                         } catch (err) {
                             console.error(err);
-                            alert('Erro ao processar o arquivo Excel.');
+                            alert(_SUITE.L("vsmExcelError"));
                         }
                         document.getElementById('cfg-file-input').value = '';
                     };
                     reader.readAsArrayBuffer(file);
                 });
                 document.getElementById('cfg-map-export-btn').addEventListener('click', () => {
-                    if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou."); return; }
+                    if (typeof XLSX === 'undefined') { alert(_SUITE.L("vsmXlsxNotLoaded")); return; }
                     const worksheet = XLSX.utils.aoa_to_sheet(activeMapMatrix);
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, "Layout_Mapa");
                     XLSX.writeFile(workbook, `Layout_Mapa_VSM_${new Date().toISOString().slice(0, 10)}.xlsx`);
                 });
                 document.getElementById('cfg-map-import-btn').addEventListener('click', () => {
-                    if (typeof XLSX === 'undefined') { alert("A biblioteca XLSX ainda não carregou."); return; }
+                    if (typeof XLSX === 'undefined') { alert(_SUITE.L("vsmXlsxNotLoaded")); return; }
                     document.getElementById('cfg-map-file-input').click();
                 });
                 document.getElementById('cfg-map-file-input').addEventListener('change', (e) => {
@@ -6717,13 +7033,13 @@
                                 activeMapMatrix = aoa;
                                 GM_setValue('vsm_custom_map_matrix', JSON.stringify(activeMapMatrix));
                                 if (lastExportData.length > 0) computeAndRenderAll(); else renderStaticVsmMap();
-                                alert('Layout do mapa importado e atualizado com sucesso!');
+                                alert(_SUITE.L("vsmMapImportSuccess"));
                             } else {
-                                alert('Arquivo de mapa vazio ou inválido.');
+                                alert(_SUITE.L("vsmMapEmpty"));
                             }
                         } catch (err) {
                             console.error(err);
-                            alert('Erro ao processar o arquivo de mapa.');
+                            alert(_SUITE.L("vsmMapFileError"));
                         }
                         document.getElementById('cfg-map-file-input').value = '';
                     };
@@ -6734,13 +7050,13 @@
                         activeMapMatrix = structuredClone(DEFAULT_MAP_MATRIX);
                         GM_setValue('vsm_custom_map_matrix', JSON.stringify(activeMapMatrix));
                         if (lastExportData.length > 0) computeAndRenderAll(); else renderStaticVsmMap();
-                        alert('Mapa restaurado para o padrão.');
+                        alert(_SUITE.L("vsmMapRestored"));
                     }
                 });
             }
             function checkDirtyConfig() {
                 if (configIsDirty) {
-                    if (confirm('Você tem alterações não salvas nas Configurações. Deseja salvar agora?')) {
+                    if (confirm(_SUITE.L("vsmUnsavedChanges"))) {
                         saveConfig();
                     } else {
                         renderConfigTable();
@@ -6751,7 +7067,7 @@
             function init() {
                 const toggle = document.createElement('button');
                 toggle.id = 'vl-toggle';
-                toggle.textContent = '🔍 Layout Digital';
+                toggle.textContent = _SUITE.L('vsmDigitalLayout');
                 toggle.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -6986,7 +7302,7 @@
                     const startHour = parseInt(rangeStartHour.value, 10);
                     const endHour = parseInt(rangeEndHour.value, 10);
                     if (!startStr || !endStr) {
-                        resultDiv.innerHTML = '<div class="vl-err">Selecione as datas.</div>';
+                        resultDiv.innerHTML = '<div class="vl-err">' + _SUITE.L('vsmSelectDates') + '</div>';
                         return;
                     }
                     const sd = new Date(startStr + 'T00:00:00');
@@ -7090,22 +7406,22 @@
             try { GM_setValue(VSM_CACHE_KEY, JSON.stringify({ ts: Date.now(), map: map })); } catch (e) { }
         }
         var STATUS_MAP = {
-            'outboundscheduled': { label: 'Agendado', color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
-            'outboundinprogress': { label: 'Em carregamento', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-            'outboundreadytodepart': { label: 'Em doca', color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
-            'outbounddeparted': { label: 'Partiu', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
-            'outboundcompleted': { label: 'Finalizado', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-            'outboundcancelled': { label: 'Cancelado', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
-            'scheduled': { label: 'Agendado', color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
-            'trailerattached': { label: 'Em espera', color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
-            'loadinginprogress': { label: 'Em carregamento', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-            'finishedloading': { label: 'Em doca', color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
-            'completed': { label: 'Finalizado', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-            'readytodepart': { label: 'Em doca', color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
-            'readyforloading': { label: 'Em doca', color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
-            'outboundreadyforloading': { label: 'Em doca', color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
-            'departed': { label: 'Partiu', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
-            'cancelled': { label: 'Cancelado', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+            'outboundscheduled': { label: _SUITE.L('statusScheduled'), color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
+            'outboundinprogress': { label: _SUITE.L('statusLoading'), color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+            'outboundreadytodepart': { label: _SUITE.L('statusInDock'), color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+            'outbounddeparted': { label: _SUITE.L('statusDeparted'), color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+            'outboundcompleted': { label: _SUITE.L('statusFinished'), color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+            'outboundcancelled': { label: _SUITE.L('statusCancelled'), color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+            'scheduled': { label: _SUITE.L('statusScheduled'), color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
+            'trailerattached': { label: _SUITE.L('statusWaiting'), color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
+            'loadinginprogress': { label: _SUITE.L('statusLoading'), color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+            'finishedloading': { label: _SUITE.L('statusInDock'), color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+            'completed': { label: _SUITE.L('statusFinished'), color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+            'readytodepart': { label: _SUITE.L('statusInDock'), color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+            'readyforloading': { label: _SUITE.L('statusInDock'), color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+            'outboundreadyforloading': { label: _SUITE.L('statusInDock'), color: '#eab308', bg: 'rgba(234,179,8,0.15)' },
+            'departed': { label: _SUITE.L('statusDeparted'), color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+            'cancelled': { label: _SUITE.L('statusCancelled'), color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
         };
         function getStatus(raw) {
             var key = (raw || '').toLowerCase().replace(/[_\s]/g, '');
@@ -7383,7 +7699,7 @@
             ].join(';');
             var hdr = document.createElement('div');
             hdr.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;cursor:grab;user-select:none;';
-            hdr.innerHTML = '<span style="font-size:16px;font-weight:900;color:#f0f6ff;flex:1;letter-spacing:0.5px;">🚛 OB — Rotas, CPT &amp; VSM</span>';
+            hdr.innerHTML = '<span style="font-size:16px;font-weight:900;color:#f0f6ff;flex:1;letter-spacing:0.5px;">' + _SUITE.L('obRoutesTitle') + '</span>';
             var closeBtn = document.createElement('button');
             closeBtn.textContent = '✕';
             closeBtn.style.cssText = 'background:none;border:none;color:#6e7681;cursor:pointer;font-size:20px;padding:0 4px;line-height:1;transition:color 0.15s;';
@@ -7406,26 +7722,26 @@
             fetchBtn.onmouseover = function () { fetchBtn.style.background = '#388bfd'; };
             fetchBtn.onmouseout = function () { fetchBtn.style.background = '#1f6feb'; };
             var filterInput = document.createElement('input');
-            filterInput.placeholder = '🔍 Filtrar rota ou VSM...';
+            filterInput.placeholder = _SUITE.L('obFilterPlaceholder');
             filterInput.style.cssText = 'background:#161b22;border:1px solid #30363d;color:#f0f6ff;border-radius:6px;padding:5px 10px;font-size:11px;flex:1;min-width:140px;font-family:monospace;outline:none;';
             var hideExpiredBtn = document.createElement('button');
-            hideExpiredBtn.textContent = '👁 Mostrar expirados';
+            hideExpiredBtn.textContent = _SUITE.L('showExpired');
             var _hideExp = true;
             hideExpiredBtn.style.cssText = 'padding:5px 10px;border:1px solid #58a6ff;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#58a6ff;white-space:nowrap;';
             hideExpiredBtn.onclick = function () {
                 _hideExp = !_hideExp;
-                hideExpiredBtn.textContent = _hideExp ? '👁 Mostrar expirados' : '🙈 Ocultar expirados';
+                hideExpiredBtn.textContent = _hideExp ? _SUITE.L('showExpired') : _SUITE.L('hideExpired');
                 hideExpiredBtn.style.color = _hideExp ? '#58a6ff' : '#8b949e';
                 hideExpiredBtn.style.borderColor = _hideExp ? '#58a6ff' : '#30363d';
                 renderCards(filterInput.value.trim());
             };
             var routesPanelBtn = document.createElement('button');
-            routesPanelBtn.textContent = '⚙ Rotas';
+            routesPanelBtn.textContent = _SUITE.L('obRoutesBtn');
             routesPanelBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
             routesPanelBtn.onmouseover = function () { routesPanelBtn.style.color = '#f0f6ff'; routesPanelBtn.style.borderColor = '#58a6ff'; };
             routesPanelBtn.onmouseout = function () { if (!routePanel.classList.contains('open')) { routesPanelBtn.style.color = '#8b949e'; routesPanelBtn.style.borderColor = '#30363d'; } };
             var calBtn = document.createElement('button');
-            calBtn.textContent = '📅 Janela';
+            calBtn.textContent = _SUITE.L('obCalendarBtn');
             calBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
             calBtn.onmouseover = function () { calBtn.style.color = '#f0f6ff'; calBtn.style.borderColor = '#58a6ff'; };
             calBtn.onmouseout = function () { if (!calPanel.classList.contains('open')) { calBtn.style.color = '#8b949e'; calBtn.style.borderColor = '#30363d'; } };
@@ -7789,7 +8105,7 @@
                     if (cdata === undefined) {
                         var loadingEl = document.createElement('div');
                         loadingEl.className = 'obdv-container-loading';
-                        loadingEl.textContent = '⏳ Carregando posições...';
+                        loadingEl.textContent = _SUITE.L('obLoadingPositions');
                         body.appendChild(loadingEl);
                     } else if (cdata && (cdata.palletCount > 0 || cdata.positionsData.length > 0)) {
                         var csect = document.createElement('div');
@@ -7835,14 +8151,14 @@
                         gridWrap.classList.remove('updating');
                     }, 60);
                 }
-                countEl.textContent = rows.length + ' / ' + _routes.length + ' rotas';
+                countEl.textContent = rows.length + ' / ' + _routes.length + ' ' + _SUITE.L('vsmRoutesLabel');
             }
             filterInput.addEventListener('input', function () { renderCards(filterInput.value.trim()); });
             setInterval(function () { if (_routes.length) renderCards(filterInput.value.trim(), true); }, 30000);
             function doFetch() {
                 fetchBtn.disabled = true; fetchBtn.textContent = _SUITE.L('vsmFetching');
-                statusBar.textContent = 'Consultando API OB...';
-                grid.innerHTML = '<div style="padding:24px;color:#6e7681;font-size:13px;grid-column:1/-1;text-align:center;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:obdv-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>Carregando rotas OB...</div>';
+                statusBar.textContent = _SUITE.L('obQueryingApi');
+                grid.innerHTML = '<div style="padding:24px;color:#6e7681;font-size:13px;grid-column:1/-1;text-align:center;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:obdv-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>' + _SUITE.L('obLoadingRoutes') + '</div>';
                 _routes = []; _vsmLoading = false; countEl.textContent = ''; vsmStatusEl.textContent = '';
                 var node = (nodeInput.value || 'CGH7').trim().toUpperCase();
                 var win = apiWindow(_activeWindow);
@@ -7858,7 +8174,7 @@
                         if (resp.status !== 200) { statusBar.textContent = '⚠ HTTP ' + resp.status; grid.innerHTML = ''; return; }
                         var data; try { data = JSON.parse(resp.responseText.replace(/^\uFEFF/, '')); } catch (e) { statusBar.textContent = '⚠ JSON parse error'; grid.innerHTML = ''; return; }
                         var aaData = data && data.ret && data.ret.aaData;
-                        if (!Array.isArray(aaData)) { statusBar.textContent = '⚠ aaData não encontrado'; grid.innerHTML = ''; return; }
+                        if (!Array.isArray(aaData)) { statusBar.textContent = _SUITE.L('obAaDataNotFound'); grid.innerHTML = ''; return; }
                         var routeMap = {};
                         var _win = _activeWindow || todayWindow(), _winStart = _win.start, _winEnd = _win.end;
                         aaData.forEach(function (item) {
@@ -7904,12 +8220,12 @@
                         fetchContainersForRoutes(activeRoutes, node, function () {
                             renderCards(filterInput.value.trim(), true);
                         });
-                        var ts = new Date().toLocaleTimeString('pt-BR', { hour12: false });
+                        var ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
                         var _wFmt = function (ms) { var d = new Date(ms); var today = new Date(); var isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); var day = isToday ? '' : ((d.getMonth() + 1) + '/' + d.getDate() + ' '); return day + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
-                        var _winLabel = ' · Janela ' + _wFmt(_winStart) + '→' + _wFmt(_winEnd);
+                        var _winLabel = ' · ' + _SUITE.L('obWindowLabel') + ' ' + _wFmt(_winStart) + '→' + _wFmt(_winEnd);
                         if (hasVsm) {
                             var vsmCount0 = Object.keys(_vsmMap).length;
-                            statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' rotas · ' + vsmCount0 + ' VSMs' + _winLabel;
+                            statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + vsmCount0 + ' VSMs' + _winLabel;
                             vsmStatusEl.textContent = '✅ ' + vsmCount0 + ' VSMs';
                         } else {
                             statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' ' + _SUITE.L('vsmRoutesLabel') + ' — ' + _SUITE.L('vsmFetchingVsm') + _winLabel;
@@ -7919,10 +8235,10 @@
                                 saveVsmCache(_vsmMap);
                                 renderCards(filterInput.value.trim(), true);
                                 if (routePanel.classList.contains('open')) buildRoutePanel();
-                                var ts2 = new Date().toLocaleTimeString('pt-BR', { hour12: false });
+                                var ts2 = new Date().toLocaleTimeString('en-GB', { hour12: false });
                                 var vsmCount = Object.keys(_vsmMap).length;
-                                statusBar.textContent = 'Atualizado ' + ts2 + ' — ' + _routes.length + ' rotas · ' + vsmCount + ' VSMs' + _winLabel;
-                                vsmStatusEl.textContent = vsmCount > 0 ? '✅ ' + vsmCount + ' VSMs' : '⚠ VSM sem dados';
+                                statusBar.textContent = 'Atualizado ' + ts2 + ' — ' + _routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + vsmCount + ' VSMs' + _winLabel;
+                                vsmStatusEl.textContent = vsmCount > 0 ? '✅ ' + vsmCount + ' VSMs' : _SUITE.L('obVsmNoData');
                             });
                         }
                     },
