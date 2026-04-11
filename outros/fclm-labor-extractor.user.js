@@ -406,7 +406,7 @@
             for (let i = 0; i < totalChunks; i++) {
                 const chunk = chunks[i];
                 const url = buildFclmUrl(chunk.start, chunk.end);
-                
+
                 // Update Progress UI
                 const progressPct = Math.round((i / totalChunks) * 100);
                 const fillEl = document.getElementById('fclm-progress-fill');
@@ -435,11 +435,11 @@
                     iframe.contentDocument.close();
 
                     // Wait for layout/rendering
-                    await new Promise(r => setTimeout(r, 1200)); 
-                    
+                    await new Promise(r => setTimeout(r, 1200));
+
                     extractDataToMap(iframe.contentDocument, mainResultsMap, lastInductStats);
                 } catch (chunkErr) {
-                    console.error(`Erro no chunk ${i+1}:`, chunkErr);
+                    console.error(`Erro no chunk ${i + 1}:`, chunkErr);
                 } finally {
                     clearTimeout(timeoutId);
                     if (iframe && iframe.parentNode) {
@@ -456,7 +456,7 @@
 
             globalResults = Array.from(mainResultsMap.values()).filter(r => r.totalHours > 0);
             lastUpdateTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            
+
             renderResults(globalResults);
 
             if (summaryContainer && globalResults.length > 0) {
