@@ -8671,21 +8671,65 @@
                 ui.loaderBarWrap.style.display = 'block';
                 ui.loaderFill.style.width = '0%';
                 ui.loader.style.display = 'flex';
+
                 _SUITE.utils.fetchAntiCsrfToken(async (token) => {
                     if (!token) return showError('Falha ao obter Token. Recarregue a página.');
                     try {
                         let completed = 0;
-                        const requests = timeBlocks.map((block, index) => {
+                        let delayIndex = 0;
+                        let cacheHits = 0;
+                        let skipped = 0;
+                        const now = Date.now();
+
+                        const updateStatus = () => {
+                            const needed = timeBlocks.length - cacheHits - skipped;
+                            ui.loaderMsg.innerHTML = `${_SUITE.L('tphFetching')} ${needed} ${_SUITE.L('tphBlocks')} <small>(${cacheHits} cache, ${skipped} skip)</small>`;
+                            ui.loaderFill.style.width = Math.round((completed / timeBlocks.length) * 100) + '%';
+                        };
+
+                        const requests = timeBlocks.map((block) => {
                             return new Promise(async (resolve) => {
-                                await new Promise(r => setTimeout(r, index * CONFIG.time.apiDelayMs));
+                                // 1. Skip future blocks (they are 0 by default)
+                                if (block.start > now) {
+                                    completed++;
+                                    skipped++;
+                                    updateStatus();
+                                    resolve();
+                                    return;
+                                }
+
+                                // 2. Check Cache
+                                const cacheKey = `tph_v2_${CURRENT_NODE}_${block.start}_${block.end}`;
+                                const cachedStr = GM_getValue(cacheKey);
+                                if (cachedStr) {
+                                    try {
+                                        const parsed = JSON.parse(cachedStr);
+                                        if (now - parsed.ts < 24 * 60 * 60 * 1000) {
+                                            block.value = parsed.value;
+                                            completed++;
+                                            cacheHits++;
+                                            updateStatus();
+                                            resolve();
+                                            return;
+                                        }
+                                    } catch(e) {}
+                                }
+
+                                // 3. Network Fetch (only if older than 15 mins to stabilize, otherwise always refetch)
+                                const currentIndex = delayIndex++;
+                                await new Promise(r => setTimeout(r, currentIndex * CONFIG.time.apiDelayMs));
                                 try {
                                     block.value = await fetchSingleBlock(CURRENT_NODE, token, block.start, block.end);
+                                    // Only cache if period is older than 15 mins
+                                    if (now - block.end > 15 * 60 * 1000) {
+                                        GM_setValue(cacheKey, JSON.stringify({ value: block.value, ts: now }));
+                                    }
                                 } catch (e) {
                                     if (e.message === 'Sessão expirada.') throw e;
                                     block.value = 0;
                                 }
                                 completed++;
-                                ui.loaderFill.style.width = Math.round((completed / timeBlocks.length) * 100) + '%';
+                                updateStatus();
                                 resolve();
                             });
                         });
@@ -8915,14 +8959,20 @@
                     }
                 });
                 setTimeout(() => {
-                    if (isManualSearch) {
-                        ui.container.scrollLeft = 0;
+                    const now = Date.now();
+                    const currentIdx = timeBlocks.findIndex(b => b.start <= now && b.end > now);
+                    const lastDataIdx = dataValues.reduce((res, val, idx) => val > 0 ? idx : res, -1);
+                    
+                    // Prioritize current time block, then last block with data, then end of chart
+                    let targetIdx = currentIdx !== -1 ? currentIdx : lastDataIdx;
+                    
+                    if (targetIdx !== -1) {
+                        const targetX = targetIdx * CONFIG.ui.pixelsPerPoint;
+                        const container = ui.container;
+                        const scrollPos = Math.max(0, targetX - (container.clientWidth / 2) + (CONFIG.ui.pixelsPerPoint / 2));
+                        container.scrollTo({ left: scrollPos, behavior: isManualSearch ? 'auto' : 'smooth' });
                     } else {
-                        const finalActiveIdx = dataValues.reduce((res, val, idx) => val > 0 ? idx : res, -1);
-                        if (finalActiveIdx !== -1) {
-                            const targetX = (finalActiveIdx + 1) * CONFIG.ui.pixelsPerPoint;
-                            ui.container.scrollLeft = Math.max(0, targetX - ui.container.clientWidth + (CONFIG.ui.pixelsPerPoint * 2));
-                        } else { ui.container.scrollLeft = ui.container.scrollWidth; }
+                        ui.container.scrollLeft = ui.container.scrollWidth;
                     }
                 }, 100);
             }
