@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.17
+// @version      1.1.18
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.17";
+    const VERSION = "1.1.18";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -52,15 +52,9 @@
             'DSP4_EF': ['X-62']
         }
     };
-
-    // ═══════════════════════════════════════════════════════════════
-    // Global i18n — _SUITE.LANG / _SUITE.L()
-    // Portuguese (pt) is default. English (en) available.
-    // ═══════════════════════════════════════════════════════════════
     _SUITE._lang = GM_getValue('rd_lang', 'pt');
     _SUITE.LANG = {
         pt: {
-            // ── Shared / Global ──
             close: 'Fechar',
             search: 'Buscar',
             apply: '▶ Aplicar',
@@ -83,8 +77,6 @@
             to: 'Até',
             start: 'Início',
             end: 'Fim',
-
-            // ── VRID Info module ──
             total: '📦 Total',
             tabRemaining: '🔄 Restante',
             xdock: '🔀 X-Dock',
@@ -172,8 +164,6 @@
             vistaSearching: '⏳ Buscando dados...',
             showExpired: '👁 Mostrar expirados',
             hideExpired: '🙈 Ocultar expirados',
-
-            // ── TPH Chart module ──
             tphTitle: 'Real-Time Throughput & Dynamic Target Dashboard',
             tphShiftStart: 'Início (Turno)',
             tphShiftEnd: 'Fim (Turno)',
@@ -193,8 +183,6 @@
             tphBlocks: 'blocos',
             tphNeedLine: 'Necessidade',
             tphRealLine: 'Real',
-
-            // ── Mapa VSM / Dock View module ──
             vsmFetchBtn: '🔄 Buscar',
             vsmFetching: '⏳ Buscando...',
             vsmReady: 'Pronto — clique em 🔄 Buscar',
@@ -228,8 +216,6 @@
             vsmFilterPlaceholder: 'Filtrar por VRID, rota ou horário...',
             vsmRoutesLabel: 'rotas',
             vsmSessionExpired: '🔐 Sessão expirada.',
-
-            // ── Painel Produtividade module ──
             prodTitle: 'Dynamic Container Builder Ranking',
             prodFrom: 'De',
             prodTo: 'Até',
@@ -251,20 +237,14 @@
             prodSessionExpiredMsg: '🔐 <b>Sessão expirada.</b>',
             prodReloadMsg: 'Recarregue a página',
             prodTryAgain: 'e tente novamente.',
-
-            // ── CPT Tracker module ──
             cptStartLabel: 'Início',
             cptEndLabel: 'Fim',
-
-            // ── Update modal ──
             updateCheckFail: 'TL-Suite: Falha ao verificar atualizações. Verifique sua conexão ou se há bloqueios de rede.',
             updateDefaultMsg: 'Novas melhorias e correções no TL-Suite.',
             updateUpToDate: 'TL-Suite: Você já usa a versão mais recente! 😁',
             updateNewVersion: 'Nova Versão Disponível:',
             updateNow: 'Atualizar Agora',
             updateLater: 'Depois',
-
-            // ── XLSX export headers ──
             xlsxPackages: 'Pacotes',
             xlsxArrivalDelay: 'Atraso Chegada',
             xlsxDocks: 'Doca(s)',
@@ -283,18 +263,12 @@
             xlsxCptRemaining: 'CPT Restante',
             xlsxRoutes: 'Rotas',
             xlsxNoData: '(nenhum dado coletado ainda)',
-
-            // ── CSV headers ──
             csvDock: 'Doca',
             csvRoute: 'Rota',
             csvPackages: 'Pacotes',
-
-            // ── Table headers ──
             thDock: 'Doca',
             thRoute: 'Rota',
             thPackages: 'Pacotes',
-
-            // ── Status labels (OB dock view) ──
             statusScheduled: 'Agendado',
             statusLoading: 'Em carregamento',
             statusInDock: 'Em doca',
@@ -305,8 +279,6 @@
             statusProcessing: 'Em processamento',
             statusDone: 'Concluído',
             statusNotProcessed: 'Não proc.',
-
-            // ── OB Dock View panel ──
             obRoutesTitle: '🚛 OB — Rotas, CPT & VSM',
             obFilterPlaceholder: '🔍 Filtrar rota ou VSM...',
             obRoutesBtn: '⚙ Rotas',
@@ -318,8 +290,6 @@
             obUpdated: 'Atualizado',
             obVsmNoData: '⚠ VSM sem dados',
             obWindowLabel: 'Janela',
-
-            // ── VRID lookup / VSM module ──
             vsmMapTitle: '🔍 VRID Lookup — Mapa VSM',
             vsmDisplay: '📊 Exibir:',
             vsmNotProcessed: 'Não proc.',
@@ -385,8 +355,6 @@
             vsmNoDataLayout: 'Nenhum dado disponível para o layout físico.',
             vsmDigitalLayout: '🔍 Layout Digital',
             vsmPlanIdUnavailable: 'Plan ID não disponível.',
-
-            // ── VRID list buttons ──
             vridAll: 'Todos',
             vridProcessing: 'Processamento',
             vridNotProcessed: 'Não proc.',
@@ -396,14 +364,10 @@
             vridConsolidated: 'Consolidar',
             vridDetailedTitle: '📦 Detalhado:',
             vridConsolidatedTitle: '📦 Consolidado por rota:',
-
-            // ── Truck / CPT ──
             truckInDock: '🚛 Em doca',
             truckInDockReason: 'Caminhão ainda em doca (trailerId virtual "{0}") — disponível apenas após liberação',
             truckEmptyTrailer: 'trailerId vazio — disponível apenas após liberação do caminhão',
             noLoadGroupId: '⚠ Sem loadGroupId',
-
-            // ── YMS ──
             ymsWaitingToken: '[YMS] Aguardando token do YMS (popup aberto)...',
             ymsTokenCaptured: '[YMS] Token capturado com sucesso.',
             ymsTokenTimeout: '[YMS] Timeout ao aguardar token do YMS.',
@@ -417,13 +381,10 @@
             ymsErrorFetchVrids: 'Erro ao buscar VRIDs:',
             ymsApiTokenError: 'Erro: Token de segurança não encontrado. Recarregue a página.',
             ymsParseError: 'Parse error — resposta inesperada da API',
-
-            // ── Misc ──
             routesTabLabel: '📊 Rotas',
             updatedLabel: 'Atualizado:',
         },
         en: {
-            // ── Shared / Global ──
             close: 'Close',
             search: 'Search',
             apply: '▶ Apply',
@@ -446,8 +407,6 @@
             to: 'To',
             start: 'Start',
             end: 'End',
-
-            // ── VRID Info module ──
             total: '📦 Total',
             tabRemaining: '🔄 Remaining',
             xdock: '🔀 X-Dock',
@@ -535,8 +494,6 @@
             vistaSearching: '⏳ Searching...',
             showExpired: '👁 Show expired',
             hideExpired: '🙈 Hide expired',
-
-            // ── TPH Chart module ──
             tphTitle: 'Real-Time Throughput & Dynamic Target Dashboard',
             tphShiftStart: 'Start (Shift)',
             tphShiftEnd: 'End (Shift)',
@@ -556,8 +513,6 @@
             tphBlocks: 'blocks',
             tphNeedLine: 'Need',
             tphRealLine: 'Real',
-
-            // ── Mapa VSM / Dock View module ──
             vsmFetchBtn: '🔄 Fetch',
             vsmFetching: '⏳ Fetching...',
             vsmReady: 'Ready — click 🔄 Fetch',
@@ -591,8 +546,6 @@
             vsmFilterPlaceholder: 'Filter by VRID, route, or time...',
             vsmRoutesLabel: 'routes',
             vsmSessionExpired: '🔐 Session expired.',
-
-            // ── Painel Produtividade module ──
             prodTitle: 'Dynamic Container Builder Ranking',
             prodFrom: 'From',
             prodTo: 'To',
@@ -614,20 +567,14 @@
             prodSessionExpiredMsg: '🔐 <b>Session expired.</b>',
             prodReloadMsg: 'Reload the page',
             prodTryAgain: 'and try again.',
-
-            // ── CPT Tracker module ──
             cptStartLabel: 'Start',
             cptEndLabel: 'End',
-
-            // ── Update modal ──
             updateCheckFail: 'TL-Suite: Failed to check for updates. Check your connection or network blocks.',
             updateDefaultMsg: 'New improvements and fixes in TL-Suite.',
             updateUpToDate: 'TL-Suite: You are already up to date! 😁',
             updateNewVersion: 'New Version Available:',
             updateNow: 'Update Now',
             updateLater: 'Later',
-
-            // ── XLSX export headers ──
             xlsxPackages: 'Packages',
             xlsxArrivalDelay: 'Arrival Delay',
             xlsxDocks: 'Dock(s)',
@@ -646,18 +593,12 @@
             xlsxCptRemaining: 'CPT Remaining',
             xlsxRoutes: 'Routes',
             xlsxNoData: '(no data collected yet)',
-
-            // ── CSV headers ──
             csvDock: 'Dock',
             csvRoute: 'Route',
             csvPackages: 'Packages',
-
-            // ── Table headers ──
             thDock: 'Dock',
             thRoute: 'Route',
             thPackages: 'Packages',
-
-            // ── Status labels (OB dock view) ──
             statusScheduled: 'Scheduled',
             statusLoading: 'Loading',
             statusInDock: 'In dock',
@@ -668,8 +609,6 @@
             statusProcessing: 'Processing',
             statusDone: 'Done',
             statusNotProcessed: 'Not proc.',
-
-            // ── OB Dock View panel ──
             obRoutesTitle: '🚛 OB — Routes, CPT & VSM',
             obFilterPlaceholder: '🔍 Filter route or VSM...',
             obRoutesBtn: '⚙ Routes',
@@ -681,8 +620,6 @@
             obUpdated: 'Updated',
             obVsmNoData: '⚠ VSM no data',
             obWindowLabel: 'Window',
-
-            // ── VRID lookup / VSM module ──
             vsmMapTitle: '🔍 VRID Lookup — VSM Map',
             vsmDisplay: '📊 Display:',
             vsmNotProcessed: 'Not proc.',
@@ -748,8 +685,6 @@
             vsmNoDataLayout: 'No data available for the physical layout.',
             vsmDigitalLayout: '🔍 Digital Layout',
             vsmPlanIdUnavailable: 'Plan ID not available.',
-
-            // ── VRID list buttons ──
             vridAll: 'All',
             vridProcessing: 'Processing',
             vridNotProcessed: 'Not proc.',
@@ -759,14 +694,10 @@
             vridConsolidated: 'Consolidate',
             vridDetailedTitle: '📦 Detailed:',
             vridConsolidatedTitle: '📦 Consolidated by route:',
-
-            // ── Truck / CPT ──
             truckInDock: '🚛 In dock',
             truckInDockReason: 'Truck still in dock (virtual trailerId "{0}") — available only after release',
             truckEmptyTrailer: 'trailerId empty — available only after truck release',
             noLoadGroupId: '⚠ No loadGroupId',
-
-            // ── YMS ──
             ymsWaitingToken: '[YMS] Waiting for YMS token (popup open)...',
             ymsTokenCaptured: '[YMS] Token captured successfully.',
             ymsTokenTimeout: '[YMS] Timeout waiting for YMS token.',
@@ -780,20 +711,16 @@
             ymsErrorFetchVrids: 'Error fetching VRIDs:',
             ymsApiTokenError: 'Error: Security token not found. Reload the page.',
             ymsParseError: 'Parse error — unexpected API response',
-
-            // ── Misc ──
             routesTabLabel: '📊 Routes',
             updatedLabel: 'Updated:',
         }
     };
     _SUITE.L = function (key) { return (_SUITE.LANG[_SUITE._lang] || _SUITE.LANG.pt)[key] || (_SUITE.LANG.pt)[key] || key; };
     _SUITE.setLang = function (lang) { _SUITE._lang = lang; GM_setValue('rd_lang', lang); };
-
     _SUITE.utils = {
         esc: function (s) {
             return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         },
-
         detectNode: function () {
             var fns = [
                 function () { var el = document.querySelector('#nodeId'); return el ? el.value || el.textContent.trim() : null; },
@@ -808,7 +735,6 @@
             }
             return GM_getValue('tl_node', 'CGH7');
         },
-
         fetchAntiCsrfToken: function (callback) {
             if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
             GM_xmlhttpRequest({
@@ -1187,7 +1113,6 @@
             SETTINGS[key] = val; GM_setValue('rd_' + key, val);
             if (key === 'lang') _SUITE.setLang(val);
         }
-        // Local L() delegates to global _SUITE.L() — all keys are defined in _SUITE.LANG
         function L(key) { return _SUITE.L(key); }
         const styleEl = document.createElement('style');
         styleEl.textContent = `
@@ -6969,7 +6894,6 @@
                     if (typeof XLSX === 'undefined') { alert(_SUITE.L("vsmXlsxNotLoaded")); return; }
                     document.getElementById('cfg-file-input').click();
                 });
-
                 document.getElementById('cfg-file-input').addEventListener('change', (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
@@ -7347,7 +7271,6 @@
         if (!_SUITE.isDock) return;
         'use strict';
         var BASE = _SUITE.BASE;
-        // _csrfToken now reads from the central interceptor set by patchXHR()
         var _csrfToken = '';
         Object.defineProperty(window, '__tlCptCsrf__', {
             get: function () { return _SUITE.antiCsrfToken || _csrfToken; }
@@ -7631,11 +7554,9 @@
         var _vsmPending = false;
         function fetchVSM(node, onDone) {
             _vsmMap = {};
-            // 1. Load Hardcoded Defaults
             for (var route in _SUITE.DEFAULT_VSM_SEGMENT_MAP) {
                 _vsmMap[route.toUpperCase().trim()] = _SUITE.DEFAULT_VSM_SEGMENT_MAP[route].join(', ');
             }
-            // 2. Overwrite/Augment with Custom Config from Layout Digital
             try {
                 var configStr = GM_getValue('vsm_custom_config', '[]');
                 var configArr = JSON.parse(configStr);
@@ -8674,7 +8595,6 @@
                 ui.loaderBarWrap.style.display = 'block';
                 ui.loaderFill.style.width = '0%';
                 ui.loader.style.display = 'flex';
-
                 _SUITE.utils.fetchAntiCsrfToken(async (token) => {
                     if (!token) return showError('Falha ao obter Token. Recarregue a página.');
                     try {
@@ -8683,13 +8603,11 @@
                         let cacheHits = 0;
                         let skipped = 0;
                         const now = Date.now();
-
                         const updateStatus = () => {
                             const needed = timeBlocks.length - cacheHits - skipped;
                             ui.loaderMsg.innerHTML = `${_SUITE.L('tphFetching')} ${needed} ${_SUITE.L('tphBlocks')} <small>(${cacheHits} cache, ${skipped} skip)</small>`;
                             ui.loaderFill.style.width = Math.round((completed / timeBlocks.length) * 100) + '%';
                         };
-
                         const requests = timeBlocks.map((block) => {
                             return new Promise(async (resolve) => {
                                 // 1. Skip future blocks (they are 0 by default)
@@ -8700,7 +8618,6 @@
                                     resolve();
                                     return;
                                 }
-
                                 // 2. Check Cache
                                 const cacheKey = `tph_v2_${CURRENT_NODE}_${block.start}_${block.end}`;
                                 const cachedStr = GM_getValue(cacheKey);
@@ -8717,7 +8634,6 @@
                                         }
                                     } catch(e) {}
                                 }
-
                                 // 3. Network Fetch (only if older than 15 mins to stabilize, otherwise always refetch)
                                 const currentIndex = delayIndex++;
                                 await new Promise(r => setTimeout(r, currentIndex * CONFIG.time.apiDelayMs));
@@ -8863,19 +8779,15 @@
                 document.getElementById('tl-v5-val-total').innerText = totalPkgs.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg-hr').innerText = avgHr.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg').innerText = avg.toLocaleString('pt-BR');
-
                 const needHr = currentNeedMetric * 12;
                 const needHrEl = document.getElementById('tl-v5-val-need-hr');
                 if (needHrEl) needHrEl.innerText = needHr > 0 ? needHr.toLocaleString('pt-BR') : '--';
-
                 const needEl = document.getElementById('tl-v5-val-need');
                 if (needEl) needEl.innerText = currentNeedMetric > 0 ? currentNeedMetric.toLocaleString('pt-BR') : '--';
-
                 document.getElementById('tl-v5-val-achv').innerText = achv + '%';
                 const achvEl = document.getElementById('tl-v5-val-achv');
                 if (achv >= 95) achvEl.style.color = '#60a5fa'; else if (achv >= 80) achvEl.style.color = '#34d399';
                 else if (achv >= 50) achvEl.style.color = '#fcd34d'; else achvEl.style.color = '#f87171';
-
                 // ── Tendência (Trend Projection) ──
                 const trendEl = document.getElementById('tl-v5-val-trend');
                 const trendCard = document.getElementById('tl-v5-metric-trend');
@@ -8890,7 +8802,6 @@
                         }
                         const projected = totalPkgs + (avg * remainingBlocks);
                         trendEl.innerText = projected.toLocaleString('pt-BR');
-
                         // Color based on comparison with volume target
                         if (initialVol > 0) {
                             const pct = (projected / initialVol) * 100;
@@ -8914,7 +8825,6 @@
                         trendCard.style.borderColor = 'rgba(168,157,255,0.3)';
                     }
                 }
-
                 const neededWidth = timeBlocks.length * CONFIG.ui.pixelsPerPoint;
                 ui.canvasInner.style.minWidth = `max(100%, ${neededWidth}px)`;
                 if (chartInstance) { chartInstance.destroy(); }
@@ -8960,10 +8870,8 @@
                     const now = Date.now();
                     const currentIdx = timeBlocks.findIndex(b => b.start <= now && b.end > now);
                     const lastDataIdx = dataValues.reduce((res, val, idx) => val > 0 ? idx : res, -1);
-                    
                     // Prioritize current time block, then last block with data, then end of chart
                     let targetIdx = currentIdx !== -1 ? currentIdx : lastDataIdx;
-                    
                     if (targetIdx !== -1) {
                         const targetX = targetIdx * CONFIG.ui.pixelsPerPoint;
                         const container = ui.container;
