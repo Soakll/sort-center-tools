@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.18
+// @version      1.1.19
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.18";
+    const VERSION = "1.1.19";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -156,8 +156,8 @@
             updatedAt: 'Atualizado',
             containerIn: 'container(s) em',
             docksWord: 'doca(s)',
-            ibBarLabel: 'IB Routes:',
-            obBarLabel: 'OB:',
+            ibBarLabel: '',
+            obBarLabel: '',
             lastUpdateLabel: 'Última atualização',
             versionLabel: 'Versão',
             vistaLoading: 'Carregando...',
@@ -486,8 +486,8 @@
             updatedAt: 'Updated',
             containerIn: 'container(s) in',
             docksWord: 'dock(s)',
-            ibBarLabel: 'IB Routes:',
-            obBarLabel: 'OB:',
+            ibBarLabel: '',
+            obBarLabel: '',
             lastUpdateLabel: 'Last update',
             versionLabel: 'Version',
             vistaLoading: 'Loading...',
@@ -1942,7 +1942,7 @@
                         infoRows.push([
                             d.vrid || '',
                             d.packages || '',
-                            d.cuft || '',
+                            (d.cuft || '').replace(/\s*cuft/i, '').trim(),
                             cubeVal,
                             d.checkIn || '',
                             d.arrivalDelay || '',
@@ -1956,7 +1956,7 @@
                         infoRows.push([
                             d.vrid || '',
                             d.packages || '',
-                            d.cuft || '',
+                            (d.cuft || '').replace(/\s*cuft/i, '').trim(),
                             d.checkIn || '',
                             d.tdrDock || '',
                             d.dockDoors || '',
@@ -2026,12 +2026,12 @@
                     const laneEl = row.querySelector('[class*="lane"]');
                     if (laneEl) {
                         const raw = laneEl.textContent.trim();
-                        const m = raw.match(/->([A-Z0-9]{3,6})/);
+                        const m = raw.match(/->\s*([A-Z0-9]{3,6})/);
                         if (m) yard = m[1];
                         routeName = raw.replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || raw;
                     }
                 } else {
-                    const sdtCell = row.querySelector('td.scheduledArrivalTimeCol');
+                    const sdtCell = row.querySelector('td.scheduledArrivalTimeCol') || row.querySelector('td.sdtCol');
                     sdt = sdtCell ? sdtCell.textContent.trim() : null;
                     yard = CURRENT_NODE;
                     const laneEl = row.querySelector('[class*="lane"]');
@@ -2041,9 +2041,11 @@
                         if (m) yard = m[1];
                         routeName = raw.replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || raw;
                     } else {
+                        // fallback: search across all cells for a lane-like pattern
                         for (const cell of row.querySelectorAll('td')) {
-                            const m = cell.textContent.trim().match(/^([A-Z0-9]{3,6})\s*->/);
-                            if (m) { yard = m[1]; break; }
+                            const txt = cell.textContent.trim();
+                            const m = txt.match(/^([A-Z0-9]{3,6})\s*->/);
+                            if (m) { yard = m[1]; routeName = txt; break; }
                         }
                     }
                 }
@@ -2104,7 +2106,15 @@
                         btn.textContent = L('getInfo');
                         btn.className = 'tl-btn tl-btn-blue';
                         btn.disabled = false;
-                        btn.onclick = () => showInfoPanel(vrid, data);
+                        btn.onclick = () => {
+                            if (isIB) {
+                                if (_openIbPanel) _openIbPanel(vrid, sdt, yard, packages, row, status, btn);
+                                else showInfoPanel(vrid, data);
+                            } else {
+                                if (_openObPanel) _openObPanel(vrid, sdt, yard, packages, row, status, btn);
+                                else showInfoPanel(vrid, data);
+                            }
+                        };
                         if (!isIB && runRoutesForBadge && row && row.querySelector('a.packageDetails')) {
                             runRoutesForBadge(vrid, row, btn);
                         }
@@ -2484,30 +2494,35 @@
                     let attempts = 0;
                     const iv = setInterval(() => {
                         attempts++;
-                        const firstRow = document.querySelector('tr[vrid]');
-                        const v = firstRow ? firstRow.getAttribute('vrid') : null;
-                        if ((v && v !== expectedDifferentVrid) || attempts >= 150) {
+                        const firstRow = isIB ? document.querySelector('tr[vrid]') : document.querySelector('tr span.loadId[data-vrid]');
+                        const v = firstRow ? (isIB ? firstRow.getAttribute('vrid') : firstRow.getAttribute('data-vrid')) : null;
+                        if ((v && v !== expectedDifferentVrid) || attempts >= 80) {
                             clearInterval(iv); cb();
                         }
                     }, 50);
                 }
                 function collectPage() {
-                    document.querySelectorAll('tr[vrid]').forEach(row => {
+                    const sel = isIB ? 'tr[vrid]' : 'tr';
+                    document.querySelectorAll(sel).forEach(row => {
                         const meta = getRowMeta(row);
                         if (!meta) return;
                         if (infoStore[meta.vrid]) return;
                         if (allMetas.some(m => m.vrid === meta.vrid)) return;
-                        const statusElRow = row.querySelector('[data-status]');
+                        
+                        const statusElRow = isIB ? row.querySelector('[class*="originalStatusCheck"][data-status]') : row.querySelector('[data-status]');
                         const status = statusElRow ? statusElRow.getAttribute('data-status') : '';
-                        if (!status || status === 'SCHEDULED') return;
-                        allMetas.push({ meta, status });
+                        // Removed skipping of SCHEDULED for universal collection
+                        allMetas.push({ meta, status, row }); 
                     });
                 }
                 function nextPage(cb) {
                     const nextBtn = document.querySelector('#dashboard_next');
                     if (!nextBtn || nextBtn.classList.contains('ui-state-disabled')) { cb(false); return; }
-                    const prevVrid = (document.querySelector('tr[vrid]') || {}).getAttribute
-                        ? document.querySelector('tr[vrid]').getAttribute('vrid') : null;
+                    
+                    let prevVrid = null;
+                    const firstRow = isIB ? document.querySelector('tr[vrid]') : document.querySelector('tr span.loadId[data-vrid]');
+                    if (firstRow) prevVrid = isIB ? firstRow.getAttribute('vrid') : firstRow.getAttribute('data-vrid');
+                    
                     nextBtn.click();
                     waitForPageLoad(prevVrid, () => cb(true));
                 }
@@ -2515,12 +2530,20 @@
                     collectPage();
                     nextPage(hasNext => {
                         if (hasNext) { scanPages(); return; }
-                        if (allMetas.length === 0) { onDone(); return; }
+                        if (allMetas.length === 0) { 
+                            if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) firstBtn.click();
+                            onDone(); return; 
+                        }
                         if (statusEl) statusEl.textContent = 'Fetching info 0 / ' + allMetas.length + '…';
-                        runInfoBatch(allMetas, onDone, statusEl);
+                        runInfoBatch(allMetas, () => {
+                            // Return to first page after scan
+                            const fBtn = document.querySelector('#dashboard_paginate .first');
+                            if (fBtn && !fBtn.classList.contains('ui-state-disabled')) fBtn.click();
+                            onDone();
+                        }, statusEl);
                     });
                 }
-                setTimeout(scanPages, firstBtn && !firstBtn.classList.contains('ui-state-disabled') ? 300 : 0);
+                setTimeout(scanPages, 400);
             }
             function runInfoBatch(candidates, onDone, statusEl) {
                 const CONCURRENCY = 3;
@@ -2549,7 +2572,7 @@
                                 if (isIB) {
                                     rowBtn.onclick = () => { if (_openIbPanel) _openIbPanel(meta.vrid, meta.sdt, meta.yard, meta.packages, row, status, rowBtn); };
                                 } else {
-                                    rowBtn.onclick = () => showInfoPanel(meta.vrid, data);
+                                    rowBtn.onclick = () => { if (_openObPanel) _openObPanel(meta.vrid, meta.sdt, meta.yard, meta.packages, row, status, rowBtn); else showInfoPanel(meta.vrid, data); };
                                 }
                             } else {
                                 rowBtn.textContent = '⚠ No data';
@@ -3586,9 +3609,7 @@
                     if (document.getElementById('rd-global-bar')) return;
                     const bar = document.createElement('div');
                     bar.id = 'rd-global-bar';
-                    const label = document.createElement('span');
-                    label.className = 'rd-global-label';
-                    label.textContent = L('ibBarLabel');
+
                     const settingsBtn = document.createElement('button');
                     settingsBtn.className = 'tl-btn tl-btn-gray';
                     settingsBtn.setAttribute('data-rd-settings-btn', '1');
@@ -3617,7 +3638,7 @@
                             updateStatus();
                         });
                     };
-                    bar.appendChild(label);
+
                     bar.appendChild(settingsBtn);
                     bar.appendChild(checkUpdateBtn);
                     bar.appendChild(statusEl);
@@ -3858,9 +3879,7 @@
                     const bar = document.createElement('div');
                     bar.id = 'rd-global-bar';
                     bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:40px;background:#0d47a1;border-bottom:2px solid #90caf9;z-index:9999;display:flex;align-items:center;padding:0 20px;gap:15px;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.3);';
-                    const label = document.createElement('span');
-                    label.className = 'rd-global-label';
-                    label.textContent = L('obBarLabel');
+
                     const statusEl = document.createElement('span');
                     statusEl.className = 'rd-global-status';
                     const fullExportBtn = document.createElement('button');
@@ -3910,7 +3929,7 @@
                             updateStatus();
                         });
                     };
-                    bar.appendChild(label);
+
                     bar.appendChild(fullExportBtn);
                     bar.appendChild(settingsBtn);
                     bar.appendChild(checkUpdateBtn);
@@ -3935,7 +3954,8 @@
                         : row.querySelector('[data-status]');
                     const status = statusEl ? statusEl.getAttribute('data-status') : '';
                     if (isIB) { if (!status) return; }
-                    else { if (!status || status === 'SCHEDULED') return; }
+                    // Removed SCHEDULED restriction for Outbound as well to show info buttons for all VRIDs found
+                    else { if (!status) return; }
                     const meta = getRowMeta(row);
                     if (!meta) return;
                     const { vrid, sdt, yard, packages } = meta;
@@ -3953,10 +3973,10 @@
                         ibBtn.disabled = finished;
                         ibBtn.title = finished ? L('concluded') : `Info — ${vrid}`;
                         if (!finished) {
-                            ibBtn.addEventListener('click', e => {
+                            ibBtn.onclick = e => {
                                 e.stopPropagation();
                                 if (_openIbPanel) _openIbPanel(vrid, sdt, yard, packages, row, status, ibBtn);
-                            });
+                            };
                         }
                         const insertBefore = row.querySelector('span.loadId') || row.querySelectorAll('td')[7];
                         if (insertBefore) insertBefore.parentNode.insertBefore(ibBtn, insertBefore);
@@ -3966,10 +3986,10 @@
                         obBtn.disabled = finished;
                         obBtn.title = finished ? L('concluded') : `Info — ${vrid}`;
                         if (!finished) {
-                            obBtn.addEventListener('click', e => {
+                            obBtn.onclick = e => {
                                 e.stopPropagation();
                                 if (_openObPanel) _openObPanel(vrid, sdt, yard, packages, row, status, obBtn);
-                            });
+                            };
                         }
                         const group = getOrCreateBtnGroup(row);
                         if (group) group.insertBefore(obBtn, group.firstChild);
