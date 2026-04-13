@@ -13,7 +13,8 @@ Uma suite de scripts unificada e poderosa, desenvolvida para operadores e gestor
 -   **📈 TPH Chart (V5):** Painel de throughput em tempo real com cálculo dinâmico de necessidade.
 -   **👥 Dynamic Container Builder Ranking:** Ranking de produtividade de associados com busca e auto-scroll.
 -   **🚛 VSM Map / Dock View:** Mapa interativo das docas (IB, OB, Reversa) e integração com YMS.
--   **🔍 VRID Info & CPT Tracker:** Detalhes de VRIDs e monitoramento de tempos críticos (CPT).
+-   **🔍 VRID Info & CPT Tracker:** Detalhes técnicos de VRIDs, análise de volumetria em CuFt, identificação de X-Dock e exportação para Excel.
+-   **📅 CPT Tracker:** Monitoramento de tempos críticos (CPT) com alertas de urgência.
 
 ### 🛠️ Principais Funcionalidades
 
@@ -42,7 +43,8 @@ A powerful and unified userscript suite designed for Amazon Sort Center operator
 -   **📈 TPH Chart (V5):** Real-time throughput dashboard with dynamic "Need" calculation.
 -   **👥 Dynamic Container Builder Ranking:** Associate productivity tracking and ranking with auto-scroll.
 -   **🚛 VSM Map / Dock View:** Interactive visual map of yard/dock sectors (IB, OB, Reversa).
--   **🔍 VRID Info & CPT Tracker:** Enhanced VRID details and Critical Pull Time monitoring.
+-   **🔍 VRID Info & CPT Tracker:** Detailed VRID analytics, CuFt volumetric calculation, X-Dock identification, and Excel export.
+-   **📅 CPT Tracker:** Critical Pull Time monitoring with visual urgency alerts.
 
 ### 🛠️ Key Features
 

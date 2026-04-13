@@ -56,6 +56,20 @@ Módulo focado em performance de associados.
 
 ---
 
+#### 🔍 VRID Info & CPT Analytics
+Este módulo atua como uma camada de inteligência sobre as páginas de Site Status, YMS e Relay Tracking.
+
+-   **Captura de Dados Multi-Sistema:** O script intercepta IDs de VRID na página e realiza consultas paralelas aos endpoints `getContainerIds` e `getContainersDetail` da API Vista.
+-   **Cálculo de Volumetria (CuFt):** Diferente dos sistemas padrão que focam em scans, este módulo converte as dimensões de todos os pallets bipados de `cm³` para `ft³` (CuFt). Isso permite que a liderança visualize a ocupação real do trailer antes mesmo do fechamento.
+-   **Abas de Análise no Popup:**
+    -   **Total:** Mostra o volume planejado vs carregado.
+    -   **Restante:** Filtra apenas os pacotes/pallets que ainda precisam ser processados para aquele VRID específico.
+    -   **X-Dock:** Identifica pacotes que não pertencem à rota direta, facilitando a triagem de transbordo.
+    -   **CPT Priority:** Ordena toda a carga pendente por horário de saída (CPT), destacando o que é crítico.
+-   **Exportação de Dados:** Utiliza a biblioteca `SheetJS (XLSX)` injetada para permitir que o usuário baixe um relatório detalhado em Excel com um único clique.
+
+---
+
 ### 3. Design System: Glassmorphism
 A interface foi projetada para ser visualmente premium e funcional.
 -   **Fundo:** `rgba(10, 22, 40, 0.85)` com `backdrop-filter: blur(16px)`.
@@ -123,6 +137,20 @@ The "Current Need" is recalculated every refresh to adapt to throughput fluctuat
     -   **Good Tier (Yellow):** >75% of PPH goal.
     -   **Warning (Red):** >40% of PPH goal.
 -   **Smart Auto-Scroll:** Loops through the table only if no mouse activity is detected for 5 seconds.
+
+---
+
+#### 🔍 VRID Info & CPT Analytics
+An intelligence layer that enhances Site Status, YMS, and Relay Tracking pages by providing deep visibility into cargo details.
+
+-   **Multi-System Data Injection:** Intercepts VRID IDs on the page and performs parallel queries to Vista API endpoints (`getContainerIds` and `getContainersDetail`).
+-   **Volumetric Calculation (CuFt):** Unlike standard systems that focus solely on scan counts, this module converts pallet dimensions from `cm³` to `ft³` (CuFt). This allows leadership to monitor real-time trailer occupancy and plan for consolidations.
+-   **Advanced Analysis Tabs:**
+    -   **Total:** Overview of total planned vs. loaded volume.
+    -   **Remaining:** Dynamically filters packages/pallets that are yet to be processed for the specific VRID.
+    -   **X-Dock:** Specifically identifies Cross-Dock/Transshipment packages not belonging to the direct route.
+    -   **CPT Priority:** Sorts all pending cargo by critical departure times (CPT), highlighting missed or urgent shipments.
+-   **Data Exporting:** Uses the integrated `SheetJS (XLSX)` library to generate and download comprehensive Excel reports directly from the browser UI.
 
 ---
 
