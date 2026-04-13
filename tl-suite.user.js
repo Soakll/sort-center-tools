@@ -230,7 +230,7 @@
             vsmSessionExpired: '🔐 Sessão expirada.',
 
             // ── Painel Produtividade module ──
-            prodTitle: 'Produtividade',
+            prodTitle: 'Dynamic Container Builder Ranking',
             prodFrom: 'De',
             prodTo: 'Até',
             prodApply: '▶ Aplicar',
@@ -593,7 +593,7 @@
             vsmSessionExpired: '🔐 Session expired.',
 
             // ── Painel Produtividade module ──
-            prodTitle: 'Productivity',
+            prodTitle: 'Dynamic Container Builder Ranking',
             prodFrom: 'From',
             prodTo: 'To',
             prodApply: '▶ Apply',
