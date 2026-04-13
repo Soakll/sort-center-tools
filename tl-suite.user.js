@@ -178,7 +178,7 @@
             tphShiftStart: 'Início (Turno)',
             tphShiftEnd: 'Fim (Turno)',
             tphTotalVol: 'Volume Total',
-            tphLunchBreak: 'Horário de Almoço',
+            tphLunchBreak: 'Almoço/Janta',
             tphBreak: 'Pausa',
             tphRaiseBar: 'Raise the bar',
             tphFetchData: 'Buscar Dados',
@@ -186,6 +186,7 @@
             tphAvgHour: 'Média / Hora',
             tphAvg5min: 'Média / 5 min',
             tphCurrentNeed: 'Nec. Atual / 5 min',
+            tphNeedHour: 'Nec. Atual / Hora',
             tphAchievement: 'Atingimento (vs Nec.)',
             tphTrend: '📈 Tendência',
             tphFetching: 'Buscando',
@@ -540,7 +541,7 @@
             tphShiftStart: 'Start (Shift)',
             tphShiftEnd: 'End (Shift)',
             tphTotalVol: 'Total Volume',
-            tphLunchBreak: 'Lunch Break',
+            tphLunchBreak: 'Lunch/Dinner',
             tphBreak: 'Break',
             tphRaiseBar: 'Raise the bar',
             tphFetchData: 'Fetch Data',
@@ -548,6 +549,7 @@
             tphAvgHour: 'Avg / Hour',
             tphAvg5min: 'Avg / 5 min',
             tphCurrentNeed: 'Current Need / 5 min',
+            tphNeedHour: 'Current Need / Hour',
             tphAchievement: 'Achievement (vs Need)',
             tphTrend: '📈 Trend',
             tphFetching: 'Fetching',
@@ -8495,6 +8497,7 @@
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">${_SUITE.L('tphTotalPeriod')}</span><span class="tl-v5-metric-val" id="tl-v5-val-total">--</span></div>
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">${_SUITE.L('tphAvgHour')}</span><span class="tl-v5-metric-val" id="tl-v5-val-avg-hr">--</span></div>
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">${_SUITE.L('tphAvg5min')}</span><span class="tl-v5-metric-val" id="tl-v5-val-avg">--</span></div>
+                <div class="tl-v5-metric" style="border-color:${CONFIG.ui.needColor}44;"><span class="tl-v5-metric-label" style="color:${CONFIG.ui.needColor};">${_SUITE.L('tphNeedHour')}</span><span class="tl-v5-metric-val" id="tl-v5-val-need-hr">--</span></div>
                 <div class="tl-v5-metric" style="border-color:${CONFIG.ui.needColor}44;"><span class="tl-v5-metric-label" style="color:${CONFIG.ui.needColor};">${_SUITE.L('tphCurrentNeed')}</span><span class="tl-v5-metric-val" id="tl-v5-val-need">--</span></div>
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">${_SUITE.L('tphAchievement')}</span><span class="tl-v5-metric-val" id="tl-v5-val-achv" style="color:${CONFIG.ui.realColor};">--%</span></div>
                 <div class="tl-v5-metric" id="tl-v5-metric-trend" style="border-color:rgba(168,157,255,0.3);"><span class="tl-v5-metric-label" style="color:#c4b5fd;">${_SUITE.L('tphTrend')}</span><span class="tl-v5-metric-val" id="tl-v5-val-trend" style="color:#c4b5fd;">--</span></div>
@@ -8749,7 +8752,7 @@
                 afterDatasetsDraw(chart) {
                     const { ctx, data } = chart;
                     const metaReal = chart.getDatasetMeta(0);
-                    const needDataset = data.datasets.find(ds => ds.label === 'Necessidade');
+                    const needDataset = data.datasets.find(ds => ds.label === _SUITE.L('tphNeedLine'));
                     const needMeta = needDataset
                         ? chart.getDatasetMeta(data.datasets.indexOf(needDataset))
                         : null;
@@ -8793,17 +8796,6 @@
                                 ctx.fillStyle = CONFIG.ui.needColor;
                                 ctx.textBaseline = 'top';
                                 ctx.fillText(needVal, point.x, yPos);
-                                if (realVal > 0) {
-                                    const diffPct = ((realVal - needVal) / needVal) * 100;
-                                    const diffRounded = Math.round(diffPct);
-                                    let pctText = '', pctColor = '';
-                                    if (diffRounded > 0) { pctText = `▲ ${diffRounded}%`; pctColor = CONFIG.ui.upColor; }
-                                    else if (diffRounded < 0) { pctText = `▼ ${Math.abs(diffRounded)}%`; pctColor = CONFIG.ui.downColor; }
-                                    else { pctText = `- 0%`; pctColor = 'rgba(255,255,255,0.4)'; }
-                                    ctx.font = 'bold 11px "DM Sans", sans-serif';
-                                    ctx.fillStyle = pctColor;
-                                    ctx.fillText(pctText, point.x, yPos + 16);
-                                }
                                 ctx.textBaseline = 'bottom';
                             }
                         });
@@ -8871,8 +8863,14 @@
                 document.getElementById('tl-v5-val-total').innerText = totalPkgs.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg-hr').innerText = avgHr.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg').innerText = avg.toLocaleString('pt-BR');
+
+                const needHr = currentNeedMetric * 12;
+                const needHrEl = document.getElementById('tl-v5-val-need-hr');
+                if (needHrEl) needHrEl.innerText = needHr > 0 ? needHr.toLocaleString('pt-BR') : '--';
+
                 const needEl = document.getElementById('tl-v5-val-need');
                 if (needEl) needEl.innerText = currentNeedMetric > 0 ? currentNeedMetric.toLocaleString('pt-BR') : '--';
+
                 document.getElementById('tl-v5-val-achv').innerText = achv + '%';
                 const achvEl = document.getElementById('tl-v5-val-achv');
                 if (achv >= 95) achvEl.style.color = '#60a5fa'; else if (achv >= 80) achvEl.style.color = '#34d399';
