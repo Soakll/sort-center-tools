@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.22
+// @version      1.1.23
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.22";
+    const VERSION = "1.1.23";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -9576,7 +9576,7 @@
                 currentSlots.forEach(function (h) {
                     hourlyMaps[h] = {};
                     (hourlyData[h] || []).forEach(function (r) {
-                        hourlyMaps[h][r.login || r.userLogin || r.userName] = r;
+                        hourlyMaps[h][r.userId || r.login || r.userLogin || r.userName] = r;
                     });
                 });
                 var totalsPerSlot = {};
@@ -9631,7 +9631,7 @@
                 var winners = { total: 0 };
                 currentSlots.forEach(function (h) { winners[h] = 0; });
                 lastData.forEach(function (d) {
-                    var login = d.login || d.userLogin || d.userName;
+                    var login = d.userId || d.login || d.userLogin || d.userName;
                     var total = d.successfulScans || 0;
                     if (total > winners.total) winners.total = total;
                     currentSlots.forEach(function (h) {
@@ -9644,20 +9644,20 @@
                 var sorted = lastData.slice().filter(function (d) {
                     if (!searchQuery) return true;
                     var name = (d.userName || '').toLowerCase();
-                    var login = (d.login || d.userLogin || '').toLowerCase();
+                    var login = (d.login || d.userLogin || d.userId || '').toLowerCase();
                     return name.includes(searchQuery) || login.includes(searchQuery);
                 }).sort(function (a, b) {
                     var ka = sortCol;
                     if (ka === 'userName') {
-                        var va = (a.userName || '').toLowerCase(), vb = (b.userName || '').toLowerCase();
+                        var va = (a.userId || a.userName || '').toLowerCase(), vb = (b.userId || b.userName || '').toLowerCase();
                         return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                     }
                     var va = Number(a[ka]) || 0, vb = Number(b[ka]) || 0;
                     return sortAsc ? va - vb : vb - va;
                 });
                 sorted.forEach(function (d, i) {
-                    var login = d.login || d.userLogin || d.userName;
-                    var name = normalizeName(d.userName || login);
+                    var login = d.userId || d.login || d.userLogin || d.userName;
+                    var name = d.userId || normalizeName(d.userName || login);
                     var totalPkgs = d.successfulScans || 0;
                     var totalErr = d.errorScans || 0;
                     var totalWork = d.workInSeconds || 0;
