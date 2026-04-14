@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.21
+// @version      1.1.22
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.21";
+    const VERSION = "1.1.22";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -7347,6 +7347,8 @@
                 return parsed.map || {};
             } catch (e) { return {}; }
         }
+        var URGENT_THRESHOLD = GM_getValue('obdv_urgent_min', 90);
+        var WARNING_THRESHOLD = GM_getValue('obdv_warning_min', 120);
         function saveVsmCache(map) {
             try { GM_setValue(VSM_CACHE_KEY, JSON.stringify({ ts: Date.now(), map: map })); } catch (e) { }
         }
@@ -7624,6 +7626,8 @@
             .obdv-pallets   { font-size: 16px; font-weight: 800; color: #34d399; }
             .obdv-positions { font-size: 15px; color: #818cf8; line-height: 1.5; word-break: break-word; }
             .obdv-container-loading { font-size: 15px; color: #4b5563; animation: obdv-blink 1.2s ease-in-out infinite; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; margin-top: 6px; }
+            .obdv-thresh-inp::-webkit-outer-spin-button, .obdv-thresh-inp::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+            .obdv-thresh-inp { -moz-appearance: textfield; }
         `;
             document.head.appendChild(st);
         }
@@ -7698,6 +7702,24 @@
             toolbar.appendChild(hideExpiredBtn);
             toolbar.appendChild(routesPanelBtn);
             toolbar.appendChild(calBtn);
+            // Thresholds
+            var threshWrap = document.createElement('div');
+            threshWrap.style.cssText = 'display:flex;align-items:center;gap:2px;background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);margin-left:auto;';
+            var urgLbl = document.createElement('span'); urgLbl.textContent = '🚨'; urgLbl.style.fontSize = '10px'; threshWrap.appendChild(urgLbl);
+            var urgInp = document.createElement('input'); urgInp.type = 'number'; urgInp.value = URGENT_THRESHOLD;
+            urgInp.className = 'obdv-thresh-inp';
+            urgInp.style.cssText = 'background:transparent;border:none;color:#ef4444;font-size:11px;width:22px;font-family:monospace;outline:none;font-weight:bold;cursor:pointer;padding:0;';
+            urgInp.onchange = function () { URGENT_THRESHOLD = parseInt(this.value) || 90; GM_setValue('obdv_urgent_min', URGENT_THRESHOLD); renderCards(filterInput.value.trim()); };
+            threshWrap.appendChild(urgInp);
+            var minUrg = document.createElement('span'); minUrg.textContent = 'min'; minUrg.style.cssText = 'font-size:9px;color:#6e7681;margin-right:6px;'; threshWrap.appendChild(minUrg);
+            var warnLbl = document.createElement('span'); warnLbl.textContent = '⚠️'; warnLbl.style.fontSize = '10px'; threshWrap.appendChild(warnLbl);
+            var warnInp = document.createElement('input'); warnInp.type = 'number'; warnInp.value = WARNING_THRESHOLD;
+            warnInp.className = 'obdv-thresh-inp';
+            warnInp.style.cssText = 'background:transparent;border:none;color:#f59e0b;font-size:11px;width:22px;font-family:monospace;outline:none;font-weight:bold;cursor:pointer;padding:0;';
+            warnInp.onchange = function () { WARNING_THRESHOLD = parseInt(this.value) || 120; GM_setValue('obdv_warning_min', WARNING_THRESHOLD); renderCards(filterInput.value.trim()); };
+            threshWrap.appendChild(warnInp);
+            var minWarn = document.createElement('span'); minWarn.textContent = 'min'; minWarn.style.cssText = 'font-size:9px;color:#6e7681;'; threshWrap.appendChild(minWarn);
+            toolbar.appendChild(threshWrap);
             toolbar.appendChild(countEl);
             toolbar.appendChild(vsmStatusEl);
 
@@ -8009,8 +8031,8 @@
                 var now = Date.now(), diff = r.cptMs ? r.cptMs - now : null;
                 var isCompleted = _isCompleted(r.status);
                 var expired = (diff !== null && diff < 0) || isCompleted;
-                var urgent = !expired && diff !== null && diff >= 0 && diff < 90 * 60000;
-                var warning = !expired && diff !== null && diff >= 90 * 60000 && diff < 2 * 3600000;
+                var urgent = !expired && diff !== null && diff >= 0 && diff < URGENT_THRESHOLD * 60000;
+                var warning = !expired && diff !== null && diff >= URGENT_THRESHOLD * 60000 && diff < WARNING_THRESHOLD * 60000;
                 var card = document.createElement('div');
                 card.className = 'obdv-card' + (urgent ? ' urgent' : warning ? ' warning' : expired ? ' expired' : '');
                 var headerBg = expired ? '#1c2128' : urgent ? '#2d0f0f' : warning ? '#2b1d0e' : '#161b22';
