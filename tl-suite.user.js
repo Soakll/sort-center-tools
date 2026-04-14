@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.20
+// @version      1.1.21
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.20";
+    const VERSION = "1.1.21";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -8366,7 +8366,7 @@
         .tl-v5-metric { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px 14px; flex:1; min-width: 0; }
         .tl-v5-metric-label { font-size:0.65rem; color:rgba(255,255,255,0.4); margin-bottom:4px; text-transform:uppercase; display:block; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tl-v5-metric-val { font-size:1.6rem; font-weight:700; color:#fff; display:block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tl-v5-canvas-container { position:relative; flex:1; width:100%; overflow-x:auto; overflow-y:hidden; min-height:250px; border-radius:8px; opacity:1; transition:opacity 0.2s, transform 0.2s; }
+        .tl-v5-canvas-container { flex:1; width:100%; overflow-x:auto; overflow-y:hidden; border-radius:8px; opacity:1; transition:opacity 0.2s, transform 0.2s; }
         .tl-v5-canvas-container.updating { opacity:0; transform:translateY(4px); }
         .tl-v5-canvas-container::-webkit-scrollbar { height: 8px; }
         .tl-v5-canvas-container::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
@@ -8475,8 +8475,15 @@
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">${_SUITE.L('tphAchievement')}</span><span class="tl-v5-metric-val" id="tl-v5-val-achv" style="color:${CONFIG.ui.realColor};">--%</span></div>
                 <div class="tl-v5-metric" id="tl-v5-metric-trend" style="border-color:rgba(168,157,255,0.3);"><span class="tl-v5-metric-label" style="color:#c4b5fd;">${_SUITE.L('tphTrend')}</span><span class="tl-v5-metric-val" id="tl-v5-val-trend" style="color:#c4b5fd;">--</span></div>
             </div>
-            <div class="tl-v5-canvas-container" id="tl-v5-container">
-                <div class="tl-v5-canvas-inner" id="tl-v5-canvas-inner"></div>
+            <div style="display:flex; flex:1; position:relative; min-height:250px;">
+                <div id="tl-v5-yaxis-wrap" style="position:absolute; left:0; top:0; bottom:8px; z-index:10; background:transparent; pointer-events:none; width:45px; display:none;">
+                </div>
+                <div id="tl-v5-mask-wrap" style="flex:1; width:100%; position:relative; overflow:hidden; display:flex;">
+                    <div class="tl-v5-canvas-container" id="tl-v5-container" style="flex:1;">
+                        <div class="tl-v5-canvas-inner" id="tl-v5-canvas-inner"></div>
+                    </div>
+                </div>
+                </div>
             </div>
         </div>
     `;
@@ -8902,19 +8909,46 @@
                         label: _SUITE.L('tphNeedLine'), data: needValues, borderColor: CONFIG.ui.needColor, borderWidth: 2, borderDash: [5, 5], pointRadius: 0, fill: false
                     });
                 }
+                let rawMax = Math.max(...dataValues, GOAL_5MIN, ...needValues);
+                let roundedMax = Math.ceil((rawMax + 200) / 100) * 100;
                 const bottomPadding = (currentNeedMetric > 0 || initialVol !== 0) ? 55 : 10;
                 chartInstance = new Chart(ctx, {
                     type: 'line',
                     data: { labels, datasets },
-                    plugins: [labelsPlugin],
+                    plugins: [labelsPlugin, {
+                        id: 'htmlYAxis',
+                        afterDraw: (chart) => {
+                            const yAxisWrap = document.getElementById('tl-v5-yaxis-wrap');
+                            if (!yAxisWrap || !chart.scales.y) return;
+                            yAxisWrap.style.display = 'block';
+                            const yScale = chart.scales.y;
+                            const yWidth = Math.ceil(yScale.right) || 45;
+                            yAxisWrap.style.width = yWidth + 'px';
+
+                            const maskWrap = document.getElementById('tl-v5-mask-wrap');
+                            if (maskWrap) {
+                                const maskStr = `linear-gradient(to right, transparent ${yWidth}px, black ${yWidth}px)`;
+                                maskWrap.style.maskImage = maskStr;
+                                maskWrap.style.webkitMaskImage = maskStr;
+                            }
+
+                            let html = '';
+                            yScale.ticks.forEach(tick => {
+                                if (tick.label === undefined || tick.label === '') return;
+                                const yPos = yScale.getPixelForValue(tick.value);
+                                html += `<div style="position:absolute; right:10px; top:${yPos}px; transform:translateY(-50%); color:rgba(255,255,255,0.6); font-family:'DM Sans', sans-serif; font-size:14px; font-weight:bold; white-space:nowrap; text-shadow:1px 1px 2px rgba(10,22,40,0.8);">${tick.label}</div>`;
+                            });
+                            yAxisWrap.innerHTML = html;
+                        }
+                    }],
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         layout: { padding: { top: 60, right: 30, bottom: bottomPadding, left: 20 } },
                         interaction: { mode: 'index', intersect: false },
                         plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(20,10,50,0.9)', titleColor: '#fff', bodyColor: '#aaa' } },
                         scales: {
-                            x: { ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 14, family: "'DM Sans', sans-serif", weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false } },
-                            y: { min: 0, max: Math.max(...dataValues, GOAL_5MIN, ...needValues) + 200, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 14, family: "'DM Sans', sans-serif", weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false } }
+                            x: { offset: true, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 14, family: "'DM Sans', sans-serif", weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false } },
+                            y: { min: 0, max: roundedMax, ticks: { color: 'transparent', font: { size: 14, family: "'DM Sans', sans-serif", weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false } }
                         }
                     }
                 });
@@ -9039,7 +9073,7 @@
                 '#tl-auto-select{font-size:11px;padding:3px 6px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);cursor:pointer}',
                 '#tl-auto-select:focus{outline:none;border-color:#3b82f6}',
                 '#tl-auto-countdown{font-size:11px;font-family:monospace;color:#3b82f6;font-weight:700;min-width:48px}',
-                '#tl-goal-bar{display:flex;align-items:center;gap:12px;padding:8px 20px;background:rgba(15, 23, 42, 0.95);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;position:relative;z-index:1001}',
+                '#tl-goal-bar{display:flex;align-items:center;gap:12px;padding:8px 20px;background:transparent;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
                 '#tl-goal-label{font-size:13px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
                 '#tl-goal-input{width:86px;font-size:16px;font-weight:800;padding:4px 8px;border:2px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;background:rgba(0,0,0,0.3);text-align:center;-moz-appearance:textfield}',
                 '#tl-goal-input::-webkit-outer-spin-button,#tl-goal-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
@@ -9049,7 +9083,7 @@
                 '.tl-goal-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap}',
                 '#tl-prod-body{overflow:auto;flex:1;min-height:0;background:transparent}',
                 '#tl-prod-body table{width:100%;border-collapse:collapse;border-spacing:0}',
-                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(255,255,255,0.2);cursor:pointer;user-select:none;white-space:nowrap;z-index:1000}',
+                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(255,255,255,0.2);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
                 '#tl-prod-body thead th:hover{color:#fff;background:rgba(51, 65, 85, 0.95)}',
                 '#tl-prod-body thead th.sort-asc::after{content:" ▴"}',
                 '#tl-prod-body thead th.sort-desc::after{content:" ▾"}',
