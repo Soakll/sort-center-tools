@@ -9154,7 +9154,7 @@
                 '.tl-as-slider{width:70px;accent-color:#3b82f6;cursor:pointer;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.1);border-radius:2px}',
                 '.tl-as-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#3b82f6;border-radius:50%;cursor:pointer;box-shadow:0 0 5px rgba(0,0,0,0.5)}',
                 '.tl-as-label{font-size:10px;color:#9ca3af;text-transform:uppercase;font-weight:800;letter-spacing:0.02em}',
-                '.winners-img{transition:transform .25s ease;z-index:10;pointer-events:auto;cursor:pointer}',
+                '.winners-img{transition:transform .25s ease;z-index:1;pointer-events:auto;cursor:pointer}',
                 '.winners-img:hover{transform:scale(5);z-index:99!important;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.5))}',
             ].join(''));
             var fab = document.createElement('button');
