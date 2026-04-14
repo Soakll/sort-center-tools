@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.19
+// @version      1.1.20
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.19";
+    const VERSION = "1.1.20";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -1289,7 +1289,7 @@
         .rd-popup-body  { display: flex; gap: 0; overflow: hidden; flex: 1; min-height: 0; }
         .rd-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         .rd-panel + .rd-panel { border-left: 1px solid rgba(255, 255, 255, 0.1); }
-        .rd-panel-header { padding: 7px 12px 6px; font-size: 11.5px; font-weight: 700; flex-shrink: 0; }
+        .rd-panel-header { padding: 7px 12px 6px; font-size: 17px; font-weight: 700; flex-shrink: 0; }
         .rd-panel-header-total { background: rgba(232, 245, 233, 0.5); color: #1b5e20; }
         .rd-panel-header-rest  { background: rgba(227, 242, 253, 0.5); color: #0d47a1; }
         .rd-panel-header-xd    { background: rgba(255, 243, 224, 0.5); color: #e65100; }
@@ -1299,13 +1299,13 @@
             padding: 5px 0; border-bottom: 1px solid #f0f0f0;
         }
         .rd-route-row:last-child { border-bottom: none; }
-        .rd-route-name  { flex: 1; font-size: 11px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rd-route-name  { flex: 1; font-size: 16px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .rd-route-pkgs  { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; min-width: 44px; text-align: right; }
         .rd-bar-wrap    { width: 80px; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; flex-shrink: 0; }
         .rd-bar-fill    { height: 100%; border-radius: 5px; transition: width 0.3s ease; }
         .rd-pct-label   { font-size: 11px; font-weight: 700; color: #475569; min-width: 38px; text-align: right; white-space: nowrap; }
         .rd-cpt-list    { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 0 5px 8px; border-bottom: 1px solid #f0f0f0; }
-        .rd-cpt-chip    { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 20px; background: #f0f4ff; border: 1px solid #c5cae9; font-size: 10px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; }
+        .rd-cpt-chip    { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 20px; background: #f0f4ff; border: 1px solid #c5cae9; font-size: 15px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; }
         .rd-cpt-name    { font-weight: 700; color: #283593; }
         .rd-cpt-pkgs    { font-weight: 600; color: #444; }
         .rd-cpt-pct     { font-weight: 700; }
@@ -1333,8 +1333,8 @@
         .rd-dark .rd-vrid-sub-lane   { color: #7878a8 !important; }
         .rd-dark .rd-vrid-sub-pkgs   { color: #90caf9 !important; }
         .rd-vrid-sub      { padding: 3px 4px 5px 8px; border-top: 1px dashed #e0e0e0; display: flex; flex-wrap: wrap; gap: 4px; }
-        .rd-vrid-sub-item { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 20px; background: #f3f4ff; border: 1px solid #c5cae9; font-size: 10px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; cursor: default; }
-        .rd-vrid-sub-lane { font-weight: 400; color: #777; font-size: 9.5px; }
+        .rd-vrid-sub-item { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 20px; background: #f3f4ff; border: 1px solid #c5cae9; font-size: 15px; font-family: 'Amazon Ember', Arial, sans-serif; white-space: nowrap; cursor: default; }
+        .rd-vrid-sub-lane { font-weight: 400; color: #777; font-size: 14px; }
         .rd-vrid-sub-pkgs { font-weight: 700; color: #0d47a1; }
         .rd-settings-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999999;display:flex;align-items:center;justify-content:center; }
         .rd-settings-panel   { background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);padding:20px 24px;min-width:280px;font-family:'Amazon Ember',Arial,sans-serif; }
@@ -2508,21 +2508,21 @@
                         if (!meta) return;
                         if (infoStore[meta.vrid]) return;
                         if (allMetas.some(m => m.vrid === meta.vrid)) return;
-                        
+
                         const statusElRow = isIB ? row.querySelector('[class*="originalStatusCheck"][data-status]') : row.querySelector('[data-status]');
                         const status = statusElRow ? statusElRow.getAttribute('data-status') : '';
                         // Removed skipping of SCHEDULED for universal collection
-                        allMetas.push({ meta, status, row }); 
+                        allMetas.push({ meta, status, row });
                     });
                 }
                 function nextPage(cb) {
                     const nextBtn = document.querySelector('#dashboard_next');
                     if (!nextBtn || nextBtn.classList.contains('ui-state-disabled')) { cb(false); return; }
-                    
+
                     let prevVrid = null;
                     const firstRow = isIB ? document.querySelector('tr[vrid]') : document.querySelector('tr span.loadId[data-vrid]');
                     if (firstRow) prevVrid = isIB ? firstRow.getAttribute('vrid') : firstRow.getAttribute('data-vrid');
-                    
+
                     nextBtn.click();
                     waitForPageLoad(prevVrid, () => cb(true));
                 }
@@ -2530,9 +2530,9 @@
                     collectPage();
                     nextPage(hasNext => {
                         if (hasNext) { scanPages(); return; }
-                        if (allMetas.length === 0) { 
+                        if (allMetas.length === 0) {
                             if (firstBtn && !firstBtn.classList.contains('ui-state-disabled')) firstBtn.click();
-                            onDone(); return; 
+                            onDone(); return;
                         }
                         if (statusEl) statusEl.textContent = 'Fetching info 0 / ' + allMetas.length + '…';
                         runInfoBatch(allMetas, () => {
@@ -3072,16 +3072,16 @@
                             : { title: '#e65100', info: '#bf360c', border: '#ffe0b2', vridName: '#333', lane: '#888', vridInfo: '#e65100', routeName: '#555', pallet: '#e65100', bar: '#e65100', pct: '#e65100' };
                         const xdTotalHeader = document.createElement('div');
                         xdTotalHeader.style.cssText = `padding:6px 0 4px;border-bottom:2px solid ${xdC.border};display:flex;align-items:center;gap:6px;margin-bottom:4px;`;
-                        const xdTotalTitle = document.createElement('div'); xdTotalTitle.style.cssText = `flex:1;font-size:11px;font-weight:800;color:${xdC.title};`; xdTotalTitle.textContent = 'X-Dock restante';
-                        const xdTotalInfo = document.createElement('div'); xdTotalInfo.style.cssText = `font-size:11px;font-weight:700;color:${xdC.info};white-space:nowrap;`; xdTotalInfo.textContent = `${xdTotalPkgs.toLocaleString('en-US')} pkgs · ${xdTotalPallets} Pallets`;
+                        const xdTotalTitle = document.createElement('div'); xdTotalTitle.style.cssText = `flex:1;font-size:16px;font-weight:800;color:${xdC.title};`; xdTotalTitle.textContent = 'X-Dock restante';
+                        const xdTotalInfo = document.createElement('div'); xdTotalInfo.style.cssText = `font-size:16px;font-weight:700;color:${xdC.info};white-space:nowrap;`; xdTotalInfo.textContent = `${xdTotalPkgs.toLocaleString('en-US')} pkgs · ${xdTotalPallets} Pallets`;
                         xdTotalHeader.appendChild(xdTotalTitle); xdTotalHeader.appendChild(xdTotalInfo);
                         xdScroll.appendChild(xdTotalHeader);
                         xdVrids.forEach(v => {
                             const vridRow = document.createElement('div');
                             vridRow.style.cssText = 'padding:5px 0 2px;display:flex;align-items:center;gap:6px;margin-top:6px;';
-                            const vridName = document.createElement('div'); vridName.style.cssText = `flex:1;font-size:11px;font-weight:800;color:${xdC.vridName};`;
-                            vridName.innerHTML = `<span>${v.vrid}</span>${v.lane ? `<span style="font-weight:400;color:${xdC.lane};font-size:10px;margin-left:5px">${v.lane}</span>` : ''}`;
-                            const vridInfo = document.createElement('div'); vridInfo.style.cssText = `font-size:11px;font-weight:700;color:${xdC.vridInfo};white-space:nowrap;`;
+                            const vridName = document.createElement('div'); vridName.style.cssText = `flex:1;font-size:16px;font-weight:800;color:${xdC.vridName};`;
+                            vridName.innerHTML = `<span>${v.vrid}</span>${v.lane ? `<span style="font-weight:400;color:${xdC.lane};font-size:15px;margin-left:5px">${v.lane}</span>` : ''}`;
+                            const vridInfo = document.createElement('div'); vridInfo.style.cssText = `font-size:16px;font-weight:700;color:${xdC.vridInfo};white-space:nowrap;`;
                             vridInfo.textContent = `${v.pkgs.toLocaleString('en-US')} pkgs · ${v.pallets} Pallets`;
                             vridRow.appendChild(vridName); vridRow.appendChild(vridInfo);
                             xdScroll.appendChild(vridRow);
@@ -3090,7 +3090,7 @@
                                 const routeRow = document.createElement('div'); routeRow.className = 'rd-route-row'; routeRow.style.paddingLeft = '10px';
                                 const routeName = document.createElement('div'); routeName.className = 'rd-route-name'; routeName.style.color = xdC.routeName; routeName.textContent = r.route; routeName.title = r.route;
                                 const routePkgs = document.createElement('div'); routePkgs.className = 'rd-route-pkgs'; routePkgs.textContent = r.pkgs.toLocaleString('en-US');
-                                const palletBadge = document.createElement('div'); palletBadge.style.cssText = `font-size:10px;color:${xdC.pallet};white-space:nowrap;min-width:52px;text-align:right`; palletBadge.textContent = r.pallets + ' Pallets';
+                                const palletBadge = document.createElement('div'); palletBadge.style.cssText = `font-size:15px;color:${xdC.pallet};white-space:nowrap;min-width:52px;text-align:right`; palletBadge.textContent = r.pallets + ' Pallets';
                                 const barWrap = document.createElement('div'); barWrap.className = 'rd-bar-wrap';
                                 const barFill = document.createElement('div'); barFill.className = 'rd-bar-fill'; barFill.style.cssText = `width:${pct.toFixed(1)}%;background:${xdC.bar};`; barWrap.appendChild(barFill);
                                 const pctLabel = document.createElement('div'); pctLabel.className = 'rd-pct-label'; pctLabel.style.color = xdC.pct; pctLabel.textContent = pct.toFixed(1) + '%';
@@ -3157,16 +3157,16 @@
                             const rowBg = expired ? cptC.expiredBg : 'transparent';
                             cptRow.style.cssText = `padding:6px 8px 3px;border-bottom:2px solid ${expired ? cptC.expiredBorder : cptC.border};border-radius:${expired ? '4px 4px 0 0' : '0'};display:flex;align-items:center;gap:6px;margin-top:4px;background:${rowBg};`;
                             const cptName = document.createElement('div');
-                            cptName.style.cssText = `flex:1;font-size:11px;font-weight:800;color:${expired ? cptC.expiredName : cptC.cptName};`;
+                            cptName.style.cssText = `flex:1;font-size:16px;font-weight:800;color:${expired ? cptC.expiredName : cptC.cptName};`;
                             cptName.textContent = cpt;
                             if (expired) {
                                 const badge = document.createElement('span');
-                                badge.style.cssText = `font-size:10px;font-weight:700;color:${cptC.expiredBadge};white-space:nowrap;margin-left:6px;`;
+                                badge.style.cssText = `font-size:15px;font-weight:700;color:${cptC.expiredBadge};white-space:nowrap;margin-left:6px;`;
                                 badge.textContent = L('cptExpired');
                                 cptName.appendChild(badge);
                             }
                             const cptTotalEl = document.createElement('div');
-                            cptTotalEl.style.cssText = `font-size:11px;font-weight:700;color:${expired ? cptC.expiredTotal : cptC.cptTotal};white-space:nowrap;`;
+                            cptTotalEl.style.cssText = `font-size:16px;font-weight:700;color:${expired ? cptC.expiredTotal : cptC.cptTotal};white-space:nowrap;`;
                             cptTotalEl.textContent = cptTotal.toLocaleString('en-US') + ' ' + L('restantes');
                             cptRow.appendChild(cptName); cptRow.appendChild(cptTotalEl);
                             block.appendChild(cptRow);
@@ -3176,7 +3176,7 @@
                                 vridRow.className = 'rd-route-row';
                                 vridRow.style.cssText = `padding-left:10px;background:${expired ? cptC.expiredBg : 'transparent'};`;
                                 const vridName = document.createElement('div'); vridName.className = 'rd-route-name'; vridName.style.color = expired ? cptC.expiredName : cptC.vridName;
-                                vridName.innerHTML = `<span style="font-weight:700">${vrid}</span>${lane ? `<span style="font-weight:400;color:${cptC.lane};font-size:10px;margin-left:5px">${lane}</span>` : ''}`;
+                                vridName.innerHTML = `<span style="font-weight:700">${vrid}</span>${lane ? `<span style="font-weight:400;color:${cptC.lane};font-size:15px;margin-left:5px">${lane}</span>` : ''}`;
                                 const vridPkgs = document.createElement('div'); vridPkgs.className = 'rd-route-pkgs'; vridPkgs.textContent = pkgs.toLocaleString('en-US');
                                 const barWrap = document.createElement('div'); barWrap.className = 'rd-bar-wrap';
                                 const barFill = document.createElement('div'); barFill.className = 'rd-bar-fill'; barFill.style.cssText = `width:${pct.toFixed(1)}%;background:${expired ? cptC.expiredBadge : cptC.bar};`; barWrap.appendChild(barFill);
@@ -3194,7 +3194,7 @@
                                             const chipBorder = isDark ? (expired ? '#7a1a1a' : '#4a4a8e') : (expired ? '#f44336' : '#c5cae9');
                                             const chipColor = isDark ? (expired ? '#ff8a80' : '#90a0ff') : (expired ? '#b71c1c' : '#283593');
                                             const pkgColor = isDark ? (expired ? '#ff5252' : '#b0b0cc') : (expired ? '#c62828' : '#444');
-                                            chip.style.cssText = `display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;background:${chipBg};border:1px solid ${chipBorder};font-size:10px;font-family:'Amazon Ember',Arial,sans-serif;white-space:nowrap;`;
+                                            chip.style.cssText = `display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;background:${chipBg};border:1px solid ${chipBorder};font-size:15px;font-family:'Amazon Ember',Arial,sans-serif;white-space:nowrap;`;
                                             chip.innerHTML = `<span style="font-weight:700;color:${chipColor}">${routeName}</span><span style="font-weight:600;color:${pkgColor}">${routePkgs.toLocaleString('en-US')}</span>`;
                                             routeChipRow.appendChild(chip);
                                         });
@@ -3809,7 +3809,7 @@
                                     : { title: '#e65100', info: '#bf360c', border: '#ffe0b2', routeName: '#555', pallet: '#e65100', bar: '#e65100', pct: '#e65100' };
                                 pXd = document.createElement('div'); pXd.className = 'rd-panel'; pXd.style.flex = '1';
                                 const xHdr = document.createElement('div'); xHdr.className = 'rd-panel-header rd-panel-header-xd';
-                                xHdr.innerHTML = L('xdock') + ' <span style="float:right;font-weight:700;color:' + xdC.info + ';">' + xdD.pkgs.toLocaleString('en-US') + ' pkgs · ' + xdD.pallets + ' Pallets</span>';
+                                xHdr.innerHTML = L('xdock') + ' <span style="float:right;font-weight:700;font-size:16px;color:' + xdC.info + ';">' + xdD.pkgs.toLocaleString('en-US') + ' pkgs · ' + xdD.pallets + ' Pallets</span>';
                                 pXd.appendChild(xHdr);
                                 const xScroll = document.createElement('div'); xScroll.className = 'rd-panel-scroll';
                                 if (xdD.routes) {
@@ -3818,7 +3818,7 @@
                                         const rr = document.createElement('div'); rr.className = 'rd-route-row';
                                         const rName = document.createElement('div'); rName.className = 'rd-route-name'; rName.style.color = xdC.routeName; rName.textContent = rt2; rName.title = rt2;
                                         const rPkgs = document.createElement('div'); rPkgs.className = 'rd-route-pkgs'; rPkgs.textContent = v2.pkgs.toLocaleString('en-US');
-                                        const rPallets = document.createElement('div'); rPallets.style.cssText = 'font-size:10px;color:' + xdC.pallet + ';white-space:nowrap;min-width:52px;text-align:right;'; rPallets.textContent = (v2.pallets || 0) + ' Pallets';
+                                        const rPallets = document.createElement('div'); rPallets.style.cssText = 'font-size:15px;color:' + xdC.pallet + ';white-space:nowrap;min-width:52px;text-align:right;'; rPallets.textContent = (v2.pallets || 0) + ' Pallets';
                                         const bWrap = document.createElement('div'); bWrap.className = 'rd-bar-wrap';
                                         const bFill = document.createElement('div'); bFill.className = 'rd-bar-fill'; bFill.style.cssText = 'width:' + pct2.toFixed(1) + '%;background:' + xdC.bar + ';'; bWrap.appendChild(bFill);
                                         const rPct = document.createElement('div'); rPct.className = 'rd-pct-label'; rPct.style.color = xdC.pct; rPct.textContent = pct2.toFixed(1) + '%';
@@ -3842,12 +3842,12 @@
                                     const blk = document.createElement('div');
                                     const cRow = document.createElement('div');
                                     cRow.style.cssText = 'padding:6px 8px 3px;border-bottom:2px solid ' + (exp ? cC.eBorder : cC.border) + ';display:flex;align-items:center;gap:6px;margin-top:4px;background:' + (exp ? cC.eBg : 'transparent') + ';';
-                                    cRow.innerHTML = '<div style="flex:1;font-size:11px;font-weight:800;color:' + (exp ? cC.eName : cC.cName) + ';">' + esc(cpt) + (exp ? '<span style="font-size:10px;font-weight:700;color:' + cC.eBdg + ';margin-left:6px;">' + L('cptExpired') + '</span>' : '') + '</div><div style="font-size:11px;font-weight:700;color:' + (exp ? cC.eTot : cC.cTot) + ';white-space:nowrap;">' + cTot.toLocaleString('en-US') + ' pkgs</div>';
+                                    cRow.innerHTML = '<div style="flex:1;font-size:16px;font-weight:800;color:' + (exp ? cC.eName : cC.cName) + ';">' + esc(cpt) + (exp ? '<span style="font-size:15px;font-weight:700;color:' + cC.eBdg + ';margin-left:6px;">' + L('cptExpired') + '</span>' : '') + '</div><div style="font-size:16px;font-weight:700;color:' + (exp ? cC.eTot : cC.cTot) + ';white-space:nowrap;">' + cTot.toLocaleString('en-US') + ' pkgs</div>';
                                     blk.appendChild(cRow);
                                     vlist.forEach(({ vrid: vv, pkgs: pp, lane: ll }) => {
                                         const ppct = cTot > 0 ? (pp / cTot) * 100 : 0;
                                         const vRow = document.createElement('div'); vRow.className = 'rd-route-row'; vRow.style.cssText = 'padding-left:10px;background:' + (exp ? cC.eBg : 'transparent') + ';';
-                                        vRow.innerHTML = '<div class="rd-route-name" style="color:' + (exp ? cC.eName : cC.vName) + ';"><span style="font-weight:700;">' + esc(vv) + '</span>' + (ll ? '<span style="font-weight:400;color:' + cC.lnC + ';font-size:10px;margin-left:5px;">' + esc(ll) + '</span>' : '') + '</div><div class="rd-route-pkgs">' + pp.toLocaleString('en-US') + '</div><div class="rd-bar-wrap"><div class="rd-bar-fill" style="width:' + ppct.toFixed(1) + '%;background:' + (exp ? cC.eBdg : cC.bar) + ';"></div></div><div class="rd-pct-label" style="color:' + (exp ? cC.eTot : cC.pct) + '">' + ppct.toFixed(1) + '%</div>';
+                                        vRow.innerHTML = '<div class="rd-route-name" style="color:' + (exp ? cC.eName : cC.vName) + ';"><span style="font-weight:700;">' + esc(vv) + '</span>' + (ll ? '<span style="font-weight:400;color:' + cC.lnC + ';font-size:15px;margin-left:5px;">' + esc(ll) + '</span>' : '') + '</div><div class="rd-route-pkgs">' + pp.toLocaleString('en-US') + '</div><div class="rd-bar-wrap"><div class="rd-bar-fill" style="width:' + ppct.toFixed(1) + '%;background:' + (exp ? cC.eBdg : cC.bar) + ';"></div></div><div class="rd-pct-label" style="color:' + (exp ? cC.eTot : cC.pct) + '">' + ppct.toFixed(1) + '%</div>';
                                         blk.appendChild(vRow);
                                     });
                                     pCpt.appendChild(blk);
@@ -7621,9 +7621,9 @@
             .obdv-cpt-date      { font-size: 13px; font-weight: 800; color: #8b949e; letter-spacing: 0.3px; line-height: 1.2; margin-top: 2px; }
             .obdv-status-badge  { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; white-space: nowrap; margin-top: auto; align-self: flex-start; }
             .obdv-container-section { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
-            .obdv-pallets   { font-size: 11px; font-weight: 800; color: #34d399; }
-            .obdv-positions { font-size: 10px; color: #818cf8; line-height: 1.5; word-break: break-word; }
-            .obdv-container-loading { font-size: 10px; color: #4b5563; animation: obdv-blink 1.2s ease-in-out infinite; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; margin-top: 6px; }
+            .obdv-pallets   { font-size: 16px; font-weight: 800; color: #34d399; }
+            .obdv-positions { font-size: 15px; color: #818cf8; line-height: 1.5; word-break: break-word; }
+            .obdv-container-loading { font-size: 15px; color: #4b5563; animation: obdv-blink 1.2s ease-in-out infinite; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; margin-top: 6px; }
         `;
             document.head.appendChild(st);
         }
@@ -7700,6 +7700,38 @@
             toolbar.appendChild(calBtn);
             toolbar.appendChild(countEl);
             toolbar.appendChild(vsmStatusEl);
+
+            // Add zoom controls
+            var zoomWrap = document.createElement('div');
+            zoomWrap.style.cssText = 'display:flex;align-items:center;gap:4px;border-left:1px solid rgba(255,255,255,0.1);padding-left:8px;margin-left:4px;';
+            var zoomOut = document.createElement('button');
+            zoomOut.textContent = '−';
+            zoomOut.style.cssText = 'width:24px;height:24px;border:1px solid #30363d;border-radius:4px;background:#161b22;color:#f0f6ff;cursor:pointer;font-weight:bold;display:flex;align-items:center;justify-content:center;font-size:16px;';
+            var zoomVal = document.createElement('span');
+            zoomVal.textContent = '100%';
+            zoomVal.style.cssText = 'font-size:11px;color:#6e7681;min-width:34px;text-align:center;';
+            var zoomIn = document.createElement('button');
+            zoomIn.textContent = '+';
+            zoomIn.style.cssText = 'width:24px;height:24px;border:1px solid #30363d;border-radius:4px;background:#161b22;color:#f0f6ff;cursor:pointer;font-weight:bold;display:flex;align-items:center;justify-content:center;font-size:16px;';
+            var currentZoom = 100;
+            function updateGridZoom(delta) {
+                currentZoom = Math.max(50, Math.min(300, currentZoom + delta));
+                zoomVal.textContent = currentZoom + '%';
+                if (grid) grid.style.zoom = currentZoom / 100;
+                GM_setValue('obdv_zoom_level', currentZoom);
+            }
+            zoomOut.onclick = function () { updateGridZoom(-10); };
+            zoomIn.onclick = function () { updateGridZoom(10); };
+            zoomWrap.appendChild(zoomOut);
+            zoomWrap.appendChild(zoomVal);
+            zoomWrap.appendChild(zoomIn);
+            toolbar.appendChild(zoomWrap);
+
+            // Load saved zoom
+            setTimeout(function () {
+                var saved = GM_getValue('obdv_zoom_level', 100);
+                if (saved !== 100) { currentZoom = saved; zoomVal.textContent = currentZoom + '%'; if (grid) grid.style.zoom = currentZoom / 100; }
+            }, 200);
             var routePanel = document.createElement('div');
             routePanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.25s ease;';
             var routePanelInner = document.createElement('div');
@@ -8652,7 +8684,7 @@
                                             resolve();
                                             return;
                                         }
-                                    } catch(e) {}
+                                    } catch (e) { }
                                 }
                                 // 3. Network Fetch (only if older than 15 mins to stabilize, otherwise always refetch)
                                 const currentIndex = delayIndex++;
@@ -9007,7 +9039,7 @@
                 '#tl-auto-select{font-size:11px;padding:3px 6px;border:1.5px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;background:rgba(0,0,0,0.2);cursor:pointer}',
                 '#tl-auto-select:focus{outline:none;border-color:#3b82f6}',
                 '#tl-auto-countdown{font-size:11px;font-family:monospace;color:#3b82f6;font-weight:700;min-width:48px}',
-                '#tl-goal-bar{display:flex;align-items:center;gap:12px;padding:8px 20px;background:transparent;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0}',
+                '#tl-goal-bar{display:flex;align-items:center;gap:12px;padding:8px 20px;background:rgba(15, 23, 42, 0.95);border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;position:relative;z-index:1001}',
                 '#tl-goal-label{font-size:13px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}',
                 '#tl-goal-input{width:86px;font-size:16px;font-weight:800;padding:4px 8px;border:2px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;background:rgba(0,0,0,0.3);text-align:center;-moz-appearance:textfield}',
                 '#tl-goal-input::-webkit-outer-spin-button,#tl-goal-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}',
@@ -9017,7 +9049,7 @@
                 '.tl-goal-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap}',
                 '#tl-prod-body{overflow:auto;flex:1;min-height:0;background:transparent}',
                 '#tl-prod-body table{width:100%;border-collapse:collapse;border-spacing:0}',
-                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(255,255,255,0.2);cursor:pointer;user-select:none;white-space:nowrap;z-index:2}',
+                '#tl-prod-body thead th{position:sticky;top:0;background:rgba(30, 41, 59, 0.98);padding:10px 16px;text-align:center;font-size:13px;font-weight:800;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(255,255,255,0.2);cursor:pointer;user-select:none;white-space:nowrap;z-index:1000}',
                 '#tl-prod-body thead th:hover{color:#fff;background:rgba(51, 65, 85, 0.95)}',
                 '#tl-prod-body thead th.sort-asc::after{content:" ▴"}',
                 '#tl-prod-body thead th.sort-desc::after{content:" ▾"}',
@@ -9066,6 +9098,8 @@
                 '.tl-as-slider{width:70px;accent-color:#3b82f6;cursor:pointer;height:4px;-webkit-appearance:none;background:rgba(255,255,255,0.1);border-radius:2px}',
                 '.tl-as-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#3b82f6;border-radius:50%;cursor:pointer;box-shadow:0 0 5px rgba(0,0,0,0.5)}',
                 '.tl-as-label{font-size:10px;color:#9ca3af;text-transform:uppercase;font-weight:800;letter-spacing:0.02em}',
+                '.winners-img{transition:transform .25s ease;z-index:10;pointer-events:auto;cursor:pointer}',
+                '.winners-img:hover{transform:scale(5);z-index:99!important;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.5))}',
             ].join(''));
             var fab = document.createElement('button');
             fab.id = 'tl-prod-fab';
@@ -9599,8 +9633,14 @@
                         html += '<tr class="tl-row-anim" style="animation-delay:' + delay + 'ms">' +
                             '<td style="color:#64748b;font-size:12px;width:34px">' + (i + 1) + '</td>' +
                             '<td class="td-label">' +
-                            '<div style="display:flex;align-items:center;min-width:340px;gap:15px">' +
+                            '<div style="display:flex;align-items:center;min-width:340px;gap:15px;justify-content:space-between;padding-right:15px">' +
                             '<span>' + name + '</span>' +
+                            (function () {
+                                if (i === 0) return '<img src="https://i.imgur.com/crT3rkJ.png" class="winners-img" style="height:24px;width:auto;border-radius:2px" alt="1st">';
+                                if (i === 1) return '<img src="https://i.imgur.com/oLZSFzo.png" class="winners-img" style="height:24px;width:auto;border-radius:2px" alt="2nd">';
+                                if (i === 2) return '<img src="https://i.imgur.com/AaP6eOF.png" class="winners-img" style="height:24px;width:auto;border-radius:2px" alt="3rd">';
+                                return '';
+                            })() +
                             '</div>' +
                             '</td>' +
                             '<td class="td-num" style="' + totalStyle + '">' +
