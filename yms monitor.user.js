@@ -14,6 +14,8 @@
         const style = document.createElement('style');
         style.id = 'yms-glass-style';
         style.textContent = `
+            input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; }
+            input[type=number] { -moz-appearance: textfield !important; }
             .yms-glass-btn { background: rgba(88, 166, 255, 0.15); border: 1px solid rgba(88, 166, 255, 0.3); color: #58a6ff; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 600; transition: all 0.2s; backdrop-filter: blur(4px); }
             .yms-glass-btn:hover { background: rgba(88, 166, 255, 0.25); box-shadow: 0 0 8px rgba(88,166,255,0.4); }
             .yms-glass-btn.active { background: rgba(168, 157, 255, 0.25); border-color: #a89dff; color: #d2a8ff; box-shadow: 0 0 10px rgba(168,157,255,0.3); }

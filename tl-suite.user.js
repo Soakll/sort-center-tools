@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.24
+// @version      1.1.25
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -33,7 +33,8 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    const VERSION = "1.1.24";
+    GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
+    const VERSION = "1.1.25";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -164,6 +165,8 @@
             vistaSearching: '⏳ Buscando dados...',
             showExpired: '👁 Mostrar expirados',
             hideExpired: '🙈 Ocultar expirados',
+            showNoVsm: '👁 Mostrar s/ VSM',
+            hideNoVsm: '🙈 Ocultar s/ VSM',
             tphTitle: 'Real-Time Throughput & Dynamic Target Dashboard',
             tphShiftStart: 'Início (Turno)',
             tphShiftEnd: 'Fim (Turno)',
@@ -494,6 +497,8 @@
             vistaSearching: '⏳ Searching...',
             showExpired: '👁 Show expired',
             hideExpired: '🙈 Hide expired',
+            showNoVsm: '👁 Show w/o VSM',
+            hideNoVsm: '🙈 Hide w/o VSM',
             tphTitle: 'Real-Time Throughput & Dynamic Target Dashboard',
             tphShiftStart: 'Start (Shift)',
             tphShiftEnd: 'End (Shift)',
@@ -4833,10 +4838,8 @@
                 { id: 17, vsms: ['CD51', 'CD52', 'CD53', 'CD61'] }
             ];
             const DEFAULT_MAP_MATRIX = [
-                ["", "", "", "", "", "", "", "", "", "[F1]", "[L_F1]", "", "", "[L_TS]", "[SKIP]", "", "", "[L_F2]", "[F2]", "", "", "", "", "", "", "", "", "", ""],
-                ["", "", "", "", "", "", "", "", "", "", "", "", "", "[TS_V]", "[SKIP]", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                ["", "", "", "", "", "[B17]", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                ["0", "0", "0", "0", "0", "0", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                ["", "", "", "", "", "[B17]", "", "", "", "[F1]", "[L_F1]", "", "", "[L_TS]", "[SKIP]", "", "", "[L_F2]", "[F2]", "", "", "", "", "", "", "", "", "", ""],
+                ["0", "0", "0", "0", "0", "0", "", "", "", "", "", "", "", "[TS_V]", "[SKIP]", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["-", "CD51", "CD52", "CD53", "CD61", "CD61", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "0"],
@@ -4852,13 +4855,13 @@
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
-                ["CD12", "CD12", "CD13", "CD13", "CD11", "CD11", "", "CC36", "CC35", "CC34", "CC34", "CC32", "CC31", "", "", "", "X-53", "X-52", "X-51", "X-51", "X-51", "", "AB31", "AB31", "AB32", "AB32", "AB41", "-", ""],
+                ["CD12", "CD12", "CD13", "CD13", "CD11", "CD11", "", "CC36", "CC35", "CC34", "CC34", "CC32", "CC31", "", "", "-", "X-53", "X-52", "X-51", "X-51", "X-51", "", "AB31", "AB31", "AB32", "AB32", "AB41", "-", ""],
                 ["", "", "", "", "", "[B3]", "", "[B7]", "", "", "", "", "", "", "", "", "", "", "", "", "[B11]", "", "[B15]", "", "", "", "", "", ""],
                 ["CD12", "CD12", "CD13", "CD13", "CD11", "CD11", "", "CC36", "CC35", "CC34", "CC34", "CC32", "CC31", "", "", "-", "-", "-", "-", "X-51", "X-51", "", "AB31", "AB32", "AB32", "AB41", "AB41", "AB42", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""],
                 ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "0"],
-                ["CD23", "CD23", "CD31", "CD31", "CD32", "CD33", "", "CC61", "CC61", "CC61", "CC41", "CC41", "CC41", "", "", "", "", "", "X-61", "X-61", "X-61", "", "AB51", "AB52", "AB52", "AB53", "AB61", "AB61", "AIR"],
+                ["CD23", "CD23", "CD31", "CD31", "CD32", "CD33", "", "CC61", "CC61", "CC61", "CC41", "CC41", "CC41", "", "", "-", "-", "-", "X-61", "X-61", "X-61", "", "AB51", "AB52", "AB52", "AB53", "AB61", "AB61", "AIR"],
                 ["", "", "", "", "", "[B4]", "", "[B8]", "", "", "", "", "", "", "", "", "", "", "", "", "[B12]", "", "[B16]", "", "", "", "", "", ""],
                 ["CD21", "CD23", "CD23", "CD31", "CD31", "CD32", "", "CC61", "CC61", "CC61", "CC41", "CC41", "CC41", "", "", "-", "-", "-", "X-62", "X-61", "X-61", "", "AB52", "AB52", "AB53", "AB61", "AB61", "AB61", ""],
                 ["0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", "", "", "0", "0", "0", "0", "0", "0", "", "0", "0", "0", "0", "0", "0", ""]
@@ -4940,6 +4943,7 @@
             let lastSearch = null;
             let isRefreshing = false;
             let selectedVrids = new Set();
+            let activeSelectionFilter = null;
             let hideZeroPkgs = true;
             function initializeConfig() {
                 const savedNode = GM_getValue('vsm_custom_node');
@@ -5775,7 +5779,7 @@
             }
             function getStatusInfo(percent) {
                 if (percent === undefined || percent === null) return { text: 'N/A', color: '#aaa', order: 4 };
-                if (percent <= 2) return { text: 'Não processado', color: '#ff6b6b', order: 2 };
+                if (percent <= 2) return { text: _SUITE.L('statusNotProcessed'), color: '#ff6b6b', order: 2 };
                 if (percent < 93) return { text: _SUITE.L('statusProcessing'), color: '#aad4ff', order: 1 };
                 return { text: _SUITE.L('statusDone'), color: '#88cc99', order: 3 };
             }
@@ -5787,7 +5791,10 @@
                     return;
                 }
                 const enriched = lastExportData.map(v => {
-                    const totalP = (v.containers || []).reduce((s, c) => s + getCounts(c).P, 0);
+                    const totalP = (v.containers || []).reduce((s, c) => {
+                        const cnts = getCounts(c);
+                        return s + (cnts.C > 0 ? 0 : cnts.P);
+                    }, 0);
                     const percent = v.completePercent !== undefined ? v.completePercent : null;
                     const status = getStatusInfo(percent);
                     return { ...v, totalP, status };
@@ -5813,7 +5820,7 @@
                     const checked = selectedVrids.has(v.vrid);
                     const sat = v.scheduledArrivalTime || 'N/A';
                     const aat = v.actualArrivalTime && v.actualArrivalTime !== 'N/A' ? v.actualArrivalTime : '—';
-                    const route = v.route || 'N/A';
+                    const route = (v.route || 'N/A').split('->')[0];
                     const percent = v.completePercent !== undefined ? v.completePercent : null;
                     const status = v.status;
                     html += `
@@ -5821,15 +5828,17 @@
                     <div class="vrid-badge-content">
                         <div class="vrid-badge-header">
                             <span class="vrid-badge-vrid">🚛 ${esc(v.vrid)}</span>
-                            <span class="vrid-badge-pkgs">📦 ${v.totalP} / ${(v.containers || []).reduce((s, c) => s + getCounts(c).C, 0)}</span>
+                            <span class="vrid-badge-pkgs">📦 ${v.totalP}</span>
                         </div>
                         <div class="vrid-badge-times">
                             <span>⏰ SAT: ${esc(sat)}</span>
                             <span>🛬 AAT: ${esc(aat)}</span>
                         </div>
-                        <div class="vrid-badge-route">🛣 ${esc(route)}</div>
-                        <div class="vrid-badge-status" style="color: ${status.color}; font-weight: bold;">
-                            ${percent !== null ? `📊 ${percent}% ` : ''}${status.text}
+                        <div class="vrid-badge-footer">
+                            <div class="vrid-badge-route">🛣 ${esc(route)}</div>
+                            <div class="vrid-badge-status" style="color: ${status.color}; background: ${status.color}22; border: 1px solid ${status.color}44;">
+                                ${percent !== null ? `📊 ${percent}% ` : ''}${status.text}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5862,6 +5871,7 @@
                             selectedVrids.add(vrid);
                             badge.classList.add('selected');
                         }
+                        activeSelectionFilter = null;
                         computeAndRenderAll();
                     });
                 });
@@ -5877,6 +5887,7 @@
                             b.classList.remove('selected');
                         }
                     });
+                    activeSelectionFilter = targetOrder;
                     computeAndRenderAll();
                 }
                 document.getElementById('btn-sel-all').addEventListener('click', () => {
@@ -5892,6 +5903,7 @@
                             b.classList.add('selected');
                         }
                     });
+                    activeSelectionFilter = allSelected ? null : 'all';
                     computeAndRenderAll();
                 });
                 document.getElementById('btn-sel-proc').addEventListener('click', () => filterSelectionByStatus(1));
@@ -5986,7 +5998,10 @@
                 if (!resultDiv) return;
                 resultDiv.innerHTML = '';
                 const sorted = [...lastExportData].sort((a, b) => {
-                    const sumP = v => (v.containers || []).reduce((s, c) => s + getCounts(c).P, 0);
+                    const sumP = v => (v.containers || []).reduce((s, c) => {
+                        const cnts = getCounts(c);
+                        return s + (cnts.C > 0 ? 0 : cnts.P);
+                    }, 0);
                     return sumP(b) - sumP(a);
                 });
                 for (let i = 0; i < sorted.length; i++) {
@@ -6112,6 +6127,13 @@
                             continue;
                         }
                         const containers = containersMap[planId] || [];
+                        const totalP = containers.reduce((s, c) => s + getCounts(c).P, 0);
+                        if (totalP === 0) {
+                            document.getElementById(`vl-card-${i}`)?.remove();
+                            done++;
+                            setProgress(done, `Processando VRIDs… ${done} / ${total}`);
+                            continue;
+                        }
                         const percentInfo = percentMap[planId] || {};
                         const completePercent = percentInfo.completePercent !== undefined ? percentInfo.completePercent : null;
                         const tempContainer = document.createElement('div');
@@ -6141,10 +6163,20 @@
                 const oldKnownVrids = new Set(lastExportData.map(v => v.vrid));
                 const newSelectedVrids = new Set();
                 allExportData.forEach(v => {
-                    if (isRefresh && oldKnownVrids.has(v.vrid)) {
-                        if (selectedVrids.has(v.vrid)) newSelectedVrids.add(v.vrid);
+                    if (activeSelectionFilter !== null) {
+                        const percent = v.completePercent !== undefined ? v.completePercent : null;
+                        const status = getStatusInfo(percent);
+                        if (activeSelectionFilter === 'all') {
+                            newSelectedVrids.add(v.vrid);
+                        } else if (status.order === activeSelectionFilter) {
+                            newSelectedVrids.add(v.vrid);
+                        }
                     } else {
-                        newSelectedVrids.add(v.vrid);
+                        if (isRefresh && oldKnownVrids.has(v.vrid)) {
+                            if (selectedVrids.has(v.vrid)) newSelectedVrids.add(v.vrid);
+                        } else {
+                            newSelectedVrids.add(v.vrid);
+                        }
                     }
                 });
                 selectedVrids = newSelectedVrids;
@@ -6376,6 +6408,7 @@
             display: none;
             transition: all .2s ease;
         }
+        #vl-panel-body.updating { opacity: 0.6; pointer-events: none; }
         #vl-panel-head {
             background: rgba(255, 255, 255, 0.03);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: #e8eaed; padding: 0 16px;
@@ -6562,9 +6595,10 @@
         .vrid-badge-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
         .vrid-badge-vrid { font-weight: 700; color: #ff9900; font-size: 16px; }
         .vrid-badge-pkgs { background: rgba(0, 180, 120, 0.15); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; font-weight: 600; color: #4dddaa; }
-        .vrid-badge-times { display: flex; gap: 14px; margin-bottom: 3px; color: #99a; font-size: 13px; }
-        .vrid-badge-route { color: #668; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .vrid-badge-status { font-size: 12px; margin-top: 4px; }
+        .vrid-badge-times { display: flex; gap: 14px; margin-bottom: 3px; color: #e8eaed; font-size: 14px; font-weight: 600; }
+        .vrid-badge-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; }
+        .vrid-badge-route { color: #aad4ff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+        .vrid-badge-status { font-size: 14px; font-weight: 800; padding: 6px 12px; border-radius: 8px; width: fit-content; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
         #vl-toggle { position: fixed; bottom: 80px; right: 20px; background: linear-gradient(135deg, #1a2a3a 0%, #232f3e 100%); color: #ff9900; border: 1px solid rgba(255,153,0,.3); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.4); z-index: 99998; transition: all .2s; letter-spacing: .3px; }
         #vl-toggle:hover { background: linear-gradient(135deg, #232f3e 0%, #2a3a4a 100%); box-shadow: 0 6px 20px rgba(0,0,0,.5); transform: translateY(-2px); }
         .vsm-config-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
@@ -7699,7 +7733,19 @@
             toolbar.appendChild(nodeInput);
             toolbar.appendChild(fetchBtn);
             toolbar.appendChild(filterInput);
+            var hideNoVsmBtn = document.createElement('button');
+            hideNoVsmBtn.textContent = _SUITE.L('showNoVsm');
+            var _hideNoVsm = true;
+            hideNoVsmBtn.style.cssText = 'padding:5px 10px;border:1px solid #58a6ff;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#58a6ff;white-space:nowrap;';
+            hideNoVsmBtn.onclick = function () {
+                _hideNoVsm = !_hideNoVsm;
+                hideNoVsmBtn.textContent = _hideNoVsm ? _SUITE.L('showNoVsm') : _SUITE.L('hideNoVsm');
+                hideNoVsmBtn.style.color = _hideNoVsm ? '#58a6ff' : '#8b949e';
+                hideNoVsmBtn.style.borderColor = _hideNoVsm ? '#58a6ff' : '#30363d';
+                renderCards(filterInput.value.trim());
+            };
             toolbar.appendChild(hideExpiredBtn);
+            toolbar.appendChild(hideNoVsmBtn);
             toolbar.appendChild(routesPanelBtn);
             toolbar.appendChild(calBtn);
             // Thresholds
@@ -8133,6 +8179,7 @@
                     if (_disabledRoutes[r.route]) return false;
                     var isCompleted = _isCompleted(r.status);
                     if (_hideExp && ((r.cptMs && r.cptMs < now) || isCompleted)) return false;
+                    if (_hideNoVsm && !_vsmLoading && !_vsmMap[r.route]) return false;
                     if (!term) return true;
                     var t = term.toLowerCase();
                     return r.route.toLowerCase().includes(t) || (_vsmMap[r.route] || '').toLowerCase().includes(t);
@@ -8383,7 +8430,8 @@
         .tl-v5-toggle.on .thumb { left:19px; }
         .tl-v5-timer-wrap { display:flex; align-items:center; gap:8px; background:rgba(0,0,0,0.2); padding:4px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.05); height: 29px; }
         .tl-v5-timer-text { font-family:'Space Mono', monospace; font-size:12px; color:${CONFIG.ui.realColor}; font-weight:bold; min-width:40px; }
-        .tl-v5-refresh-select { background:transparent; border:none; color:rgba(255,255,255,0.6); font-size:10px; cursor:pointer; outline:none; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 6px; font-family:'DM Sans', sans-serif; }
+        .tl-v5-refresh-select { background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; font-size:10px; cursor:pointer; outline:none; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 6px; font-family:'DM Sans', sans-serif; }
+        .tl-v5-refresh-select option { background:#161b22; color:#fff; }
         .tl-v5-metrics { display:flex; gap:1rem; margin-bottom:1rem; flex-shrink:0; justify-content: space-between; }
         .tl-v5-metric { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px 14px; flex:1; min-width: 0; }
         .tl-v5-metric-label { font-size:0.65rem; color:rgba(255,255,255,0.4); margin-bottom:4px; text-transform:uppercase; display:block; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -9643,21 +9691,22 @@
                 html += '</tr></thead><tbody>';
                 var sorted = lastData.slice().filter(function (d) {
                     if (!searchQuery) return true;
-                    var name = (d.userName || '').toLowerCase();
-                    var login = (d.login || d.userLogin || d.userId || '').toLowerCase();
-                    return name.includes(searchQuery) || login.includes(searchQuery);
+                    var nameStr = (d.userName || '').toLowerCase();
+                    var loginStr = (d.login || d.userLogin || d.userId || '').toLowerCase();
+                    return nameStr.includes(searchQuery) || loginStr.includes(searchQuery);
                 }).sort(function (a, b) {
                     var ka = sortCol;
                     if (ka === 'userName') {
-                        var va = (a.userId || a.userName || '').toLowerCase(), vb = (b.userId || b.userName || '').toLowerCase();
+                        var va = (a.userName || a.userId || a.login || '').toLowerCase();
+                        var vb = (b.userName || b.userId || b.login || '').toLowerCase();
                         return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
                     }
-                    var va = Number(a[ka]) || 0, vb = Number(b[ka]) || 0;
-                    return sortAsc ? va - vb : vb - va;
+                    var vaVal = Number(a[ka]) || 0, vbVal = Number(b[ka]) || 0;
+                    return sortAsc ? vaVal - vbVal : vbVal - vaVal;
                 });
                 sorted.forEach(function (d, i) {
                     var login = d.userId || d.login || d.userLogin || d.userName;
-                    var name = d.userId || normalizeName(d.userName || login);
+                    var name = normalizeName(d.userName || d.userId || login);
                     var totalPkgs = d.successfulScans || 0;
                     var totalErr = d.errorScans || 0;
                     var totalWork = d.workInSeconds || 0;
