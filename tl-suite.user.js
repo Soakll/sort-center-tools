@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.25
+// @version      1.1.26
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -34,7 +34,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.25";
+    const VERSION = "1.1.26";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -1033,7 +1033,7 @@
         }
         function fetchContainerIds(token, lane, destination, callback) {
             var containerTypes = ['BAG', 'GAYLORD', 'PALLET'];
-            var businessTypes = ['EMPTY', 'TRANSSHIPMENT'];
+            var businessTypes = ['EMPTY', 'TRANSSHIPMENT', 'NON_TRANSSHIPMENT', 'SHIP_WITH_AMAZON'];
             var stackingFilters = /^[A-Z0-9]+-(B|BUS)$/i.test(destination)
                 ? [destination]
                 : destination.split('-').filter(function (p) { return p.length > 0; });
@@ -1066,7 +1066,9 @@
                     try {
                         var json = JSON.parse(resp.responseText);
                         var entities = (json.ret && json.ret.getContainerIdsOutput && json.ret.getContainerIdsOutput.entities) || [];
-                        entities.forEach(function (e) { ids.push(e.entityId); });
+                        entities.forEach(function (e) {
+                            if (e.entityId && ids.indexOf(e.entityId) === -1) ids.push(e.entityId);
+                        });
                     } catch (e) { }
                     callback(ids);
                 },
@@ -1097,6 +1099,17 @@
                 });
             });
         }
+        function fetchContainersVistaChained(lane, destination, callback) {
+            _SUITE.utils.fetchAntiCsrfToken(function (token) {
+                if (!token) { callback([]); return; }
+                fetchContainerIds(token, lane, destination, function (ids) {
+                    if (!ids || !ids.length) { callback([]); return; }
+                    fetchContainerDetails(token, ids, function (detailMap) {
+                        callback(Object.values(detailMap));
+                    });
+                });
+            });
+        }
         function cm3ToFt3(cm3) {
             return (cm3 * 0.0000353147).toFixed(2);
         }
@@ -1111,7 +1124,7 @@
             return normalizeDestination((parts[1] || lane).trim());
         }
         const SETTINGS = {
-            theme: GM_getValue('rd_theme', 'light'),
+            theme: 'dark',
             lang: GM_getValue('rd_lang', 'pt'),
         };
         function saveSetting(key, val) {
@@ -1543,7 +1556,7 @@
                     body.innerHTML = '<div class="vp-loading" style="color:#c62828">⚠ VSM Module not loaded</div>';
                     return;
                 }
-                _SUITE.vsm.fetchByRoute(destination, function (containers) {
+                fetchContainersVistaChained(lane, destination, function (containers) {
                     if (!containers || containers.length === 0) {
                         body.innerHTML = '<div class="vp-loading">' + L('noContainersLane') + '</div>';
                         if (status) status.textContent = '';
@@ -1621,7 +1634,7 @@
                 wrapper.innerHTML = '';
                 wrapper.appendChild(makeBtn('⏳ ' + dock, 'tl-btn-gray tl-loading', true));
                 var destination = laneToDestination(lane);
-                _SUITE.vsm.fetchByRoute(destination, function (containers) {
+                fetchContainersVistaChained(lane, destination, function (containers) {
                     if (!containers || containers.length === 0) { renderError(dock, lane, wrapper); return; }
                     var totalVol = 0;
                     containers.forEach(function (c) {
@@ -2482,7 +2495,7 @@
                         if (infoStore[meta.vrid]) return;
                         const statusElRow = row.querySelector('[class*="originalStatusCheck"][data-status]');
                         const status = statusElRow ? statusElRow.getAttribute('data-status') : '';
-                        if (!status) return;
+                        if (!status || status === 'SCHEDULED') return;
                         const bar = row.querySelector('.progressbarDashboard');
                         if (!bar || !bar.querySelector('.progressLoaded') || bar.querySelector('.width100')) return;
                         candidates.push({ meta, row, status });
@@ -2516,7 +2529,7 @@
 
                         const statusElRow = isIB ? row.querySelector('[class*="originalStatusCheck"][data-status]') : row.querySelector('[data-status]');
                         const status = statusElRow ? statusElRow.getAttribute('data-status') : '';
-                        // Removed skipping of SCHEDULED for universal collection
+                        if (status === 'SCHEDULED') return;
                         allMetas.push({ meta, status, row });
                     });
                 }
@@ -2595,53 +2608,18 @@
             }
             let fetchSingleRoutes = null;
             let runRoutesForBadge = null;
-            function showSettingsPanel() {
-                document.querySelectorAll('.rd-settings-overlay').forEach(e => e.remove());
-                const isDark = SETTINGS.theme === 'dark';
-                const overlay = document.createElement('div');
-                overlay.className = 'rd-settings-overlay';
-                const panel = document.createElement('div');
-                panel.className = 'rd-settings-panel' + (isDark ? ' rd-dark-panel' : '');
-                const title = document.createElement('div');
-                title.className = 'rd-settings-title';
-                title.textContent = L('settingsTitle');
-                panel.appendChild(title);
-                function makeRow(labelKey, options, currentVal, onPick) {
-                    const row = document.createElement('div'); row.className = 'rd-settings-row';
-                    const lbl = document.createElement('div'); lbl.className = 'rd-settings-label'; lbl.textContent = L(labelKey);
-                    const opts = document.createElement('div'); opts.className = 'rd-settings-options';
-                    options.forEach(({ val, label }) => {
-                        const btn = document.createElement('button');
-                        btn.className = 'rd-settings-opt' + (val === currentVal ? ' active' : '');
-                        btn.textContent = label;
-                        btn.addEventListener('click', () => {
-                            opts.querySelectorAll('.rd-settings-opt').forEach(b => b.classList.remove('active'));
-                            btn.classList.add('active');
-                            onPick(val);
-                        });
-                        opts.appendChild(btn);
-                    });
-                    row.appendChild(lbl); row.appendChild(opts);
-                    return row;
-                }
-                panel.appendChild(makeRow('themeLabel',
-                    [{ val: 'light', label: L('themeLight') }, { val: 'dark', label: L('themeDark') }],
-                    SETTINGS.theme, val => saveSetting('theme', val)
-                ));
-                panel.appendChild(makeRow('langLabel',
-                    [{ val: 'pt', label: '🇧🇷 Português' }, { val: 'en', label: '🇺🇸 English' }],
-                    SETTINGS.lang, val => saveSetting('lang', val)
-                ));
-                const saveBtn = document.createElement('button');
-                saveBtn.className = 'tl-btn tl-btn-blue';
-                saveBtn.style.cssText = 'margin-top:8px;width:100%;justify-content:center;';
-                saveBtn.textContent = L('saveClose');
-                saveBtn.addEventListener('click', () => {
-                    overlay.remove();
-                    document.querySelectorAll('[data-rd-settings-btn]').forEach(b => {
-                        b.textContent = L('settingsTitle');
-                        b.title = L('settingsTitle');
-                    });
+            function createLangSelector() {
+                const select = document.createElement('select');
+                select.style.cssText = 'background:#252545;border:1px solid #3a3a6e;color:#c0c0e0;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;font-family:"Amazon Ember",Arial,sans-serif;cursor:pointer;outline:none;';
+                [{val:'pt',label:'🇧🇷 PT'},{val:'en',label:'🇺🇸 EN'}].forEach(({val,label}) => {
+                    const opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = label;
+                    opt.selected = SETTINGS.lang === val;
+                    select.appendChild(opt);
+                });
+                select.addEventListener('change', () => {
+                    saveSetting('lang', select.value);
                     document.querySelectorAll('[data-vrid-getinfo]').forEach(b => {
                         if (!b.disabled && !b.textContent.startsWith('⏳') && !b.textContent.startsWith('⏸') && !b.textContent.startsWith('⚠')) {
                             b.textContent = L('getInfo');
@@ -2654,10 +2632,7 @@
                         el.textContent = L(el.getAttribute('data-lkey')) + ':';
                     });
                 });
-                panel.appendChild(saveBtn);
-                overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-                overlay.appendChild(panel);
-                document.body.appendChild(overlay);
+                return select;
             }
             if (isIB) {
                 function pctColor(pct) {
@@ -2673,10 +2648,10 @@
                     return '#69f0ae';
                 }
                 function resolvedPctColor(pct) {
-                    return SETTINGS.theme === 'dark' ? pctColorDark(pct) : pctColor(pct);
+                    return pctColorDark(pct);
                 }
                 function makePanel(headerClass, headerText, totalVal, rows, sortKey, routeVridMap) {
-                    const dark = SETTINGS.theme === 'dark';
+                    const dark = true;
                     const panel = document.createElement('div');
                     panel.className = 'rd-panel';
                     const ph = document.createElement('div');
@@ -2852,7 +2827,7 @@
                 }
                 function showRoutesPopup(title, subtitle, routes, total, xdData, cptAnalysis, routeVridMap, vridSdtMap) {
                     document.querySelectorAll('.rd-popup-overlay').forEach(el => el.remove());
-                    const isDark = SETTINGS.theme === 'dark';
+                    const isDark = true;
                     const overlay = document.createElement('div');
                     overlay.className = 'rd-popup-overlay';
                     const popup = document.createElement('div');
@@ -3615,12 +3590,7 @@
                     const bar = document.createElement('div');
                     bar.id = 'rd-global-bar';
 
-                    const settingsBtn = document.createElement('button');
-                    settingsBtn.className = 'tl-btn tl-btn-gray';
-                    settingsBtn.setAttribute('data-rd-settings-btn', '1');
-                    settingsBtn.textContent = L('settingsTitle');
-                    settingsBtn.title = L('settingsTitle');
-                    settingsBtn.addEventListener('click', () => showSettingsPanel());
+                    const langSelect = createLangSelector();
                     const statusEl = document.createElement('span');
                     statusEl.className = 'rd-global-status';
                     const creditEl = document.createElement('span');
@@ -3644,7 +3614,7 @@
                         });
                     };
 
-                    bar.appendChild(settingsBtn);
+                    bar.appendChild(langSelect);
                     bar.appendChild(checkUpdateBtn);
                     bar.appendChild(statusEl);
                     bar.appendChild(creditEl);
@@ -3654,7 +3624,7 @@
                 injectGlobalBar();
                 _openIbPanel = function openIbPanel(vrid, sdt, yard, packages, row, status, btn) {
                     document.querySelectorAll('.ib-panel-overlay').forEach(function (e) { e.remove(); });
-                    const isDark = SETTINGS.theme === 'dark';
+                    const isDark = true;
                     const laneEl = row.querySelector('[class*="lane"]');
                     const lane = laneEl ? laneEl.textContent.trim() : '';
                     const overlay = document.createElement('div');
@@ -3908,12 +3878,7 @@
                             }, 200);
                         }, statusEl);
                     });
-                    const settingsBtn = document.createElement('button');
-                    settingsBtn.className = 'tl-btn tl-btn-gray';
-                    settingsBtn.setAttribute('data-rd-settings-btn', '1');
-                    settingsBtn.textContent = L('settingsTitle');
-                    settingsBtn.title = L('settingsTitle');
-                    settingsBtn.addEventListener('click', () => showSettingsPanel());
+                    const langSelect = createLangSelector();
                     const creditEl = document.createElement('span');
                     creditEl.style.cssText = 'margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,0.45);font-family:"Amazon Ember",Arial,sans-serif;white-space:nowrap;letter-spacing:0.3px;';
                     creditEl.textContent = 'By emanunec@';
@@ -3936,7 +3901,7 @@
                     };
 
                     bar.appendChild(fullExportBtn);
-                    bar.appendChild(settingsBtn);
+                    bar.appendChild(langSelect);
                     bar.appendChild(checkUpdateBtn);
                     bar.appendChild(statusEl);
                     bar.appendChild(creditEl);
@@ -3959,8 +3924,7 @@
                         : row.querySelector('[data-status]');
                     const status = statusEl ? statusEl.getAttribute('data-status') : '';
                     if (isIB) { if (!status) return; }
-                    // Removed SCHEDULED restriction for Outbound as well to show info buttons for all VRIDs found
-                    else { if (!status) return; }
+                    else { if (!status || status === 'SCHEDULED') return; }
                     const meta = getRowMeta(row);
                     if (!meta) return;
                     const { vrid, sdt, yard, packages } = meta;
@@ -4005,7 +3969,7 @@
             window.addEventListener('load', () => setTimeout(processRows, 2500));
             _openObPanel = function openObPanel(vrid, sdt, yard, packages, row, status, btn) {
                 document.querySelectorAll('.ob-panel-overlay').forEach(function (e) { e.remove(); });
-                var isDark = SETTINGS.theme === 'dark';
+                var isDark = true;
                 var laneEl = row.querySelector('span.floatL[class*="lane"]');
                 var lane = laneEl ? laneEl.textContent.trim() : '';
                 var dockEl = row.querySelector('span.locLabel');
@@ -4016,7 +3980,7 @@
                 var loadedCount = _lLink ? (parseInt(_lLink.textContent.trim(), 10) || 0) : 0;
                 var canCuft = !!(dock && loadedCount > 0);
                 var pRow = extractParamsFromRow(row, vrid);
-                var canCpt = !!(pRow.trailerId && !/^OTHR/i.test(pRow.trailerId));
+                var canCpt = !!(pRow.trailerId && !/^OTHR/i.test(pRow.trailerId)) || status === 'LOADING';
                 var overlay = document.createElement('div');
                 overlay.className = 'ob-panel-overlay rd-popup-overlay';
                 var popup = document.createElement('div');
@@ -4107,7 +4071,7 @@
                             paneCuft.innerHTML = '<div style="font-size:12px;color:#c62828;padding:14px;">⚠ VSM Module not loaded</div>';
                             return;
                         }
-                        _SUITE.vsm.fetchByRoute(destination, function (containers) {
+                        fetchContainersVistaChained(lane, destination, function (containers) {
                             if (!containers || !containers.length) {
                                 paneCuft.innerHTML = '<div style="font-size:12px;color:' + (isDark ? '#8080a0' : '#888') + ';padding:14px;">' + L('noContainersFound') + '</div>';
                                 return;
@@ -4368,7 +4332,7 @@
             return { nodeId, loadGroupId, planId, vrid, trailerId, trailerNumber };
         }
         function openCptPanelLoading(vrid, lane) {
-            var _D = SETTINGS.theme === 'dark';
+            var _D = true;
             document.querySelectorAll('.lpd-panel-overlay').forEach(function (e) { e.remove(); });
             var overlay = document.createElement('div');
             overlay.className = 'lpd-panel-overlay';
@@ -4459,7 +4423,7 @@
                 tabBar.innerHTML = '';
                 bodyEl.innerHTML = '';
                 var tabs = [L('byPallet'), L('byCpt')];
-                var panes = [buildPalletPane(result, SETTINGS.theme === 'dark'), buildCptPane(result, SETTINGS.theme === 'dark')];
+                var panes = [buildPalletPane(result, true), buildCptPane(result, true)];
                 var tabBtns = [];
                 tabs.forEach(function (label, i) {
                     var tb = document.createElement('button');
@@ -4500,7 +4464,7 @@
             handle.populate(result);
         }
         function buildCptPane(result, isDark) {
-            var D = isDark || SETTINGS.theme === 'dark';
+            var D = true;
             var pane = document.createElement('div');
             pane.style.cssText = 'overflow-y:auto;flex:1;padding:12px 16px;background:' + (D ? '#1a1a2e' : '#fff') + ';';
             var cptEntries = Object.keys(result.cptMap).sort(function (a, b) {
@@ -5057,8 +5021,23 @@
                 if (lastExportData.length > 0) computeAndRenderAll();
             }
             function resetConfigToDefault() {
-                if (confirm(_SUITE.L('vsmConfirmRestore'))) {
-                    activeNodeId = detectCurrentNode() || GM_getValue('tl_node', 'Node não selecionado');
+                try {
+                    const btn = document.getElementById('cfg-reset-btn');
+                    if (btn.dataset.confirm !== '1') {
+                        btn.dataset.confirm = '1';
+                        const oldText = btn.textContent;
+                        const oldBg = btn.style.background;
+                        btn.textContent = 'Tem certeza? (Clique novamente)';
+                        btn.style.background = '#e05';
+                        setTimeout(() => {
+                            btn.dataset.confirm = '0';
+                            btn.textContent = oldText;
+                            btn.style.background = oldBg;
+                        }, 4000);
+                        return;
+                    }
+
+                    activeNodeId = _SUITE.utils.detectNode() || GM_getValue('tl_node', 'Node não selecionado');
                     buildDefaultMappings();
                     activeFingers = JSON.parse(JSON.stringify(DEFAULT_FINGERS));
                     GM_setValue('vsm_custom_node', activeNodeId);
@@ -5070,6 +5049,17 @@
                     configIsDirty = false;
                     renderConfigTable();
                     if (lastExportData.length > 0) computeAndRenderAll();
+                    
+                    btn.dataset.confirm = '0';
+                    btn.textContent = '✅ Restaurado!';
+                    btn.style.background = '#28a745';
+                    setTimeout(() => {
+                        btn.textContent = _SUITE.L('vsmRestoreMapping');
+                        btn.style.background = '#4a5a6a';
+                    }, 3000);
+
+                } catch (e) {
+                    console.error('Erro ao restaurar:', e);
                 }
             }
             function loadCsrfFromStorage() {
@@ -7025,12 +7015,36 @@
                     };
                     reader.readAsArrayBuffer(file);
                 });
-                document.getElementById('cfg-map-reset-btn').addEventListener('click', () => {
-                    if (confirm(_SUITE.L('vsmConfirmRestoreMap'))) {
-                        activeMapMatrix = structuredClone(DEFAULT_MAP_MATRIX);
+                document.getElementById('cfg-map-reset-btn').addEventListener('click', (e) => {
+                    try {
+                        const btn = e.target;
+                        if (btn.dataset.confirm !== '1') {
+                            btn.dataset.confirm = '1';
+                            const oldText = btn.textContent;
+                            const oldBg = btn.style.background;
+                            btn.textContent = 'Tem certeza? (Clique novamente)';
+                            btn.style.background = '#e05';
+                            setTimeout(() => {
+                                btn.dataset.confirm = '0';
+                                btn.textContent = oldText;
+                                btn.style.background = oldBg;
+                            }, 4000);
+                            return;
+                        }
+
+                        activeMapMatrix = JSON.parse(JSON.stringify(DEFAULT_MAP_MATRIX));
                         GM_setValue('vsm_custom_map_matrix', JSON.stringify(activeMapMatrix));
                         if (lastExportData.length > 0) computeAndRenderAll(); else renderStaticVsmMap();
-                        alert(_SUITE.L("vsmMapRestored"));
+                        
+                        btn.dataset.confirm = '0';
+                        btn.textContent = '✅ Restaurado!';
+                        btn.style.background = '#28a745';
+                        setTimeout(() => {
+                            btn.textContent = _SUITE.L("vsmRestoreMap");
+                            btn.style.background = '#4a5a6a';
+                        }, 3000);
+                    } catch (err) {
+                        console.error('Erro ao restaurar o mapa: ', err);
                     }
                 });
             }
@@ -7610,9 +7624,7 @@
         var _vsmPending = false;
         function fetchVSM(node, onDone) {
             _vsmMap = {};
-            for (var route in _SUITE.DEFAULT_VSM_SEGMENT_MAP) {
-                _vsmMap[route.toUpperCase().trim()] = _SUITE.DEFAULT_VSM_SEGMENT_MAP[route].join(', ');
-            }
+            // 1. Load manual config (User overrides)
             try {
                 var configStr = GM_getValue('vsm_custom_config', '[]');
                 var configArr = JSON.parse(configStr);
@@ -7621,11 +7633,40 @@
                         _vsmMap[item.route.toUpperCase().trim()] = item.vsm.trim();
                     }
                 });
-                console.log('[OBDockView] VSM Map combined. Total entries:', Object.keys(_vsmMap).length);
-            } catch (e) {
-                console.error('[OBDockView] Erro ao carregar vsm_custom_config:', e);
-            }
-            onDone();
+            } catch (e) {}
+
+            // 2. Real-time consult: Fetch Inbound assignments from the system
+            _SUITE.utils.fetchAntiCsrfToken(function (token) {
+                var win = todayWindow();
+                var params = ['entity=getInboundDockView', 'nodeId=' + encodeURIComponent(node), 'startDate=' + win.start, 'endDate=' + win.end,
+                    'loadCategories=inboundScheduled,inboundArrived,inboundCompleted',
+                    'shippingPurposeType=TRANSSHIPMENT,NON-TRANSSHIPMENT,SHIP_WITH_AMAZON'].join('&');
+                
+                GM_xmlhttpRequest({
+                    method: 'POST', url: BASE + 'ssp/dock/hrz/ib/fetchdata',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
+                    data: params, withCredentials: true, timeout: 10000,
+                    onload: function (resp) {
+                        try {
+                            var data = JSON.parse(resp.responseText.replace(/^\uFEFF/, ''));
+                            var aaData = data && data.ret && data.ret.aaData;
+                            if (Array.isArray(aaData)) {
+                                aaData.forEach(function (item) {
+                                    var load = item.load || item;
+                                    var r = (load.route || item.route || '').toUpperCase().trim();
+                                    var d = (item.dockDoors || '').trim();
+                                    if (r && d && !_vsmMap[r]) {
+                                        _vsmMap[r] = d; // Auto-detect mapping
+                                    }
+                                });
+                            }
+                        } catch (err) {}
+                        onDone();
+                    },
+                    onerror: function () { onDone(); },
+                    ontimeout: function () { onDone(); }
+                });
+            });
         }
         function injectStyles() {
             if (document.getElementById('obdv-styles')) return;
@@ -8253,8 +8294,7 @@
                             _defaultsApplied = true;
                             _routes.forEach(function (r) { if (isDefaultDisabled(r.route)) _disabledRoutes[r.route] = true; });
                         }
-                        var hasVsm = Object.keys(_vsmMap).length > 0;
-                        _vsmLoading = !hasVsm;
+                        _vsmLoading = true;
                         renderCards(filterInput.value.trim());
                         if (routePanel.classList.contains('open')) buildRoutePanel();
                         var now0 = Date.now();
@@ -8267,24 +8307,18 @@
                         var ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
                         var _wFmt = function (ms) { var d = new Date(ms); var today = new Date(); var isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); var day = isToday ? '' : ((d.getMonth() + 1) + '/' + d.getDate() + ' '); return day + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
                         var _winLabel = ' · ' + _SUITE.L('obWindowLabel') + ' ' + _wFmt(_winStart) + '→' + _wFmt(_winEnd);
-                        if (hasVsm) {
-                            var vsmCount0 = Object.keys(_vsmMap).length;
-                            statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + vsmCount0 + ' VSMs' + _winLabel;
-                            vsmStatusEl.textContent = '✅ ' + vsmCount0 + ' VSMs';
-                        } else {
-                            statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' ' + _SUITE.L('vsmRoutesLabel') + ' — ' + _SUITE.L('vsmFetchingVsm') + _winLabel;
-                            vsmStatusEl.textContent = '⏳ VSM...';
-                            fetchVSM(node, function () {
-                                _vsmLoading = false;
-                                saveVsmCache(_vsmMap);
-                                renderCards(filterInput.value.trim(), true);
-                                if (routePanel.classList.contains('open')) buildRoutePanel();
-                                var ts2 = new Date().toLocaleTimeString('en-GB', { hour12: false });
-                                var vsmCount = Object.keys(_vsmMap).length;
-                                statusBar.textContent = 'Atualizado ' + ts2 + ' — ' + _routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + vsmCount + ' VSMs' + _winLabel;
-                                vsmStatusEl.textContent = vsmCount > 0 ? '✅ ' + vsmCount + ' VSMs' : _SUITE.L('obVsmNoData');
-                            });
-                        }
+                        statusBar.textContent = 'OB OK (' + ts + ') — ' + _routes.length + ' ' + _SUITE.L('vsmRoutesLabel') + ' — ' + _SUITE.L('vsmFetchingVsm') + _winLabel;
+                        vsmStatusEl.textContent = '⏳ VSM...';
+                        fetchVSM(node, function () {
+                            _vsmLoading = false;
+                            saveVsmCache(_vsmMap);
+                            renderCards(filterInput.value.trim(), true);
+                            if (routePanel.classList.contains('open')) buildRoutePanel();
+                            var ts2 = new Date().toLocaleTimeString('en-GB', { hour12: false });
+                            var vsmCount = Object.keys(_vsmMap).length;
+                            statusBar.textContent = 'Atualizado ' + ts2 + ' — ' + _routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + vsmCount + ' VSMs' + _winLabel;
+                            vsmStatusEl.textContent = vsmCount > 0 ? '✅ ' + vsmCount + ' VSMs' : _SUITE.L('obVsmNoData');
+                        });
                     },
                     onerror: function () { fetchBtn.disabled = false; fetchBtn.textContent = _SUITE.L('vsmFetchBtn'); statusBar.textContent = _SUITE.L('vsmNetworkError'); grid.innerHTML = ''; },
                     ontimeout: function () { fetchBtn.disabled = false; fetchBtn.textContent = _SUITE.L('vsmFetchBtn'); statusBar.textContent = _SUITE.L('vsmTimeout'); grid.innerHTML = ''; }
