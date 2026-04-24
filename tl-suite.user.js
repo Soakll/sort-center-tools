@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.27
+// @version      1.1.28
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -34,7 +34,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.27";
+    const VERSION = "1.1.28";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -304,7 +304,7 @@
             vsmSingleVrid: 'VRID Único',
             vsmTypeVrid: 'Digite o VRID…',
             vsmUntil: 'até',
-            vsmMaxDays: 'Máximo 7 dias entre as datas',
+            vsmMaxDays: 'Máximo 31 dias entre as datas',
             vsmMapHoursLabel: '🗺 Mapa VSM (Horas x VSM)',
             vsmExportCsv: '📥 Exportar VRIDs (CSV)',
             vsmLoadVridsToView: 'Carregue VRIDs para visualizar o mapa.',
@@ -637,7 +637,7 @@
             vsmSingleVrid: 'Single VRID',
             vsmTypeVrid: 'Enter VRID…',
             vsmUntil: 'to',
-            vsmMaxDays: 'Maximum 7 days between dates',
+            vsmMaxDays: 'Maximum 31 days between dates',
             vsmMapHoursLabel: '🗺 VSM Map (Hours x VSM)',
             vsmExportCsv: '📥 Export VRIDs (CSV)',
             vsmLoadVridsToView: 'Load VRIDs to view the map.',
@@ -2613,7 +2613,7 @@
             function createLangSelector() {
                 const select = document.createElement('select');
                 select.style.cssText = 'background:#252545;border:1px solid #3a3a6e;color:#c0c0e0;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;font-family:"Amazon Ember",Arial,sans-serif;cursor:pointer;outline:none;';
-                [{val:'pt',label:'🇧🇷 PT'},{val:'en',label:'🇺🇸 EN'}].forEach(({val,label}) => {
+                [{ val: 'pt', label: '🇧🇷 PT' }, { val: 'en', label: '🇺🇸 EN' }].forEach(({ val, label }) => {
                     const opt = document.createElement('option');
                     opt.value = val;
                     opt.textContent = label;
@@ -5051,7 +5051,7 @@
                     configIsDirty = false;
                     renderConfigTable();
                     if (lastExportData.length > 0) computeAndRenderAll();
-                    
+
                     btn.dataset.confirm = '0';
                     btn.textContent = '✅ Restaurado!';
                     btn.style.background = '#28a745';
@@ -6211,33 +6211,107 @@
                 link.click();
             }
             function exportStaticLayoutCSV() {
-                const totals = getStaticVsmTotals();
-                const rows = [];
-                for (const group of BELT_GROUPS) {
-                    let fingerName = '';
-                    for (const f of activeFingers) {
-                        if (f.belts.includes(group.id)) { fingerName = f.name; break; }
-                    }
-                    for (const vsm of group.vsms) {
-                        const count = totals[vsm] || 0;
-                        if (count > 0) {
-                            const routes = activeMappings.filter(m => m.vsm.toUpperCase() === vsm.toUpperCase()).map(m => m.route).join(' / ') || '-';
-                            rows.push({ vsm, count, belt: 'Belt ' + group.id, finger: fingerName || '-', route: routes });
+                const filteredData = getFilteredExportData();
+                if (!filteredData.length) return;
+                const dailyTotals = {};
+                filteredData.forEach(vridData => {
+                    const timeStr = vridData.actualArrivalTime && vridData.actualArrivalTime !== 'N/A' ? vridData.actualArrivalTime : vridData.scheduledArrivalTime;
+                    if (!timeStr) return;
+                    const dateObj = parseLocalDateTime(timeStr);
+                    if (!dateObj) return;
+                    const hour = dateObj.getHours();
+                    const minute = dateObj.getMinutes();
+                    const currentRatio = (60 - minute) / 60;
+                    const route = vridData.route || '';
+                    const isMMRoute = route.toUpperCase().endsWith('_MM');
+                    const containers = vridData.containers || [];
+                    containers.forEach(container => {
+                        const counts = getCounts(container);
+                        if (counts.C > 0 || counts.P === 0) return;
+                        const addPkg = (vsm, date, amount) => {
+                            const y = date.getFullYear();
+                            const mo = String(date.getMonth() + 1).padStart(2, '0');
+                            const da = String(date.getDate()).padStart(2, '0');
+                            const ho = String(date.getHours()).padStart(2, '0') + ':00';
+                            const fullKey = `${y}-${mo}-${da} ${ho}`;
+                            if (!dailyTotals[fullKey]) {
+                                dailyTotals[fullKey] = {};
+                                ALL_VSMS.forEach(v => dailyTotals[fullKey][v] = 0);
+                            }
+                            if (dailyTotals[fullKey][vsm] !== undefined) dailyTotals[fullKey][vsm] += amount;
+                        };
+                        if (isMMRoute) {
+                            const curP = Math.round(counts.P * currentRatio);
+                            const nextP = counts.P - curP;
+                            addPkg('AIR', dateObj, curP);
+                            if (nextP > 0) {
+                                const nextDate = new Date(dateObj);
+                                nextDate.setHours(hour + 1);
+                                addPkg('AIR', nextDate, nextP);
+                            }
+                            return;
+                        }
+                        const originalLane = container.lane || '';
+                        const segments = splitLaneSegments(originalLane);
+                        const nSeg = segments.length;
+                        if (nSeg === 0) return;
+                        const baseP = Math.floor(counts.P / nSeg);
+                        const remP = counts.P % nSeg;
+                        for (let i = 0; i < nSeg; i++) {
+                            const seg = segments[i];
+                            const addP_total = baseP + (i < remP ? 1 : 0);
+                            if (addP_total === 0) continue;
+                            const targetVsms = segmentToVSM(seg);
+                            if (targetVsms && targetVsms.length > 0) {
+                                const subBaseP = Math.floor(addP_total / targetVsms.length);
+                                const subRemP = addP_total % targetVsms.length;
+                                for (let j = 0; j < targetVsms.length; j++) {
+                                    const vsm = targetVsms[j];
+                                    if (ALL_VSMS.includes(vsm)) {
+                                        const finalAddP = subBaseP + (j < subRemP ? 1 : 0);
+                                        const curP = Math.round(finalAddP * currentRatio);
+                                        const nextP = finalAddP - curP;
+                                        addPkg(vsm, dateObj, curP);
+                                        if (nextP > 0) {
+                                            const nextDate = new Date(dateObj);
+                                            nextDate.setHours(hour + 1);
+                                            addPkg(vsm, nextDate, nextP);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                const sortedKeys = Object.keys(dailyTotals).sort();
+                const csvRows = [];
+                sortedKeys.forEach(key => {
+                    const [date, hour] = key.split(' ');
+                    const totals = dailyTotals[key];
+                    for (const group of BELT_GROUPS) {
+                        let fingerName = '';
+                        for (const f of activeFingers) {
+                            if (f.belts.includes(group.id)) { fingerName = f.name; break; }
+                        }
+                        for (const vsm of group.vsms) {
+                            const count = totals[vsm] || 0;
+                            if (count > 0) {
+                                const routes = activeMappings.filter(m => m.vsm.toUpperCase() === vsm.toUpperCase()).map(m => m.route).join(' / ') || '-';
+                                csvRows.push({ date, hour, vsm, count, belt: 'Belt ' + group.id, finger: fingerName || '-', route: routes });
+                            }
                         }
                     }
-                }
-                if (!rows.length) return;
-                rows.sort((a, b) => b.count - a.count);
-                const csv = ['VSM,Rota,Pacotes,Belt,Finger'];
-                rows.forEach(r => {
-                    csv.push(`${r.vsm},${r.route},${r.count},${r.belt},${r.finger}`);
+                });
+                if (!csvRows.length) return;
+                const csv = ['Data,Hora,VSM,Rota,Pacotes,Belt,Finger'];
+                csvRows.forEach(r => {
+                    csv.push(`${r.date},${r.hour},${r.vsm},"${r.route}",${r.count},${r.belt},${r.finger}`);
                 });
                 const blob = new Blob(['\ufeff' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 link.setAttribute('href', URL.createObjectURL(blob));
-                const hourLabel = staticSelectedHour === -1 ? 'total' : String(staticSelectedHour).padStart(2, '0') + 'h';
                 const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '_');
-                link.setAttribute('download', `layout_${hourLabel}_${ts}.csv`);
+                link.setAttribute('download', `layout_horario_${ts}.csv`);
                 link.click();
             }
             async function doSingleSearch(vrid) {
@@ -7070,7 +7144,7 @@
                         activeMapMatrix = JSON.parse(JSON.stringify(DEFAULT_MAP_MATRIX));
                         GM_setValue('vsm_custom_map_matrix', JSON.stringify(activeMapMatrix));
                         if (lastExportData.length > 0) computeAndRenderAll(); else renderStaticVsmMap();
-                        
+
                         btn.dataset.confirm = '0';
                         btn.textContent = '✅ Restaurado!';
                         btn.style.background = '#28a745';
@@ -7184,7 +7258,7 @@
                     const start = new Date(rangeStartDate.value);
                     if (isNaN(start.getTime())) return;
                     const max = new Date(start);
-                    max.setDate(start.getDate() + 7);
+                    max.setDate(start.getDate() + 31);
                     rangeEndDate.max = max.toISOString().slice(0, 10);
                     if (new Date(rangeEndDate.value) < start) rangeEndDate.value = rangeStartDate.value;
                     if (new Date(rangeEndDate.value) > max) rangeEndDate.value = max.toISOString().slice(0, 10);
@@ -7347,8 +7421,8 @@
                         resultDiv.innerHTML = '<div class="vl-err">Data final menor que inicial.</div>';
                         return;
                     }
-                    if ((ed - sd) / 86400000 > 7) {
-                        resultDiv.innerHTML = '<div class="vl-err">Intervalo máximo de 7 dias.</div>';
+                    if ((ed - sd) / 86400000 > 31) {
+                        resultDiv.innerHTML = '<div class="vl-err">Intervalo máximo de 31 dias.</div>';
                         return;
                     }
                     const body = document.getElementById('vl-panel-body');
@@ -7675,7 +7749,7 @@
                         _vsmMap[item.route.toUpperCase().trim()] = item.vsm.trim();
                     }
                 });
-            } catch (e) {}
+            } catch (e) { }
 
             // 2. Real-time consult: Fetch Inbound assignments from the system
             _SUITE.utils.fetchAntiCsrfToken(function (token) {
@@ -7683,7 +7757,7 @@
                 var params = ['entity=getInboundDockView', 'nodeId=' + encodeURIComponent(node), 'startDate=' + win.start, 'endDate=' + win.end,
                     'loadCategories=inboundScheduled,inboundArrived,inboundCompleted',
                     'shippingPurposeType=TRANSSHIPMENT,NON-TRANSSHIPMENT,SHIP_WITH_AMAZON'].join('&');
-                
+
                 GM_xmlhttpRequest({
                     method: 'POST', url: BASE + 'ssp/dock/hrz/ib/fetchdata',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
@@ -7702,7 +7776,7 @@
                                     }
                                 });
                             }
-                        } catch (err) {}
+                        } catch (err) { }
                         onDone();
                     },
                     onerror: function () { onDone(); },
