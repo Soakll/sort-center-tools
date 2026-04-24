@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.26
+// @version      1.1.27
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -34,7 +34,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.26";
+    const VERSION = "1.1.27";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -386,6 +386,7 @@
             ymsParseError: 'Parse error — resposta inesperada da API',
             routesTabLabel: '📊 Rotas',
             updatedLabel: 'Atualizado:',
+            vsmExportLayoutCsv: '📥 Exportar Layout (CSV)',
         },
         en: {
             close: 'Close',
@@ -718,6 +719,7 @@
             ymsParseError: 'Parse error — unexpected API response',
             routesTabLabel: '📊 Routes',
             updatedLabel: 'Updated:',
+            vsmExportLayoutCsv: '📥 Export Layout (CSV)',
         }
     };
     _SUITE.L = function (key) { return (_SUITE.LANG[_SUITE._lang] || _SUITE.LANG.pt)[key] || (_SUITE.LANG.pt)[key] || key; };
@@ -6208,6 +6210,36 @@
                 link.setAttribute('download', `vrid_vsm_export_${ts}.csv`);
                 link.click();
             }
+            function exportStaticLayoutCSV() {
+                const totals = getStaticVsmTotals();
+                const rows = [];
+                for (const group of BELT_GROUPS) {
+                    let fingerName = '';
+                    for (const f of activeFingers) {
+                        if (f.belts.includes(group.id)) { fingerName = f.name; break; }
+                    }
+                    for (const vsm of group.vsms) {
+                        const count = totals[vsm] || 0;
+                        if (count > 0) {
+                            const routes = activeMappings.filter(m => m.vsm.toUpperCase() === vsm.toUpperCase()).map(m => m.route).join(' / ') || '-';
+                            rows.push({ vsm, count, belt: 'Belt ' + group.id, finger: fingerName || '-', route: routes });
+                        }
+                    }
+                }
+                if (!rows.length) return;
+                rows.sort((a, b) => b.count - a.count);
+                const csv = ['VSM,Rota,Pacotes,Belt,Finger'];
+                rows.forEach(r => {
+                    csv.push(`${r.vsm},${r.route},${r.count},${r.belt},${r.finger}`);
+                });
+                const blob = new Blob(['\ufeff' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.setAttribute('href', URL.createObjectURL(blob));
+                const hourLabel = staticSelectedHour === -1 ? 'total' : String(staticSelectedHour).padStart(2, '0') + 'h';
+                const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '_');
+                link.setAttribute('download', `layout_${hourLabel}_${ts}.csv`);
+                link.click();
+            }
             async function doSingleSearch(vrid) {
                 const resultDiv = document.getElementById('vl-result');
                 const progDiv = document.getElementById('vl-progress');
@@ -6732,7 +6764,10 @@
                 </div>
                 <div id="tab-static" class="vl-tab-content">
                     <div class="vl-section">
-                        <div class="vl-section-title">${_SUITE.L('vsmPhysicalLayoutTitle')}</div>
+                        <div class="vl-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>${_SUITE.L('vsmPhysicalLayoutTitle')}</span>
+                            <button class="vl-btn" id="vl-layout-export-csv-btn" style="padding: 2px 8px; font-size: 11px; margin: 0;" onclick="">${_SUITE.L('vsmExportLayoutCsv')}</button>
+                        </div>
                         <div class="vsm-static-controls">
                             <div class="vl-ctrl-chip">
                                 <label>${_SUITE.L('vsmGoalPkgsH')}</label>
@@ -7081,6 +7116,13 @@
                 const panel = document.getElementById('vl-panel');
                 if (panel) {
                     // Fullscreen disabled by request
+                }
+                const layoutCsvBtn = document.getElementById('vl-layout-export-csv-btn');
+                if (layoutCsvBtn) {
+                    layoutCsvBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        exportStaticLayoutCSV();
+                    });
                 }
                 const staticFingerRateInput = document.getElementById('static-finger-rate');
                 if (staticFingerRateInput) {
