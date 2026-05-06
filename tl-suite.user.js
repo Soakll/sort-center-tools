@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.35
+// @version      1.1.36
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -34,7 +34,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.35";
+    const VERSION = "1.1.36";
 
     // Cleanup automático e preenchimento dos padrões (executa apenas uma vez)
     if (GM_getValue('vsm_auto_cleanup_v35', false) === false) {
@@ -769,32 +769,69 @@
             }
             return GM_getValue('tl_node', 'CGH7');
         },
-        fetchAntiCsrfToken: function (callback) {
-            if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
-            GM_xmlhttpRequest({
-                method: 'GET', url: _SUITE.BASE + 'sortcenter/vista',
-                timeout: 15000,
-                onload: function (response) {
-                    try {
-                        var div = document.createElement('div');
-                        div.innerHTML = response.responseText;
-                        var inputs = div.querySelectorAll('input');
-                        for (var i = 0; i < inputs.length; i++) {
-                            if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value) {
-                                _SUITE.antiCsrfToken = inputs[i].value; break;
-                            }
-                        }
-                        if (!_SUITE.antiCsrfToken) {
-                            var m = response.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
-                            if (!m) m = response.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
-                            if (m) _SUITE.antiCsrfToken = m[1];
-                        }
-                    } catch (e) { }
-                    callback(_SUITE.antiCsrfToken || '');
-                },
-                onerror: function () { callback(''); },
-                ontimeout: function () { callback(''); }
-            });
+        fetchAntiCsrfToken: function (callback, forceFresh) {
+            // 1. Memória local (pula se forçado)
+            if (!forceFresh && _SUITE.antiCsrfToken && _SUITE.antiCsrfToken.length > 10) { callback(_SUITE.antiCsrfToken); return; }
+
+            // 2. Sincronização entre abas (pula se forçado)
+            if (!forceFresh) {
+                var cached = GM_getValue('anti_csrf_token_global', '');
+                var cachedTs = GM_getValue('anti_csrf_token_ts', 0);
+                if (cached && (Date.now() - cachedTs < 20 * 60 * 1000)) {
+                    _SUITE.antiCsrfToken = cached;
+                    callback(cached);
+                    return;
+                }
+            }
+
+            // 3. BUSCA NA PÁGINA ATUAL (pula se forçado)
+            if (!forceFresh) {
+                var localToken = '';
+                var inputs = document.querySelectorAll('input');
+                for (var i = 0; i < inputs.length; i++) {
+                    if (/csrf|token|anti/i.test(inputs[i].name || '') && inputs[i].value && inputs[i].value.length > 10) {
+                        localToken = inputs[i].value; break;
+                    }
+                }
+                if (!localToken) {
+                    var html = document.documentElement.innerHTML;
+                    var m = html.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
+                    if (!m) m = html.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
+                    if (m) localToken = m[1];
+                }
+
+                if (localToken) {
+                    _SUITE.antiCsrfToken = localToken;
+                    GM_setValue('anti_csrf_token_global', localToken);
+                    GM_setValue('anti_csrf_token_ts', Date.now());
+                    callback(localToken);
+                    return;
+                }
+            }
+
+            // 4. Fallback: Busca externa
+            const urls = [_SUITE.BASE + 'sortcenter/flowrate', _SUITE.BASE + 'sortcenter/vista'];
+            let idx = 0;
+            const fetchNext = () => {
+                if (idx >= urls.length) { callback(''); return; }
+                GM_xmlhttpRequest({
+                    method: 'GET', url: urls[idx++], timeout: 8000,
+                    onload: function (r) {
+                        var f = '';
+                        var m = r.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
+                        if (!m) m = r.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
+                        if (m) f = m[1];
+                        if (f) {
+                            _SUITE.antiCsrfToken = f;
+                            GM_setValue('anti_csrf_token_global', f);
+                            GM_setValue('anti_csrf_token_ts', Date.now());
+                            callback(f);
+                        } else fetchNext();
+                    },
+                    onerror: fetchNext, ontimeout: fetchNext
+                });
+            };
+            fetchNext();
         },
         makeDraggable: function (handleEl, panelEl) {
             var ac = new AbortController();
@@ -4991,7 +5028,11 @@
                 activeMappings.forEach(m => {
                     const routeUpper = m.route.toUpperCase();
                     const vsmUpper = m.vsm.toUpperCase();
-                    const groupId = parseInt(m.group, 10);
+                    let groupId = parseInt(m.group, 10);
+                    if (isNaN(groupId)) {
+                        const defGroup = DEFAULT_BELT_GROUPS.find(g => g.vsms.includes(vsmUpper));
+                        groupId = defGroup ? defGroup.id : 99;
+                    }
                     if (!VSM_SEGMENT_MAP[routeUpper]) VSM_SEGMENT_MAP[routeUpper] = [];
                     if (!VSM_SEGMENT_MAP[routeUpper].includes(vsmUpper)) {
                         VSM_SEGMENT_MAP[routeUpper].push(vsmUpper);
@@ -10224,14 +10265,15 @@
                 html += '</tbody></table>';
                 bodyEl.innerHTML = html;
             }
-            function fetchProductivity() {
+            function fetchProductivity(isRetry, targetBase) {
                 var nodeInp = document.getElementById('tl-node-input');
                 if (nodeInp && nodeInp.value.trim()) CURRENT_NODE = nodeInp.value.trim().toUpperCase();
                 showSkeleton();
                 var statusEl = document.getElementById('tl-prod-status');
                 var bodyEl = document.getElementById('tl-prod-body');
-                var summaryEl = document.getElementById('tl-hourly-summary');
                 if (statusEl) statusEl.textContent = _SUITE.L('prodFetching');
+                
+                var currentBase = targetBase || _SUITE.BASE;
                 var range = getTimeRange();
                 var start = range.start, end = range.end;
                 var slots = [];
@@ -10251,8 +10293,14 @@
                     cursor = next;
                 }
                 currentSlots = slots.map(function (s) { return s.label; });
+                
+                // Se for retry, força a busca de um token NOVO ignorando o DOM local
                 _SUITE.utils.fetchAntiCsrfToken(function (token) {
-                    if (!token) return;
+                    if (!token) {
+                        if (statusEl) statusEl.textContent = '❌ Token Fail';
+                        if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">Não foi possível obter o token de segurança. Tente recarregar a página.</div>';
+                        return;
+                    }
                     var totalPayload = {
                         nodeId: CURRENT_NODE, nodeType: 'SC',
                         entity: 'getQualityMetricDetails',
@@ -10265,19 +10313,33 @@
                     tasks.push(new Promise(function (resolve) {
                         GM_xmlhttpRequest({
                             method: 'POST',
-                            url: BASE + 'sortcenter/vista/controller/getQualityMetricDetails',
+                            url: currentBase + 'sortcenter/vista/controller/getQualityMetricDetails',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
                             data: 'jsonObj=' + encodeURIComponent(JSON.stringify(totalPayload)),
                             withCredentials: true,
                             onload: function (r) {
-                                try {
-                                    var finalUrl = r.finalUrl || '';
-                                    if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || r.status === 401 || r.status === 403) {
-                                        _SUITE.antiCsrfToken = '';
-                                        if (statusEl) statusEl.textContent = _SUITE.L('prodSessionExpired');
-                                        if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">' + _SUITE.L('prodSessionExpiredMsg') + '<br><a href="' + location.href + '">' + _SUITE.L('prodReloadMsg') + '</a> ' + _SUITE.L('prodTryAgain') + '</div>';
+                                var finalUrl = r.finalUrl || '';
+                                if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || r.status === 401 || r.status === 403) {
+                                    _SUITE.antiCsrfToken = '';
+                                    GM_deleteValue('anti_csrf_token_global');
+                                    
+                                    if (!isRetry) {
+                                        console.warn("[Ranking] Sessão expirada no domínio " + currentBase + ". Tentando renovar...");
+                                        setTimeout(() => fetchProductivity(true, currentBase), 500);
+                                        return;
+                                    } else if (!targetBase) {
+                                        // Se já tentou o retry no domínio atual e falhou, tenta o domínio ALTERNATIVO
+                                        var altBase = currentBase.includes('-fe.') ? 'https://trans-logistics.amazon.com/' : 'https://trans-logistics-fe.amazon.com/';
+                                        console.warn("[Ranking] Falha persistente. Tentando domínio alternativo: " + altBase);
+                                        setTimeout(() => fetchProductivity(true, altBase), 500);
                                         return;
                                     }
+                                    
+                                    if (statusEl) statusEl.textContent = _SUITE.L('prodSessionExpired');
+                                    if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">' + _SUITE.L('prodSessionExpiredMsg') + '<br><a href="' + location.href + '">' + _SUITE.L('prodReloadMsg') + '</a> ' + _SUITE.L('prodTryAgain') + '</div>';
+                                    return;
+                                }
+                                try {
                                     var j = JSON.parse(r.responseText);
                                     lastData = (j && j.ret && j.ret.getQualityMetricDetailsOutput && j.ret.getQualityMetricDetailsOutput.qualityMetrics) || [];
                                     resolve();
@@ -10300,7 +10362,7 @@
                                 };
                                 GM_xmlhttpRequest({
                                     method: 'POST',
-                                    url: BASE + 'sortcenter/vista/controller/getQualityMetricDetails',
+                                    url: currentBase + 'sortcenter/vista/controller/getQualityMetricDetails',
                                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
                                     data: 'jsonObj=' + encodeURIComponent(JSON.stringify(p)),
                                     withCredentials: true,
@@ -10324,7 +10386,7 @@
                         selectedHour = 'total';
                         renderTable();
                     });
-                });
+                }, isRetry); // isRetry vira forceFresh aqui
             }
             var LOWER_WORDS = { de: 1, da: 1, do: 1, das: 1, dos: 1, e: 1, em: 1 };
             function normalizeName(raw) {
