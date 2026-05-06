@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.28
+// @version      1.1.30
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -34,7 +34,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.28";
+    const VERSION = "1.1.30";
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -746,6 +746,7 @@
             if (_SUITE.antiCsrfToken) { callback(_SUITE.antiCsrfToken); return; }
             GM_xmlhttpRequest({
                 method: 'GET', url: _SUITE.BASE + 'sortcenter/vista',
+                timeout: 15000,
                 onload: function (response) {
                     try {
                         var div = document.createElement('div');
@@ -764,7 +765,8 @@
                     } catch (e) { }
                     callback(_SUITE.antiCsrfToken || '');
                 },
-                onerror: function () { callback(''); }
+                onerror: function () { callback(''); },
+                ontimeout: function () { callback(''); }
             });
         },
         makeDraggable: function (handleEl, panelEl) {
@@ -7489,6 +7491,9 @@
             var m = s.match(/(\d{2}):(\d{2})$/);
             return m ? m[1] + ':' + m[2] : s;
         }
+        var URGENT_THRESHOLD = GM_getValue('obdv_urgent_min', 90);
+        var WARNING_THRESHOLD = GM_getValue('obdv_warning_min', 180);
+        var CUFT_FACTOR = 0.0000353147;
         function cleanRoute(r) { return (r || '').replace(/^[A-Z0-9]{2,6}\s*->\s*/i, '').trim() || r; }
         function splitRoute(route) {
             if (/_MM$/i.test(route)) return [route];
@@ -7511,8 +7516,6 @@
                 return parsed.map || {};
             } catch (e) { return {}; }
         }
-        var URGENT_THRESHOLD = GM_getValue('obdv_urgent_min', 90);
-        var WARNING_THRESHOLD = GM_getValue('obdv_warning_min', 120);
         function saveVsmCache(map) {
             try { GM_setValue(VSM_CACHE_KEY, JSON.stringify({ ts: Date.now(), map: map })); } catch (e) { }
         }
@@ -7574,7 +7577,7 @@
         function _extractContainerTimeMs(container) {
             if (!container) return null;
             var fields = ['scheduleDepartureTime', 'cpt', 'criticalPullTime', 'sdt', 'shipDate',
-                'estimatedShipDate', 'expiryTime', 'departureTime',
+                'estimatedShipDate', 'expiryTime', 'departureTime', 'plannedShipDate', 'creationTime',
                 'estimatedDepartureTime', 'expectedShipDate'];
             for (var i = 0; i < fields.length; i++) {
                 var val = container[fields[i]];
@@ -7658,7 +7661,8 @@
                     (node.childNodes || []).forEach(function (child) {
                         if (child.container && child.container.label &&
                             _isValidContainerLabel(child.container.label) &&
-                            _palletBelongsToRoute(child)) {
+                            _palletBelongsToRoute(child) &&
+                            _palletMatchesRoute(child.container, routeCptMs)) {
                             areaCount++;
                         }
                     });
@@ -7670,6 +7674,7 @@
                 }
                 if (_isValidContainerLabel(node.container.label) && _palletMatchesRoute(node.container, routeCptMs)) {
                     palletCount++;
+                    positionsData.push({ label: node.container.label });
                 }
             });
             return { palletCount: palletCount, positionsData: positionsData };
@@ -7737,7 +7742,190 @@
             });
             _processContainerQueue(gen, onProgress);
         }
-        var _vsmPending = false;
+        var _cuftMap = {};
+        var _cuftLoading = false;
+        function fetchCuftForRoutes(routeNames, nodeId, onDone) {
+            _cuftMap = {};
+            _cuftCountMap = {};
+            _cuftLoading = true;
+            if (!routeNames || routeNames.length === 0) { _cuftLoading = false; if (onDone) onDone(); return; }
+            console.log('[OBDV-CuFT] Iniciando busca para ' + routeNames.length + ' rotas, node=' + nodeId);
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: location.origin + '/sortcenter/vista',
+                onload: function (tokenResp) {
+                    var vistaToken = null;
+                    try {
+                        var div = document.createElement('div');
+                        div.innerHTML = tokenResp.responseText;
+                        var input = div.querySelector('input[name*="csrf"], input[name*="token"]');
+                        if (input && input.value) vistaToken = input.value;
+                        if (!vistaToken) {
+                            var m = tokenResp.responseText.match(/"anti-csrftoken-a2z"\s*[,:]?\s*"([^"]{10,})"/);
+                            if (m) vistaToken = m[1];
+                            else {
+                                var m2 = tokenResp.responseText.match(/anti.csrftoken.a2z[^"]*"([^"]{10,})"/i);
+                                if (m2) vistaToken = m2[1];
+                            }
+                        }
+                    } catch (e) { console.log('[OBDV-CuFT] Erro parsing token: ' + e.message); }
+                    if (!vistaToken) {
+                        console.log('[OBDV-CuFT] FALHA: Token Vista nao encontrado (HTTP ' + tokenResp.status + ')');
+                        _cuftLoading = false; if (onDone) onDone();
+                        return;
+                    }
+                    console.log('[OBDV-CuFT] Token Vista OK');
+                    var now = new Date();
+                    var baseTs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+                    var timestamps = [];
+                    for (var d = -5; d <= 5; d++) {
+                        timestamps.push((baseTs + d * 86400000) + ':STACKED');
+                    }
+                    var searchFilters = [];
+                    routeNames.forEach(function (route) {
+                        if (searchFilters.indexOf(route) === -1) searchFilters.push(route);
+                        var vsm = _vsmMap[route];
+                        if (vsm && searchFilters.indexOf(vsm) === -1) searchFilters.push(vsm);
+                    });
+
+                    var allIds = {};
+                    var pending = searchFilters.length;
+                    var concurrency = 4;
+                    var idx = 0;
+                    function nextBatch() {
+                        var batch = searchFilters.slice(idx, idx + concurrency);
+                        idx += concurrency;
+                        var batchLeft = batch.length;
+                        batch.forEach(function (filterStr) {
+                            var filterCriteria = ['BAG', 'GAYLORD', 'PALLET'].map(function (ct) {
+                                return { nodeId: nodeId, container_type: ct, stacking_filter: filterStr, is_enclosed: 'false' };
+                            });
+                            var payload = {
+                                filterCriteria: filterCriteria,
+                                nodeId: nodeId,
+                                segmentId: 'COMPOUND_CONTAINERS',
+                                locationGroups: { NON_DEPARTED: { locations: timestamps, filterInWindow: null } },
+                                lane: nodeId + '->' + filterStr,
+                                containerTypes: ['BAG', 'GAYLORD', 'PALLET'],
+                                adhoc: true,
+                                entity: 'getContainerIds'
+                            };
+                            GM_xmlhttpRequest({
+                                method: 'POST',
+                                url: location.origin + '/sortcenter/vista/controller/getContainerIds',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'anti-csrftoken-a2z': vistaToken
+                                },
+                                data: 'anti-csrftoken-a2z=' + encodeURIComponent(vistaToken) + '&jsonObj=' + encodeURIComponent(JSON.stringify(payload)),
+                                onload: function (res) {
+                                    try {
+                                        var json = JSON.parse(res.responseText);
+                                        var entities = (json.ret && json.ret.getContainerIdsOutput && json.ret.getContainerIdsOutput.entities) || [];
+                                        entities.forEach(function (e) { if (e.entityId) allIds[e.entityId] = filterStr; });
+                                    } catch (e) { }
+                                    batchLeft--; pending--;
+                                    if (batchLeft === 0 && idx < searchFilters.length) nextBatch();
+                                    if (pending === 0) _fetchCuftDetails(vistaToken, nodeId, allIds, onDone);
+                                },
+                                onerror: function () {
+                                    batchLeft--; pending--;
+                                    if (batchLeft === 0 && idx < searchFilters.length) nextBatch();
+                                    if (pending === 0) _fetchCuftDetails(vistaToken, nodeId, allIds, onDone);
+                                },
+                                ontimeout: function () {
+                                    batchLeft--; pending--;
+                                    if (batchLeft === 0 && idx < searchFilters.length) nextBatch();
+                                    if (pending === 0) _fetchCuftDetails(vistaToken, nodeId, allIds, onDone);
+                                }
+                            });
+                        });
+                    }
+                    nextBatch();
+                },
+                onerror: function () { console.log('[OBDV-CuFT] FALHA: Erro de rede ao buscar token Vista'); _cuftLoading = false; if (onDone) onDone(); },
+                ontimeout: function () { console.log('[OBDV-CuFT] FALHA: Timeout ao buscar token Vista'); _cuftLoading = false; if (onDone) onDone(); }
+            });
+        }
+        var _cuftCountMap = {};
+        function _fetchCuftDetails(vistaToken, nodeId, idRouteMap, onDone) {
+            var ids = Object.keys(idRouteMap);
+            if (ids.length === 0) {
+                console.log('[OBDV-CuFT] Nenhum container encontrado, finalizando');
+                _cuftLoading = false; if (onDone) onDone(); return;
+            }
+            var chunks = [];
+            for (var i = 0; i < ids.length; i += 50) { chunks.push(ids.slice(i, i + 50)); }
+            console.log('[OBDV-CuFT] Buscando detalhes: ' + ids.length + ' containers em ' + chunks.length + ' lotes');
+            var chunksDone = 0;
+            chunks.forEach(function (chunk, ci) {
+                setTimeout(function () {
+                    GM_xmlhttpRequest({
+                        method: 'POST',
+                        url: location.origin + '/sortcenter/vista/controller/getContainerDetails',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'anti-csrftoken-a2z': vistaToken
+                        },
+                        data: 'anti-csrftoken-a2z=' + encodeURIComponent(vistaToken) + '&jsonObj=' + encodeURIComponent(JSON.stringify({
+                            nodeId: nodeId,
+                            containerIds: chunk,
+                            entity: 'getContainersDetail'
+                        })),
+                        onload: function (res) {
+                            try {
+                                var json = JSON.parse(res.responseText);
+                                var map = (json.ret && json.ret.getContainersDetailOutput && json.ret.getContainersDetailOutput.containerDetailMap) || {};
+                                var detailCount = Object.keys(map).length;
+                                Object.keys(map).forEach(function (eid) {
+                                    var c = map[eid];
+                                    var vol = (c.packageVolume || 0) * CUFT_FACTOR;
+                                    var posLabel = c.locationLabel || '';
+                                    var selfLabel = c.label || '';
+
+                                    if (posLabel) {
+                                        if (_cuftMap[posLabel] === undefined) _cuftMap[posLabel] = 0;
+                                        if (_cuftCountMap[posLabel] === undefined) _cuftCountMap[posLabel] = 0;
+                                        _cuftMap[posLabel] += vol;
+                                        _cuftCountMap[posLabel] += 1;
+                                    }
+                                    if (selfLabel && selfLabel !== posLabel) {
+                                        if (_cuftMap[selfLabel] === undefined) _cuftMap[selfLabel] = 0;
+                                        if (_cuftCountMap[selfLabel] === undefined) _cuftCountMap[selfLabel] = 0;
+                                        _cuftMap[selfLabel] += vol;
+                                        _cuftCountMap[selfLabel] += 1;
+                                    }
+                                });
+                                console.log('[OBDV-CuFT] Lote ' + (ci + 1) + '/' + chunks.length + ': ' + detailCount + ' detalhes processados');
+                            } catch (e) {
+                                console.log('[OBDV-CuFT] Erro parse lote ' + (ci + 1) + ': ' + e.message);
+                            }
+                            chunksDone++;
+                            if (chunksDone >= chunks.length) {
+                                var labelCount = Object.keys(_cuftMap).filter(function (k) { return k.indexOf('__route__') !== 0; }).length;
+                                console.log('[OBDV-CuFT] FINALIZADO: ' + labelCount + ' containers com volume');
+                                _cuftLoading = false;
+                                if (onDone) onDone();
+                            }
+                        },
+                        onerror: function () {
+                            console.log('[OBDV-CuFT] Erro de rede lote ' + (ci + 1));
+                            chunksDone++;
+                            if (chunksDone >= chunks.length) { _cuftLoading = false; if (onDone) onDone(); }
+                        },
+                        ontimeout: function () {
+                            console.log('[OBDV-CuFT] Timeout lote ' + (ci + 1));
+                            chunksDone++;
+                            if (chunksDone >= chunks.length) { _cuftLoading = false; if (onDone) onDone(); }
+                        }
+                    });
+                }, ci * 300);
+            });
+        }
+
+        var _vsmError = false;
         function fetchVSM(node, onDone) {
             _vsmMap = {};
             // 1. Load manual config (User overrides)
@@ -7751,19 +7939,20 @@
                 });
             } catch (e) { }
 
-            // 2. Real-time consult: Fetch Inbound assignments from the system
+            _vsmError = false;
             _SUITE.utils.fetchAntiCsrfToken(function (token) {
                 var win = todayWindow();
                 var params = ['entity=getInboundDockView', 'nodeId=' + encodeURIComponent(node), 'startDate=' + win.start, 'endDate=' + win.end,
-                    'loadCategories=inboundScheduled,inboundArrived,inboundCompleted',
+                    'loadCategories=inboundScheduled,inboundArrived,inboundInProgress,inboundCompleted',
                     'shippingPurposeType=TRANSSHIPMENT,NON-TRANSSHIPMENT,SHIP_WITH_AMAZON'].join('&');
 
                 GM_xmlhttpRequest({
                     method: 'POST', url: BASE + 'ssp/dock/hrz/ib/fetchdata',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token || _SUITE.antiCsrfToken || '' },
                     data: params, withCredentials: true, timeout: 10000,
                     onload: function (resp) {
                         try {
+                            if (resp.status !== 200) throw new Error('HTTP ' + resp.status);
                             var data = JSON.parse(resp.responseText.replace(/^\uFEFF/, ''));
                             var aaData = data && data.ret && data.ret.aaData;
                             if (Array.isArray(aaData)) {
@@ -7776,11 +7965,21 @@
                                     }
                                 });
                             }
-                        } catch (err) { }
+                        } catch (err) {
+                            console.error('[OBDV-VSM] Error:', err);
+                            _vsmError = true;
+                        }
                         onDone();
                     },
-                    onerror: function () { onDone(); },
-                    ontimeout: function () { onDone(); }
+                    onerror: function (err) { 
+                        console.error('[OBDV-VSM] Network Error:', err);
+                        _vsmError = true; 
+                        onDone(); 
+                    },
+                    ontimeout: function () { 
+                        _vsmError = true; 
+                        onDone(); 
+                    }
                 });
             });
         }
@@ -7863,11 +8062,15 @@
             filterInput.placeholder = _SUITE.L('obFilterPlaceholder');
             filterInput.style.cssText = 'background:#161b22;border:1px solid #30363d;color:#f0f6ff;border-radius:6px;padding:5px 10px;font-size:11px;flex:1;min-width:140px;font-family:monospace;outline:none;';
             var hideExpiredBtn = document.createElement('button');
-            hideExpiredBtn.textContent = _SUITE.L('showExpired');
-            var _hideExp = true;
-            hideExpiredBtn.style.cssText = 'padding:5px 10px;border:1px solid #58a6ff;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#58a6ff;white-space:nowrap;';
+            var _hideExp = GM_getValue('obdv_hide_expired', true);
+            hideExpiredBtn.textContent = _hideExp ? _SUITE.L('showExpired') : _SUITE.L('hideExpired');
+            hideExpiredBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
+            hideExpiredBtn.style.color = _hideExp ? '#58a6ff' : '#8b949e';
+            hideExpiredBtn.style.borderColor = _hideExp ? '#58a6ff' : '#30363d';
+
             hideExpiredBtn.onclick = function () {
                 _hideExp = !_hideExp;
+                GM_setValue('obdv_hide_expired', _hideExp);
                 hideExpiredBtn.textContent = _hideExp ? _SUITE.L('showExpired') : _SUITE.L('hideExpired');
                 hideExpiredBtn.style.color = _hideExp ? '#58a6ff' : '#8b949e';
                 hideExpiredBtn.style.borderColor = _hideExp ? '#58a6ff' : '#30363d';
@@ -7891,11 +8094,15 @@
             toolbar.appendChild(fetchBtn);
             toolbar.appendChild(filterInput);
             var hideNoVsmBtn = document.createElement('button');
-            hideNoVsmBtn.textContent = _SUITE.L('showNoVsm');
-            var _hideNoVsm = true;
-            hideNoVsmBtn.style.cssText = 'padding:5px 10px;border:1px solid #58a6ff;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#58a6ff;white-space:nowrap;';
+            var _hideNoVsm = GM_getValue('obdv_hide_no_vsm', true);
+            hideNoVsmBtn.textContent = _hideNoVsm ? _SUITE.L('showNoVsm') : _SUITE.L('hideNoVsm');
+            hideNoVsmBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
+            hideNoVsmBtn.style.color = _hideNoVsm ? '#58a6ff' : '#8b949e';
+            hideNoVsmBtn.style.borderColor = _hideNoVsm ? '#58a6ff' : '#30363d';
+
             hideNoVsmBtn.onclick = function () {
                 _hideNoVsm = !_hideNoVsm;
+                GM_setValue('obdv_hide_no_vsm', _hideNoVsm);
                 hideNoVsmBtn.textContent = _hideNoVsm ? _SUITE.L('showNoVsm') : _SUITE.L('hideNoVsm');
                 hideNoVsmBtn.style.color = _hideNoVsm ? '#58a6ff' : '#8b949e';
                 hideNoVsmBtn.style.borderColor = _hideNoVsm ? '#58a6ff' : '#30363d';
@@ -7925,6 +8132,9 @@
             toolbar.appendChild(threshWrap);
             toolbar.appendChild(countEl);
             toolbar.appendChild(vsmStatusEl);
+            var cuftStatusEl = document.createElement('span');
+            cuftStatusEl.style.cssText = 'font-size:10px;color:#f59e0b;white-space:nowrap;';
+            toolbar.appendChild(cuftStatusEl);
 
             // Add zoom controls
             var zoomWrap = document.createElement('div');
@@ -8201,13 +8411,11 @@
             };
             setTimeout(function () {
                 _refreshCards(); updateCalStatus();
-                calPanel.style.maxHeight = '80px'; calPanel.classList.add('open');
-                calBtn.style.color = '#58a6ff'; calBtn.style.borderColor = '#58a6ff';
             }, 50);
             var gridWrap = document.createElement('div');
             gridWrap.style.cssText = 'flex:1;overflow-y:auto;padding:14px 16px;background:#0d1117;min-height:0;';
             var grid = document.createElement('div');
-            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:10px;';
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:10px;';
             gridWrap.appendChild(grid);
             var statusBar = document.createElement('div');
             statusBar.style.cssText = 'padding:5px 14px;font-size:10px;color:#6e7681;border-top:1px solid #21262d;background:#0d1117;flex-shrink:0;';
@@ -8242,10 +8450,21 @@
                 var hdrDiv = document.createElement('div');
                 hdrDiv.className = 'obdv-card-header';
                 hdrDiv.style.background = headerBg;
+
+                var cdata = _containerMap[r.route + '|' + (r.cptMs || 0)];
+                var cardTotalCuft = 0;
+                if (cdata && cdata.positionsData) {
+                    cdata.positionsData.forEach(function (p) {
+                        var vol = _cuftMap[p.label];
+                        if (vol && vol > 0) cardTotalCuft += vol;
+                    });
+                }
+
                 var routeEl = document.createElement('div');
                 routeEl.className = 'obdv-route';
                 routeEl.title = r.route;
                 routeEl.textContent = r.route;
+
                 var vsmEl = document.createElement('div');
                 var isMMRoute = /_MM$/i.test(r.route);
                 var vsm = isMMRoute ? null : _vsmMap[r.route];
@@ -8259,24 +8478,78 @@
                 } else if (vsm) {
                     vsmEl.className = 'obdv-vsm';
                     vsmEl.textContent = vsm;
-                    vsmEl.title = 'Visual Sortation Marker: ' + vsm;
+                    vsmEl.title = 'VSM: ' + vsm;
                 } else if (!_vsmLoading) {
                     vsmEl.className = 'obdv-vsm';
-                    vsmEl.style.color = '#374151';
-                    vsmEl.textContent = 'Sem VSM';
+                    if (_vsmError) {
+                        vsmEl.textContent = 'ERRO VSM';
+                        vsmEl.style.color = '#ef4444';
+                        vsmEl.title = 'Erro ao consultar API de VSM (Inbound Dock View)';
+                    } else {
+                        vsmEl.style.color = '#374151';
+                        vsmEl.textContent = 'Sem VSM';
+                    }
                 }
-                hdrDiv.appendChild(vsmEl);
-                hdrDiv.appendChild(routeEl);
-                card.appendChild(hdrDiv);
-                var body = document.createElement('div');
-                body.className = 'obdv-card-body';
+
+                var topRow = document.createElement('div');
+                topRow.style.display = 'flex';
+                topRow.style.alignItems = 'baseline';
+
+                vsmEl.style.margin = '0';
+                vsmEl.style.flex = '1';
+                vsmEl.style.textAlign = 'left';
+
+                var cuftEl = document.createElement('div');
+                cuftEl.style.flex = '1';
+                cuftEl.style.textAlign = 'center';
+                cuftEl.style.fontSize = '12px';
+                if (cardTotalCuft > 0) {
+                    cuftEl.innerHTML = '<span style="color:#eab308;font-weight:600;">' + cardTotalCuft.toFixed(1) + ' ft³</span>';
+                }
+
+                routeEl.style.margin = '0';
+                routeEl.style.flex = '1';
+                routeEl.style.textAlign = 'right';
+
+                topRow.appendChild(vsmEl);
+                topRow.appendChild(cuftEl);
+                topRow.appendChild(routeEl);
+                hdrDiv.appendChild(topRow);
+
+                var secondRow = document.createElement('div');
+                secondRow.style.display = 'flex';
+                secondRow.style.justifyContent = 'space-between';
+                secondRow.style.alignItems = 'flex-start';
+                secondRow.style.marginTop = '8px';
+
+                var leftGroup = document.createElement('div');
+                leftGroup.style.display = 'flex';
+                leftGroup.style.flexDirection = 'column';
+                leftGroup.style.alignItems = 'flex-start';
+                leftGroup.style.gap = '6px';
+
                 var cptClass = urgent ? 'urgent' : warning ? 'warning' : expired ? 'expired' : '';
                 var cptEl = document.createElement('div');
                 cptEl.className = 'obdv-cpt-time' + (cptClass ? ' ' + cptClass : '');
                 cptEl.textContent = r.cpt || '—';
-                body.appendChild(cptEl);
+
+                var st = getStatus(r.status);
+                var badge = document.createElement('span');
+                badge.className = 'obdv-status-badge';
+                badge.style.cssText = 'background:' + st.bg + ';color:' + st.color + ';border:1px solid ' + st.color + '44; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap;';
+                badge.textContent = st.label;
+
+                leftGroup.appendChild(cptEl);
+                leftGroup.appendChild(badge);
+
+                var rightGroup = document.createElement('div');
+                rightGroup.style.display = 'flex';
+                rightGroup.style.flexDirection = 'column';
+                rightGroup.style.alignItems = 'flex-end';
+
                 var cptDateEl = document.createElement('div');
                 cptDateEl.className = 'obdv-cpt-date';
+                cptDateEl.style.margin = '0';
                 if (r.cptMs) {
                     var _cd = new Date(r.cptMs);
                     var _today = new Date();
@@ -8285,7 +8558,7 @@
                     var _isTomorrow = _cd.getDate() === _tomorrow.getDate() && _cd.getMonth() === _tomorrow.getMonth() && _cd.getFullYear() === _tomorrow.getFullYear();
                     cptDateEl.textContent = _isTodayCpt ? 'Hoje' : _isTomorrow ? 'Amanhã' : (('0' + (_cd.getMonth() + 1)).slice(-2) + '/' + ('0' + _cd.getDate()).slice(-2));
                 } else { cptDateEl.textContent = ''; }
-                body.appendChild(cptDateEl);
+
                 var remEl = document.createElement('div');
                 remEl.className = 'obdv-remaining';
                 if (diff === null) { remEl.style.color = '#6e7681'; remEl.textContent = 'Sem CPT'; }
@@ -8293,38 +8566,69 @@
                 else if (urgent) { remEl.style.color = '#ef4444'; remEl.textContent = '🚨 ' + Math.round(diff / 60000) + 'min restantes'; }
                 else if (warning) { var m3 = Math.round(diff / 60000); remEl.style.color = '#f59e0b'; remEl.textContent = Math.floor(m3 / 60) + 'h ' + (m3 % 60) + 'min'; }
                 else { var m4 = Math.round(diff / 60000); remEl.style.color = '#22c55e'; remEl.textContent = Math.floor(m4 / 60) + 'h ' + (m4 % 60) + 'min'; }
-                body.appendChild(remEl);
-                var st = getStatus(r.status);
-                var badge = document.createElement('span');
-                badge.className = 'obdv-status-badge';
-                badge.style.cssText = 'background:' + st.bg + ';color:' + st.color + ';border:1px solid ' + st.color + '44;margin-top:6px;';
-                badge.textContent = st.label;
-                body.appendChild(badge);
-                var cdata = _containerMap[r.route + '|' + (r.cptMs || 0)];
-                if (!expired) {
+
+                rightGroup.appendChild(cptDateEl);
+                rightGroup.appendChild(remEl);
+
+                secondRow.appendChild(leftGroup);
+                secondRow.appendChild(rightGroup);
+
+                hdrDiv.appendChild(secondRow);
+                card.appendChild(hdrDiv);
+
+                var body = document.createElement('div');
+                body.className = 'obdv-card-body';
+
+                if (!isCompleted) {
                     if (cdata === undefined) {
                         var loadingEl = document.createElement('div');
                         loadingEl.className = 'obdv-container-loading';
                         loadingEl.textContent = _SUITE.L('obLoadingPositions');
                         body.appendChild(loadingEl);
                     } else if (cdata && (cdata.palletCount > 0 || cdata.positionsData.length > 0)) {
-                        var csect = document.createElement('div');
-                        csect.className = 'obdv-container-section';
-                        var pallEl = document.createElement('div');
-                        pallEl.className = 'obdv-pallets';
-                        pallEl.textContent = '📦 ' + cdata.palletCount + ' pallet' + (cdata.palletCount !== 1 ? 's' : '');
-                        csect.appendChild(pallEl);
-                        if (cdata.positionsData.length > 0) {
-                            var posEl = document.createElement('div');
-                            posEl.className = 'obdv-positions';
-                            var posText = cdata.positionsData.slice(0, 6)
-                                .map(function (p) { return p.label; })
-                                .join(' · ');
-                            if (cdata.positionsData.length > 6) posText += ' +' + (cdata.positionsData.length - 6) + ' pos';
-                            posEl.textContent = posText;
-                            csect.appendChild(posEl);
+                        var displayPalletCount = cdata.palletCount;
+                        var displayPositions = cdata.positionsData;
+                        if (!_cuftLoading) {
+                            // Filter to show only pallets that have volume data (cubic feet > 0)
+                            displayPositions = cdata.positionsData.filter(function (p) {
+                                return _cuftMap[p.label] > 0;
+                            });
+                            // Count exactly what is shown on the card
+                            displayPalletCount = displayPositions.length;
                         }
-                        body.appendChild(csect);
+                        if (displayPalletCount > 0 || displayPositions.length > 0) {
+                            var csect = document.createElement('div');
+                            csect.className = 'obdv-container-section';
+                            var pallEl = document.createElement('div');
+                            pallEl.className = 'obdv-pallets';
+                            pallEl.textContent = '📦 ' + displayPalletCount + ' pallet' + (displayPalletCount !== 1 ? 's' : '');
+                            csect.appendChild(pallEl);
+                            if (displayPositions.length > 0) {
+                                var sortedPositions = displayPositions.slice().sort(function (a, b) {
+                                    var volA = _cuftMap[a.label] || 0;
+                                    var volB = _cuftMap[b.label] || 0;
+                                    return volB - volA;
+                                });
+                                var posEl = document.createElement('div');
+                                posEl.className = 'obdv-positions';
+                                posEl.style.marginTop = '8px';
+                                posEl.style.display = 'flex';
+                                posEl.style.flexDirection = 'column';
+                                posEl.style.gap = '4px';
+                                var posText = sortedPositions.map(function (p) {
+                                    var lbl = p.label;
+                                    var vol = _cuftMap[lbl];
+                                    var volHtml = (vol && vol > 0) ? '<span style="color:#eab308;font-weight:600;white-space:nowrap;">' + vol.toFixed(1) + ' ft³</span>' : '<span style="color:#6b7280;font-size:12px;">--</span>';
+                                    return '<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:4px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05);">' +
+                                        '<span style="color:#818cf8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px; font-weight:500;" title="' + lbl + '">' + lbl + '</span>' +
+                                        volHtml +
+                                        '</div>';
+                                }).join('');
+                                posEl.innerHTML = posText;
+                                csect.appendChild(posEl);
+                            }
+                            body.appendChild(csect);
+                        }
                     }
                 }
                 card.appendChild(body);
@@ -8360,7 +8664,7 @@
                 fetchBtn.disabled = true; fetchBtn.textContent = _SUITE.L('vsmFetching');
                 statusBar.textContent = _SUITE.L('obQueryingApi');
                 grid.innerHTML = '<div style="padding:24px;color:#6e7681;font-size:13px;grid-column:1/-1;text-align:center;"><span style="display:inline-block;width:20px;height:20px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:obdv-spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>' + _SUITE.L('obLoadingRoutes') + '</div>';
-                _routes = []; _vsmLoading = false; countEl.textContent = ''; vsmStatusEl.textContent = '';
+                _routes = []; _vsmLoading = false; countEl.textContent = ''; vsmStatusEl.textContent = ''; cuftStatusEl.textContent = '';
                 var node = (nodeInput.value || 'CGH7').trim().toUpperCase();
                 var win = apiWindow(_activeWindow);
                 var params = ['entity=getOutboundDockView', 'nodeId=' + encodeURIComponent(node), 'startDate=' + win.start, 'endDate=' + win.end,
@@ -8420,6 +8724,17 @@
                         fetchContainersForRoutes(activeRoutes, node, function () {
                             renderCards(filterInput.value.trim(), true);
                         });
+                        var uniqueRoutes = [];
+                        var _seenRoutes = {};
+                        activeRoutes.forEach(function (r) { if (!_seenRoutes[r.route]) { _seenRoutes[r.route] = true; uniqueRoutes.push(r.route); } });
+                        cuftStatusEl.textContent = '⏳ CuFT...';
+                        cuftStatusEl.style.color = '#f59e0b';
+                        fetchCuftForRoutes(uniqueRoutes, node, function () {
+                            var cuftCount = Object.keys(_cuftMap).length;
+                            cuftStatusEl.textContent = cuftCount > 0 ? '✅ ' + cuftCount + ' CuFT' : '';
+                            cuftStatusEl.style.color = '#22c55e';
+                            renderCards(filterInput.value.trim(), true);
+                        });
                         var ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
                         var _wFmt = function (ms) { var d = new Date(ms); var today = new Date(); var isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear(); var day = isToday ? '' : ((d.getMonth() + 1) + '/' + d.getDate() + ' '); return day + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
                         var _winLabel = ' · ' + _SUITE.L('obWindowLabel') + ' ' + _wFmt(_winStart) + '→' + _wFmt(_winEnd);
@@ -8432,7 +8747,7 @@
                             if (routePanel.classList.contains('open')) buildRoutePanel();
                             var ts2 = new Date().toLocaleTimeString('en-GB', { hour12: false });
                             var vsmCount = Object.keys(_vsmMap).length;
-                            statusBar.textContent = 'Atualizado ' + ts2 + ' — ' + _routes.length + ' ' + L('vsmRoutesLabel') + ' · ' + vsmCount + ' VSMs' + _winLabel;
+                            statusBar.textContent = 'Atualizado ' + ts2 + ' — ' + _routes.length + ' ' + _SUITE.L('vsmRoutesLabel') + ' · ' + vsmCount + ' VSMs' + _winLabel;
                             vsmStatusEl.textContent = vsmCount > 0 ? '✅ ' + vsmCount + ' VSMs' : _SUITE.L('obVsmNoData');
                         });
                     },
@@ -8488,7 +8803,8 @@
                     needColor: '#39ff14',
                     upColor: '#34d399',
                     downColor: '#f87171'
-                }
+                },
+                gist: 'https://api.github.com/gists/2b34fb01c647afbf52633a785d98390a'
             };
             const BASE = _SUITE.BASE;
             let CURRENT_NODE = GM_getValue('tl_v5_chart_node', _SUITE.utils.detectNode());
@@ -8506,6 +8822,45 @@
             let isManualSearch = false;
             let countdownInterval = null;
             let nextRefreshTime = 0;
+
+            let METAS_PROCESSAMENTO = {
+                "Unloader": 2200, "Inducter": 780, "WS IB": 2500, "Splitter": 2625,
+                "Pickoff": 700, "Container Builder": 235, "WS PitStop": 1200, "WS OB": 1000
+            };
+
+            async function CarregarRatesPrivados() {
+                return new Promise((resolve) => {
+                    GM_xmlhttpRequest({
+                        method: "GET",
+                        url: CONFIG.gist + "?v=" + Date.now(),
+                        timeout: 5000,
+                        headers: {
+                            "Cache-Control": "no-cache, no-store, must-revalidate",
+                            "Pragma": "no-cache",
+                            "Expires": "0"
+                        },
+                        onload: function (r) {
+                            try {
+                                const data = JSON.parse(r.responseText);
+                                if (data && data.files && data.files["configRates.json"]) {
+                                    const content = JSON.parse(data.files["configRates.json"].content);
+                                    const newRates = content.METAS_PROCESSAMENTO || content;
+                                    Object.entries(newRates).forEach(([key, val]) => {
+                                        if (typeof val === 'number') {
+                                            const normalizedKey = key.replace(/_/g, ' ');
+                                            METAS_PROCESSAMENTO[normalizedKey] = val;
+                                        }
+                                    });
+                                    console.log("[TPH] Rates atualizados:", METAS_PROCESSAMENTO);
+                                }
+                            } catch (e) { console.error("[TPH] Erro ao processar Rates do Gist", e); }
+                            resolve();
+                        },
+                        onerror: () => resolve(),
+                        ontimeout: () => resolve()
+                    });
+                });
+            }
             function pad(n) { return n < 10 ? '0' + n : n; }
             function fmtDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
             function fmtTime(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
@@ -8584,7 +8939,7 @@
         .tl-v5-refresh-select option { background:#161b22; color:#fff; }
         .tl-v5-metrics { display:flex; gap:1rem; margin-bottom:1rem; flex-shrink:0; justify-content: space-between; }
         .tl-v5-metric { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px 14px; flex:1; min-width: 0; }
-        .tl-v5-metric-label { font-size:0.65rem; color:rgba(255,255,255,0.4); margin-bottom:4px; text-transform:uppercase; display:block; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tl-v5-metric-label { font-size:0.65rem; color:#fff; margin-bottom:4px; text-transform:uppercase; display:block; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tl-v5-metric-val { font-size:1.6rem; font-weight:700; color:#fff; display:block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tl-v5-canvas-container { flex:1; width:100%; overflow-x:auto; overflow-y:hidden; border-radius:8px; opacity:1; transition:opacity 0.2s, transform 0.2s; }
         .tl-v5-canvas-container.updating { opacity:0; transform:translateY(4px); }
@@ -8597,6 +8952,13 @@
         .tl-v5-loader-bar { width:200px; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden; }
         .tl-v5-loader-fill { height:100%; background:${CONFIG.ui.realColor}; width:0%; transition:width 0.1s linear; }
         .sep-line { width: 1px; height: 30px; background: rgba(255,255,255,0.1); margin: 0 4px; }
+
+        /* Headcount Grid */
+        .tl-v5-hc-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+        .tl-v5-hc-card { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 6px; text-align: center; min-width: 130px; flex: 0 1 auto; }
+        .tl-v5-hc-label { font-size: 10px; color: #fff; text-transform: uppercase; margin-bottom: 5px; display: block; font-weight: bold; }
+        .tl-v5-hc-val { font-size: 18px; font-weight: 700; color: #fff; display: block; }
+        .tl-v5-hc-rate { font-size: 9px; color: ${CONFIG.ui.needColor}; font-family: 'Space Mono', monospace; margin-top: 2px; display: block; }
     `);
             const fab = document.createElement('button');
             fab.id = 'tl-v5-fab';
@@ -8695,6 +9057,7 @@
                 <div class="tl-v5-metric"><span class="tl-v5-metric-label">${_SUITE.L('tphAchievement')}</span><span class="tl-v5-metric-val" id="tl-v5-val-achv" style="color:${CONFIG.ui.realColor};">--%</span></div>
                 <div class="tl-v5-metric" id="tl-v5-metric-trend" style="border-color:rgba(168,157,255,0.3);"><span class="tl-v5-metric-label" style="color:#c4b5fd;">${_SUITE.L('tphTrend')}</span><span class="tl-v5-metric-val" id="tl-v5-val-trend" style="color:#c4b5fd;">--</span></div>
             </div>
+            <div id="tl-v5-hc-grid" class="tl-v5-hc-grid" style="margin-bottom: 1rem; margin-top: 0;"></div>
             <div style="display:flex; flex:1; position:relative; min-height:250px;">
                 <div id="tl-v5-yaxis-wrap" style="position:absolute; left:0; top:0; bottom:8px; z-index:10; background:transparent; pointer-events:none; width:45px; display:none;">
                 </div>
@@ -8702,7 +9065,6 @@
                     <div class="tl-v5-canvas-container" id="tl-v5-container" style="flex:1;">
                         <div class="tl-v5-canvas-inner" id="tl-v5-canvas-inner"></div>
                     </div>
-                </div>
                 </div>
             </div>
         </div>
@@ -8819,7 +9181,7 @@
                 }
                 return blocks;
             }
-            function fetchSingleBlock(node, token, startMs, endMs) {
+            function fetchSingleBlock(node, token, startMs, endMs, isRetry = false) {
                 return new Promise((resolve, reject) => {
                     const payload = {
                         nodeId: node, nodeType: 'SC', entity: 'getQualityMetricDetails',
@@ -8833,18 +9195,33 @@
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'anti-csrftoken-a2z': token },
                         data: 'jsonObj=' + encodeURIComponent(JSON.stringify(payload)),
                         withCredentials: true,
-                        onload: function (response) {
+                        timeout: 15000,
+                        onload: async function (response) {
                             const finalUrl = response.finalUrl || '';
-                            if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || response.status === 401 || response.status === 403) {
-                                _SUITE.antiCsrfToken = ''; return reject(new Error('Sessão expirada.'));
+                            const isAuthError = finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || response.status === 401 || response.status === 403;
+                            
+                            if (isAuthError) {
+                                _SUITE.antiCsrfToken = '';
+                                if (!isRetry) {
+                                    const newToken = await new Promise(r => _SUITE.utils.fetchAntiCsrfToken(r));
+                                    if (newToken) {
+                                        try {
+                                            const val = await fetchSingleBlock(node, newToken, startMs, endMs, true);
+                                            return resolve(val);
+                                        } catch (e) { /* fall through */ }
+                                    }
+                                }
+                                return reject(new Error('Sessão expirada.'));
                             }
+
                             try {
                                 const json = typeof response.responseText === 'object' ? response.responseText : JSON.parse(response.responseText);
                                 const metrics = (json && json.ret && json.ret.getQualityMetricDetailsOutput && json.ret.getQualityMetricDetailsOutput.qualityMetrics) || [];
                                 resolve(metrics.reduce((acc, row) => acc + (row.successfulScans || 0), 0));
                             } catch (e) { resolve(0); }
                         },
-                        onerror: () => resolve(0)
+                        onerror: () => resolve(0),
+                        ontimeout: () => resolve(0)
                     });
                 });
             }
@@ -8860,87 +9237,96 @@
                 isManualSearch = manualClick;
                 const newBlocks = generateTimeBlocks();
                 if (!newBlocks || newBlocks.length === 0) return;
+
                 isFetching = true;
                 timeBlocks = newBlocks;
-                CURRENT_NODE = inputs.node.value.trim().toUpperCase() || (typeof CURRENT_NODE !== 'undefined' ? CURRENT_NODE : GM_getValue('tl_node', 'CGH7'));
-                GM_setValue('tl_v5_chart_node', CURRENT_NODE);
-                GM_setValue('tl_v5_vol_total', parseInt(inputs.vol.value) || 0);
-                GM_setValue('tl_v5_pausa_start', inputs.pausaStart.value || '11:00');
-                GM_setValue('tl_v5_pausa_end', inputs.pausaEnd.value || '12:15');
-                GM_setValue('tl_v5_pausa2_start', inputs.pausa2Start.value || '15:00');
-                GM_setValue('tl_v5_pausa2_end', inputs.pausa2End.value || '15:15');
+
                 ui.loaderMsg.innerHTML = `${_SUITE.L('tphFetching')} ${timeBlocks.length} ${_SUITE.L('tphBlocks')}...`;
                 ui.loaderMsg.style.color = CONFIG.ui.realColor;
                 ui.loaderBarWrap.style.display = 'block';
                 ui.loaderFill.style.width = '0%';
                 ui.loader.style.display = 'flex';
-                _SUITE.utils.fetchAntiCsrfToken(async (token) => {
-                    if (!token) return showError('Falha ao obter Token. Recarregue a página.');
-                    try {
-                        let completed = 0;
-                        let delayIndex = 0;
-                        let cacheHits = 0;
-                        let skipped = 0;
-                        const now = Date.now();
-                        const updateStatus = () => {
-                            const needed = timeBlocks.length - cacheHits - skipped;
-                            ui.loaderMsg.innerHTML = `${_SUITE.L('tphFetching')} ${needed} ${_SUITE.L('tphBlocks')} <small>(${cacheHits} cache, ${skipped} skip)</small>`;
-                            ui.loaderFill.style.width = Math.round((completed / timeBlocks.length) * 100) + '%';
-                        };
-                        const requests = timeBlocks.map((block) => {
-                            return new Promise(async (resolve) => {
-                                // 1. Skip future blocks (they are 0 by default)
-                                if (block.start > now) {
-                                    completed++;
-                                    skipped++;
-                                    updateStatus();
-                                    resolve();
-                                    return;
-                                }
-                                // 2. Check Cache
-                                const cacheKey = `tph_v2_${CURRENT_NODE}_${block.start}_${block.end}`;
-                                const cachedStr = GM_getValue(cacheKey);
-                                if (cachedStr) {
-                                    try {
-                                        const parsed = JSON.parse(cachedStr);
-                                        if (now - parsed.ts < 24 * 60 * 60 * 1000) {
-                                            block.value = parsed.value;
-                                            completed++;
-                                            cacheHits++;
-                                            updateStatus();
-                                            resolve();
-                                            return;
-                                        }
-                                    } catch (e) { }
-                                }
-                                // 3. Network Fetch (only if older than 15 mins to stabilize, otherwise always refetch)
-                                const currentIndex = delayIndex++;
-                                await new Promise(r => setTimeout(r, currentIndex * CONFIG.time.apiDelayMs));
+
+                try {
+                    await CarregarRatesPrivados();
+                    
+                    CURRENT_NODE = inputs.node.value.trim().toUpperCase() || (typeof CURRENT_NODE !== 'undefined' ? CURRENT_NODE : GM_getValue('tl_node', 'CGH7'));
+                    GM_setValue('tl_v5_chart_node', CURRENT_NODE);
+                    GM_setValue('tl_v5_vol_total', parseInt(inputs.vol.value) || 0);
+                    GM_setValue('tl_v5_pausa_start', inputs.pausaStart.value || '11:00');
+                    GM_setValue('tl_v5_pausa_end', inputs.pausaEnd.value || '12:15');
+                    GM_setValue('tl_v5_pausa2_start', inputs.pausa2Start.value || '15:00');
+                    GM_setValue('tl_v5_pausa2_end', inputs.pausa2End.value || '15:15');
+
+                    const token = await new Promise(r => _SUITE.utils.fetchAntiCsrfToken(r));
+                    if (!token) throw new Error('Falha ao obter Token. Recarregue a página.');
+
+                    let completed = 0;
+                    let cacheHits = 0;
+                    let skipped = 0;
+                    const now = Date.now();
+
+                    const updateStatus = () => {
+                        const needed = timeBlocks.length - cacheHits - skipped;
+                        ui.loaderMsg.innerHTML = `${_SUITE.L('tphFetching')} ${needed} ${_SUITE.L('tphBlocks')} <small>(${cacheHits} cache, ${skipped} skip)</small>`;
+                        ui.loaderFill.style.width = Math.round((completed / timeBlocks.length) * 100) + '%';
+                    };
+
+                    // Increase batch size for better performance (12 parallel requests)
+                    const BATCH_SIZE = 12;
+                    for (let i = 0; i < timeBlocks.length; i += BATCH_SIZE) {
+                        const batch = timeBlocks.slice(i, i + BATCH_SIZE);
+                        const batchPromises = batch.map(async (block) => {
+                            if (block.start > now) {
+                                completed++; skipped++;
+                                return;
+                            }
+
+                            const cacheKey = `tph_v2_${CURRENT_NODE}_${block.start}_${block.end}`;
+                            const cachedStr = GM_getValue(cacheKey);
+                            if (cachedStr) {
                                 try {
-                                    block.value = await fetchSingleBlock(CURRENT_NODE, token, block.start, block.end);
-                                    // Only cache if period is older than 15 mins
-                                    if (now - block.end > 15 * 60 * 1000) {
-                                        GM_setValue(cacheKey, JSON.stringify({ value: block.value, ts: now }));
+                                    const parsed = JSON.parse(cachedStr);
+                                    if (now - parsed.ts < 24 * 60 * 60 * 1000) {
+                                        block.value = parsed.value;
+                                        completed++; cacheHits++;
+                                        return;
                                     }
-                                } catch (e) {
-                                    if (e.message === 'Sessão expirada.') throw e;
-                                    block.value = 0;
+                                } catch (e) { }
+                            }
+
+                            try {
+                                const currentToken = _SUITE.antiCsrfToken || await new Promise(r => _SUITE.utils.fetchAntiCsrfToken(r));
+                                if (!currentToken) throw new Error('Falha ao obter Token.');
+
+                                block.value = await fetchSingleBlock(CURRENT_NODE, currentToken, block.start, block.end);
+                                
+                                if (now - block.end > 15 * 60 * 1000) {
+                                    GM_setValue(cacheKey, JSON.stringify({ value: block.value, ts: now }));
                                 }
                                 completed++;
-                                updateStatus();
-                                resolve();
-                            });
+                            } catch (e) {
+                                if (e.message.includes('Sessão expirada')) throw e;
+                                block.value = 0;
+                                completed++;
+                            }
                         });
-                        await Promise.all(requests);
-                        ui.loader.style.display = 'none';
-                        isFetching = false;
-                        renderChart();
-                        startCountdownTimer();
-                    } catch (error) {
-                        showError(_SUITE.utils.esc(error.message) + `<br>Faça login novamente.`);
-                        isFetching = false;
+
+                        await Promise.all(batchPromises);
+                        updateStatus();
+                        // Minimal throttle between batches
+                        if (i + BATCH_SIZE < timeBlocks.length) await new Promise(r => setTimeout(r, 30));
                     }
-                });
+
+                    ui.loader.style.display = 'none';
+                    isFetching = false;
+                    renderChart();
+                    startCountdownTimer();
+
+                } catch (error) {
+                    showError(_SUITE.utils.esc(error.message) + (error.message.includes('expirada') ? `<br>Faça login novamente.` : ''));
+                    isFetching = false;
+                }
             }
             const labelsPlugin = {
                 id: 'alwaysShowLabels',
@@ -9049,30 +9435,36 @@
                 if (endTimeMs < nowMs) {
                     currentNeedMetric = averageNeed;
                 }
+
                 const totalPkgs = dataValues.reduce((a, b) => a + b, 0);
                 const validValues = dataValues.filter(v => v > 0);
                 const avg = validValues.length > 0 ? Math.round(validValues.reduce((a, b) => a + b, 0) / validValues.length) : 0;
                 const avgHr = avg * 12;
+
                 const comparisonTarget = currentNeedMetric > 0 ? currentNeedMetric : GOAL_5MIN;
                 const achv = comparisonTarget > 0 ? Math.round((avg / comparisonTarget) * 100) : 0;
+
                 document.getElementById('tl-v5-val-total').innerText = totalPkgs.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg-hr').innerText = avgHr.toLocaleString('pt-BR');
                 document.getElementById('tl-v5-val-avg').innerText = avg.toLocaleString('pt-BR');
+
                 const needHr = currentNeedMetric * 12;
                 const needHrEl = document.getElementById('tl-v5-val-need-hr');
                 if (needHrEl) needHrEl.innerText = needHr > 0 ? needHr.toLocaleString('pt-BR') : '--';
+
                 const needEl = document.getElementById('tl-v5-val-need');
                 if (needEl) needEl.innerText = currentNeedMetric > 0 ? currentNeedMetric.toLocaleString('pt-BR') : '--';
+
                 document.getElementById('tl-v5-val-achv').innerText = achv + '%';
                 const achvEl = document.getElementById('tl-v5-val-achv');
                 if (achv >= 95) achvEl.style.color = '#60a5fa'; else if (achv >= 80) achvEl.style.color = '#34d399';
                 else if (achv >= 50) achvEl.style.color = '#fcd34d'; else achvEl.style.color = '#f87171';
+
                 // ── Tendência (Trend Projection) ──
                 const trendEl = document.getElementById('tl-v5-val-trend');
                 const trendCard = document.getElementById('tl-v5-metric-trend');
                 if (trendEl && trendCard) {
                     if (isShiftActive && avg > 0 && endTimeMs > nowMs) {
-                        // Count remaining non-pause 5-min blocks from now until shift end
                         let remainingBlocks = 0;
                         for (let i = 0; i < timeBlocks.length; i++) {
                             if (timeBlocks[i].start >= nowMs && !isAnyPauseBlock(timeBlocks[i].start)) {
@@ -9081,17 +9473,17 @@
                         }
                         const projected = totalPkgs + (avg * remainingBlocks);
                         trendEl.innerText = projected.toLocaleString('pt-BR');
-                        // Color based on comparison with volume target
+
                         if (initialVol > 0) {
                             const pct = (projected / initialVol) * 100;
                             if (pct >= 100) {
-                                trendEl.style.color = '#34d399'; // green — on/above target
+                                trendEl.style.color = '#34d399';
                                 trendCard.style.borderColor = 'rgba(52,211,153,0.4)';
                             } else if (pct >= 85) {
-                                trendEl.style.color = '#fcd34d'; // yellow — close
+                                trendEl.style.color = '#fcd34d';
                                 trendCard.style.borderColor = 'rgba(252,211,77,0.4)';
                             } else {
-                                trendEl.style.color = '#f87171'; // red — below target
+                                trendEl.style.color = '#f87171';
                                 trendCard.style.borderColor = 'rgba(248,113,113,0.4)';
                             }
                         } else {
@@ -9104,6 +9496,42 @@
                         trendCard.style.borderColor = 'rgba(168,157,255,0.3)';
                     }
                 }
+
+                // ── Grade de Headcount Necessário ──
+                const hcGrid = document.getElementById('tl-v5-hc-grid');
+                if (hcGrid) {
+                    let hcHtml = '';
+                    let totalHC = 0;
+                    
+                    // Cálculo de necessidade constante (baseado apenas no volume total e horas totais líquidas)
+                    const tempoLiquidoMin = Math.max(1, turnoTotalMin - pMin);
+                    const hrNeed = (initialVol * 60) / tempoLiquidoMin; 
+
+                    Object.entries(METAS_PROCESSAMENTO).forEach(([role, rate]) => {
+                        if (typeof rate !== 'number' || isNaN(rate)) return;
+                        const hcNeeded = hrNeed > 0 ? Math.ceil(hrNeed / rate) : 0;
+                        totalHC += hcNeeded;
+                        hcHtml += `
+                            <div class="tl-v5-hc-card">
+                                <span class="tl-v5-hc-label">${role.replace(/_/g, ' ')}</span>
+                                <span class="tl-v5-hc-val">${hcNeeded}</span>
+                                <span class="tl-v5-hc-rate">${rate}/hr</span>
+                            </div>
+                        `;
+                    });
+
+                    if (totalHC > 0) {
+                        hcHtml += `
+                            <div class="tl-v5-hc-card" style="border-color:${CONFIG.ui.upColor}88; background:rgba(52,211,153,0.1);">
+                                <span class="tl-v5-hc-label" style="color:${CONFIG.ui.upColor}; font-weight: 800;">TOTAL HC</span>
+                                <span class="tl-v5-hc-val" style="color:${CONFIG.ui.upColor};">${totalHC}</span>
+                                <span class="tl-v5-hc-rate">Pessoas</span>
+                            </div>
+                        `;
+                    }
+                    hcGrid.innerHTML = hcHtml;
+                }
+
                 const neededWidth = timeBlocks.length * CONFIG.ui.pixelsPerPoint;
                 ui.canvasInner.style.minWidth = `max(100%, ${neededWidth}px)`;
                 if (chartInstance) { chartInstance.destroy(); }
@@ -9188,10 +9616,15 @@
                     }
                 }, 100);
             }
-            fab.addEventListener('click', () => {
+            fab.addEventListener('click', async () => {
                 popup.classList.add('open'); overlay.classList.add('open');
                 if (ui.loaderMsg.style.color === 'rgb(248, 113, 113)') ui.loader.style.display = 'none';
+                
+                // Carrega rates sempre que abrir o painel para garantir que estão atualizados
+                await CarregarRatesPrivados();
+                
                 if (timeBlocks.length === 0) syncData(false);
+                else renderChart(); // Força re-render para atualizar HC grid se os rates mudaram
             });
             document.getElementById('tl-v5-btn-close').addEventListener('click', () => { popup.classList.remove('open'); overlay.classList.remove('open'); });
             overlay.addEventListener('click', () => { popup.classList.remove('open'); overlay.classList.remove('open'); });
