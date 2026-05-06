@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.32
+// @version      1.1.35
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
@@ -34,7 +34,34 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.32";
+    const VERSION = "1.1.35";
+
+    // Cleanup automático e preenchimento dos padrões (executa apenas uma vez)
+    if (GM_getValue('vsm_auto_cleanup_v35', false) === false) {
+        const _defaults = {
+            'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
+            'SBP9': ['AA32'], 'SUA9': ['AA42'], 'SVA9': ['AA51'], 'SSD9': ['AA52'], 'SBT9': ['AA53'],
+            'XSP2': ['AB31'], 'SPC9': ['AB32'], 'SSP9': ['AB41'], 'SBZ1_C2': ['AB42'],
+            'SSO9': ['AB51'], 'SSC9': ['AB52'], 'SRG9': ['AB53'], 'DSA8': ['AB61'],
+            'SDI9_C2': ['CC11'], 'DSP4': ['CC12'], 'DBR9_EF': ['CC13'], 'SLI9_C2': ['CC21'], 'SCG9': ['CC22'],
+            'DBR9': ['CC23'], 'SCZ9': ['CC31'], 'SDA9': ['CC32'], 'SBZ1': ['CC34'],
+            'SDI9': ['CC35'], 'SLI9': ['CC36'], 'SLO9': ['CC41'], 'SBZ2': ['CC61'],
+            'DSP2': ['CD11'], 'SQA9': ['CD12'], 'SFC9': ['CD13'], 'SFI9': ['CD21'], 'DFR2': ['CD23'],
+            'SRP9': ['CD31'], 'SAE9': ['CD32'], 'SCB9': ['CD33'], 'DBS5_EF': ['CD41'], 'SBL9': ['CD51'],
+            'SFM9': ['CD52'], 'DRS5': ['CD53'], 'SPM9': ['CD61'], 'TBAV': ['H-11'], 'STJ9': ['H-31'],
+            'SSJ9': ['H-32'], 'SUB9': ['H-41'], 'DSP5': ['H-51'], 'GIO7': ['H-61'], 'CNF7': ['X-12'],
+            'DOO2': ['X-21'], 'SSV3': ['X-22'], 'REO3': ['X-31'], 'DPR2': ['X-41'], 'SBV9': ['X-51'],
+            'DSP2_EF': ['X-53'], 'DRS5_EF': ['X-61'], 'DSP4_EF': ['X-62']
+        };
+        let newArr = [];
+        Object.entries(_defaults).forEach(([vsmName, segments]) => {
+            segments.forEach(seg => {
+                newArr.push({ route: vsmName.toUpperCase().trim(), vsm: seg.toUpperCase().trim() });
+            });
+        });
+        GM_setValue('vsm_custom_config', JSON.stringify(newArr));
+        GM_setValue('vsm_auto_cleanup_v35', true);
+    }
     var _SUITE = {
         DEFAULT_VSM_SEGMENT_MAP: {
             'SCP9': ['AA11'], 'SOG9': ['AA12'], 'DBS5': ['AA21'], 'SJO9': ['AA22'], 'STA9': ['AA31'],
@@ -8112,6 +8139,14 @@
             toolbar.appendChild(hideNoVsmBtn);
             toolbar.appendChild(routesPanelBtn);
             toolbar.appendChild(calBtn);
+
+            var settingsBtn = document.createElement('button');
+            settingsBtn.textContent = '⚙️';
+            settingsBtn.title = 'Configurações de VSM / Rota';
+            settingsBtn.style.cssText = 'padding:5px 10px;border:1px solid #30363d;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:#161b22;color:#8b949e;white-space:nowrap;';
+            settingsBtn.onmouseover = function () { settingsBtn.style.color = '#f0f6ff'; settingsBtn.style.borderColor = '#58a6ff'; };
+            settingsBtn.onmouseout = function () { if (!vsmSettingsPanel.classList.contains('open')) { settingsBtn.style.color = '#8b949e'; settingsBtn.style.borderColor = '#30363d'; } };
+            toolbar.appendChild(settingsBtn);
             // Thresholds
             var threshWrap = document.createElement('div');
             threshWrap.style.cssText = 'display:flex;align-items:center;gap:2px;background:rgba(255,255,255,0.05);padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);margin-left:auto;';
@@ -8208,6 +8243,128 @@
             setTimeout(function () { buildRoutePanel(); }, 0);
             var calPanel = document.createElement('div');
             calPanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.3s ease;';
+
+            var vsmSettingsPanel = document.createElement('div');
+            vsmSettingsPanel.style.cssText = 'flex-shrink:0;background:#0d1117;border-bottom:1px solid #21262d;overflow:hidden;max-height:0;transition:max-height 0.3s ease;';
+            var vsmSettingsInner = document.createElement('div');
+            vsmSettingsInner.style.cssText = 'padding:12px 14px;display:flex;flex-direction:column;gap:12px;';
+            vsmSettingsPanel.appendChild(vsmSettingsInner);
+
+            function buildVSMSettingsPanel() {
+                vsmSettingsInner.innerHTML = '';
+                var title = document.createElement('div');
+                title.style.cssText = 'font-size:11px;font-weight:800;color:#f0f6ff;margin-bottom:-4px;display:flex;align-items:center;gap:6px;';
+                title.innerHTML = '<span>Mapeamento Manual Rota ➔ VSM</span> <span style="font-weight:400;color:#6e7681;font-size:10px;">(Prioritário sobre a detecção automática)</span>';
+                vsmSettingsInner.appendChild(title);
+
+                var inputRow = document.createElement('div');
+                inputRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+                var routeInp = document.createElement('input');
+                routeInp.placeholder = 'ROTA (ex: SCP9)';
+                routeInp.style.cssText = 'background:#161b22;border:1px solid #30363d;color:#f0f6ff;border-radius:6px;padding:5px 10px;font-size:11px;width:120px;outline:none;font-family:monospace;';
+                var vsmInp = document.createElement('input');
+                vsmInp.placeholder = 'VSM (ex: AA11)';
+                vsmInp.style.cssText = 'background:#161b22;border:1px solid #30363d;color:#f0f6ff;border-radius:6px;padding:5px 10px;font-size:11px;width:120px;outline:none;font-family:monospace;';
+                var addBtn = document.createElement('button');
+                addBtn.textContent = 'Adicionar';
+                addBtn.style.cssText = 'padding:5px 12px;background:#238636;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;';
+                var resetBtn = document.createElement('button');
+                resetBtn.textContent = 'Resetar para Padrão';
+                resetBtn.style.cssText = 'padding:5px 12px;background:#30363d;color:#8b949e;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-left:auto;';
+                var clearBtn = document.createElement('button');
+                clearBtn.textContent = 'Limpar Tudo';
+                clearBtn.style.cssText = 'padding:5px 12px;background:#442222;color:#f85149;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;';
+
+                inputRow.appendChild(routeInp);
+                inputRow.appendChild(vsmInp);
+                inputRow.appendChild(addBtn);
+                inputRow.appendChild(resetBtn);
+                inputRow.appendChild(clearBtn);
+                vsmSettingsInner.appendChild(inputRow);
+
+                var listRow = document.createElement('div');
+                listRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;max-height:120px;overflow-y:auto;padding:4px;';
+                vsmSettingsInner.appendChild(listRow);
+
+                var configStr = GM_getValue('vsm_custom_config', '[]');
+                var configArr = JSON.parse(configStr);
+
+                addBtn.onclick = function () {
+                    var r = routeInp.value.toUpperCase().trim();
+                    var v = vsmInp.value.toUpperCase().trim();
+                    if (!r || !v) return;
+                    var idx = configArr.findIndex(function (x) { return x.route === r; });
+                    if (idx !== -1) configArr[idx].vsm = v;
+                    else configArr.push({ route: r, vsm: v });
+                    GM_setValue('vsm_custom_config', JSON.stringify(configArr));
+                    _vsmMap[r] = v;
+                    buildVSMSettingsPanel();
+                    renderCards(filterInput.value.trim());
+                };
+
+                resetBtn.onclick = function () {
+                    if (!confirm('Deseja carregar os mapeamentos padrões do Mapa VSM?')) return;
+                    var newArr = [];
+                    Object.entries(_SUITE.DEFAULT_VSM_SEGMENT_MAP).forEach(function (entry) {
+                        var vsmName = entry[0], segments = entry[1];
+                        segments.forEach(function (seg) {
+                            var r = vsmName.toUpperCase().trim();
+                            var v = seg.toUpperCase().trim();
+                            // ROTA no card = vsmName (ex: SCP9), VSM no card = segment (ex: AA11)
+                            newArr.push({ route: r, vsm: v });
+                            _vsmMap[r] = v;
+                        });
+                    });
+                    GM_setValue('vsm_custom_config', JSON.stringify(newArr));
+                    buildVSMSettingsPanel();
+                    renderCards(filterInput.value.trim());
+                };
+
+                clearBtn.onclick = function () {
+                    if (!confirm('Deseja remover TODOS os mapeamentos manuais?')) return;
+                    GM_setValue('vsm_custom_config', '[]');
+                    _vsmMap = {};
+                    buildVSMSettingsPanel();
+                    renderCards(filterInput.value.trim());
+                };
+
+                configArr.forEach(function (item, idx) {
+                    var chip = document.createElement('div');
+                    chip.style.cssText = 'display:flex;align-items:center;gap:6px;background:#161b22;border:1px solid #30363d;padding:3px 10px;border-radius:14px;font-size:10px;';
+                    chip.innerHTML = '<span style="color:#f0f6ff;font-weight:700;">' + item.route + '</span> <span style="color:#6e7681;">→</span> <span style="color:#58a6ff;font-weight:700;">' + item.vsm + '</span>';
+                    var del = document.createElement('span');
+                    del.textContent = '✕';
+                    del.style.cssText = 'color:#f85149;cursor:pointer;font-weight:bold;margin-left:6px;';
+                    del.onclick = function () {
+                        configArr.splice(idx, 1);
+                        delete _vsmMap[item.route];
+                        GM_setValue('vsm_custom_config', JSON.stringify(configArr));
+                        buildVSMSettingsPanel();
+                        renderCards(filterInput.value.trim());
+                    };
+                    chip.appendChild(del);
+                    listRow.appendChild(chip);
+                });
+            }
+
+            settingsBtn.onclick = function () {
+                var isOpen = vsmSettingsPanel.classList.contains('open');
+                if (isOpen) {
+                    vsmSettingsPanel.style.maxHeight = '0';
+                    vsmSettingsPanel.classList.remove('open');
+                    settingsBtn.style.color = '#8b949e';
+                    settingsBtn.style.borderColor = '#30363d';
+                } else {
+                    buildVSMSettingsPanel();
+                    vsmSettingsPanel.style.maxHeight = '250px';
+                    vsmSettingsPanel.classList.add('open');
+                    settingsBtn.style.color = '#58a6ff';
+                    settingsBtn.style.borderColor = '#58a6ff';
+                    // Close others
+                    if (calPanel.classList.contains('open')) calBtn.onclick();
+                    if (routePanel.classList.contains('open')) routesPanelBtn.onclick();
+                }
+            };
             var calInner = document.createElement('div');
             calInner.style.cssText = 'padding:8px 14px;display:flex;align-items:center;gap:8px;';
             calPanel.appendChild(calInner);
@@ -8424,6 +8581,7 @@
             _panel.classList.remove('open'); // Ensure it starts closed
             _panel.appendChild(hdr); _panel.appendChild(toolbar); _panel.appendChild(routePanel);
             _panel.appendChild(calPanel);
+            _panel.appendChild(vsmSettingsPanel);
             gridWrap.id = 'ob-dock-grid-wrap';
             gridWrap.classList.add('tl-morph-target');
             _panel.appendChild(gridWrap); _panel.appendChild(statusBar);
@@ -8823,10 +8981,7 @@
             let countdownInterval = null;
             let nextRefreshTime = 0;
 
-            let METAS_PROCESSAMENTO = {
-                "Unloader": 2200, "Inducter": 780, "WS IB": 2500, "Splitter": 2625,
-                "Pickoff": 700, "Container Builder": 235, "WS PitStop": 1200, "WS OB": 1000
-            };
+            let METAS_PROCESSAMENTO = {};
 
             async function CarregarRatesPrivados() {
                 return new Promise((resolve) => {
@@ -8845,10 +9000,13 @@
                                 if (data && data.files && data.files["configRates.json"]) {
                                     const content = JSON.parse(data.files["configRates.json"].content);
                                     const newRates = content.METAS_PROCESSAMENTO || content;
+                                    METAS_PROCESSAMENTO = {}; // Limpa para não misturar com dados antigos
                                     Object.entries(newRates).forEach(([key, val]) => {
+                                        const normalizedKey = key.replace(/_/g, ' ');
                                         if (typeof val === 'number') {
-                                            const normalizedKey = key.replace(/_/g, ' ');
-                                            METAS_PROCESSAMENTO[normalizedKey] = val;
+                                            METAS_PROCESSAMENTO[normalizedKey] = { rate: val, min: 0 };
+                                        } else if (val && typeof val === 'object' && typeof val.rate === 'number') {
+                                            METAS_PROCESSAMENTO[normalizedKey] = { rate: val.rate, min: val.min || 0 };
                                         }
                                     });
                                     console.log("[TPH] Rates atualizados:", METAS_PROCESSAMENTO);
@@ -9507,13 +9665,16 @@
                     const tempoLiquidoMin = Math.max(1, turnoTotalMin - pMin);
                     const hrNeed = (initialVol * 60) / tempoLiquidoMin;
 
-                    Object.entries(METAS_PROCESSAMENTO).forEach(([role, rate]) => {
-                        if (typeof rate !== 'number' || isNaN(rate)) return;
-                        const hcNeeded = hrNeed > 0 ? Math.ceil(hrNeed / rate) : 0;
+                    Object.entries(METAS_PROCESSAMENTO).forEach(([role, config]) => {
+                        const rate = config.rate;
+                        const min = config.min || 0;
+                        let hcNeeded = hrNeed > 0 ? Math.ceil(hrNeed / rate) : 0;
+                        if (hcNeeded < min) hcNeeded = min;
+
                         totalHC += hcNeeded;
                         hcHtml += `
                             <div class="tl-v5-hc-card">
-                                <span class="tl-v5-hc-label">${role.replace(/_/g, ' ')}</span>
+                                <span class="tl-v5-hc-label">${role}</span>
                                 <span class="tl-v5-hc-val">${hcNeeded}</span>
                                 <span class="tl-v5-hc-rate">${rate}/hr</span>
                             </div>
