@@ -8,8 +8,7 @@
 // @match        https://*.amazon.com/ssp/dock/hrz/ib*
 // @match        https://*.amazon.com/yms/*
 // @match        https://track.relay.amazon.dev/*
-// @match        https://*.amazon.com/sortcenter/flowrate*
-// @match        https://*.amazon.com/sortcenter/vista/*
+// @match        https://*.amazon.com/sortcenter/*
 // @run-at       document-start
 // @require      https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
@@ -36,6 +35,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
+    GM_addStyle("@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');");
     const VERSION = "1.1.37";
 
     // Cleanup automático e preenchimento dos padrões (executa apenas uma vez)
@@ -9100,7 +9100,6 @@
                 return getPauseDuration(p1s, p1e) + getPauseDuration(p2s, p2e);
             }
             GM_addStyle(`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');
         #tl-v5-fab { position:fixed; bottom:24px; left:24px; z-index:99999; width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:22px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s; }
         #tl-v5-fab:hover { transform:scale(1.1); box-shadow:0 12px 30px rgba(168,157,255,0.3); }
         #tl-v5-overlay { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:2147483646; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
@@ -9800,7 +9799,7 @@
                         plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(20,10,50,0.9)', titleColor: '#fff', bodyColor: '#aaa' } },
                         scales: {
                             x: { offset: true, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 14, family: "'DM Sans', sans-serif", weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false } },
-                            y: { min: 0, max: roundedMax, ticks: { color: 'transparent', font: { size: 14, family: "'DM Sans', sans-serif", weight: 'bold' } }, grid: { color: 'rgba(255,255,255,0.03)' }, border: { display: false } }
+                            y: { min: 0, max: roundedMax }
                         }
                     }
                 });
@@ -9808,7 +9807,6 @@
                     const now = Date.now();
                     const currentIdx = timeBlocks.findIndex(b => b.start <= now && b.end > now);
                     const lastDataIdx = dataValues.reduce((res, val, idx) => val > 0 ? idx : res, -1);
-                    // Prioritize current time block, then last block with data, then end of chart
                     let targetIdx = currentIdx !== -1 ? currentIdx : lastDataIdx;
                     if (targetIdx !== -1) {
                         const targetX = targetIdx * CONFIG.ui.pixelsPerPoint;
@@ -9820,26 +9818,33 @@
                     }
                 }, 100);
             }
-            fab.addEventListener('click', async (e) => {
-                e.preventDefault(); e.stopPropagation();
-                popup.classList.add('open'); overlay.classList.add('open');
+
+            function openPopup() {
+                overlay.classList.add('open');
+                popup.style.display = 'flex';
+                popup.style.animation = 'tl-popup-in .2s ease-out';
                 if (ui.loaderMsg.style.color === 'rgb(248, 113, 113)') ui.loader.style.display = 'none';
+                CarregarRatesPrivados().then(() => {
+                    if (timeBlocks.length === 0) syncData(false);
+                    else renderChart();
+                });
+            }
+            function closePopup() {
+                popup.style.display = 'none';
+                overlay.classList.remove('open');
+            }
 
-                // Carrega rates sempre que abrir o painel para garantir que estão atualizados
-                await CarregarRatesPrivados();
-
-                if (timeBlocks.length === 0) syncData(false);
-                else renderChart(); // Força re-render para atualizar HC grid se os rates mudaram
+            fab.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openPopup();
             });
             document.getElementById('tl-v5-btn-close').addEventListener('click', (e) => {
                 e.preventDefault(); e.stopPropagation();
-                popup.classList.remove('open'); overlay.classList.remove('open');
+                closePopup();
             });
             overlay.addEventListener('click', (e) => {
                 e.preventDefault(); e.stopPropagation();
-                if (e.target === overlay) {
-                    popup.classList.remove('open'); overlay.classList.remove('open');
-                }
+                if (e.target === overlay) closePopup();
             });
             inputs.search.addEventListener('click', (e) => { e.preventDefault(); syncData(true); });
             inputs.autoToggle.addEventListener('click', function (e) {
