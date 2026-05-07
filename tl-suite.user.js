@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.37
+// @version      1.1.38
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://*.amazon.com/ssp/dock/hrz/ob*
@@ -36,7 +36,7 @@
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
     GM_addStyle("@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');");
-    const VERSION = "1.1.37";
+    const VERSION = "1.1.38";
 
     // Cleanup automático e preenchimento dos padrões (executa apenas uma vez)
     if (GM_getValue('vsm_auto_cleanup_v35', false) === false) {
@@ -9100,7 +9100,7 @@
                 return getPauseDuration(p1s, p1e) + getPauseDuration(p2s, p2e);
             }
             GM_addStyle(`
-        #tl-v5-fab { position:fixed; bottom:24px; left:24px; z-index:99999; width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:22px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s; }
+        #tl-v5-fab { position:fixed; bottom:24px; left:80px; z-index:99999; width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:22px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s; }
         #tl-v5-fab:hover { transform:scale(1.1); box-shadow:0 12px 30px rgba(168,157,255,0.3); }
         #tl-v5-overlay { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:2147483646; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
         #tl-v5-overlay.open { display:block !important; opacity:1; }
@@ -9160,14 +9160,17 @@
         .tl-v5-hc-val { font-size: 18px; font-weight: 700; color: #fff; display: block; }
         .tl-v5-hc-rate { font-size: 9px; color: ${CONFIG.ui.needColor}; font-family: 'Space Mono', monospace; margin-top: 2px; display: block; }
     `);
+            if (document.getElementById('tl-v5-fab')) return;
             const fab = document.createElement('button');
             fab.id = 'tl-v5-fab';
             fab.title = 'Painel Gráfico Global V5';
             fab.innerHTML = '📈';
             document.body.appendChild(fab);
+
             const overlay = document.createElement('div');
             overlay.id = 'tl-v5-overlay';
             document.body.appendChild(overlay);
+
             const coeff = CONFIG.time.blockMs;
             const endRoundedDate = new Date(Math.floor(Date.now() / CONFIG.time.blockMs) * CONFIG.time.blockMs);
             const startRoundedDate = new Date(endRoundedDate.getTime() - 3600000);
@@ -9838,11 +9841,11 @@
                 e.preventDefault(); e.stopPropagation();
                 openPopup();
             });
-            document.getElementById('tl-v5-btn-close').addEventListener('click', (e) => {
+            document.getElementById('tl-v5-btn-close').addEventListener('click', (e) => { 
                 e.preventDefault(); e.stopPropagation();
-                closePopup();
+                closePopup(); 
             });
-            overlay.addEventListener('click', (e) => {
+            overlay.addEventListener('click', (e) => { 
                 e.preventDefault(); e.stopPropagation();
                 if (e.target === overlay) closePopup();
             });
