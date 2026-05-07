@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.38
+// @version      1.1.39
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
 // @match        https://*.amazon.com/ssp/dock/hrz/ob*
@@ -36,7 +36,7 @@
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
     GM_addStyle("@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');");
-    const VERSION = "1.1.38";
+    const VERSION = "1.1.39";
 
     // Cleanup automático e preenchimento dos padrões (executa apenas uma vez)
     if (GM_getValue('vsm_auto_cleanup_v35', false) === false) {
@@ -9100,11 +9100,11 @@
                 return getPauseDuration(p1s, p1e) + getPauseDuration(p2s, p2e);
             }
             GM_addStyle(`
-        #tl-v5-fab { position:fixed; bottom:24px; left:80px; z-index:99999; width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:22px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s; }
-        #tl-v5-fab:hover { transform:scale(1.1); box-shadow:0 12px 30px rgba(168,157,255,0.3); }
-        #tl-v5-overlay { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:2147483646; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
+        #tl-v5-fab { position:fixed; top:50%; right:0; transform:translateY(-50%); z-index:99999; width:32px; height:120px; border-radius:8px 0 0 8px; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:18px; border:1px solid rgba(255,255,255,0.1); border-right:none; cursor:pointer; box-shadow:-4px 0 16px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:width 0.2s, background 0.2s; writing-mode: vertical-rl; text-orientation: mixed; font-family:'Syne', sans-serif; font-weight:bold; letter-spacing:1px; }
+        #tl-v5-fab:hover { width:40px; background:linear-gradient(135deg, #2a0a4d 0%, #1a2638 100%); }
+        #tl-v5-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000000; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
         #tl-v5-overlay.open { display:block !important; opacity:1; }
-        #tl-v5-popup { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:2147483647; background:rgba(10, 22, 40, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:none; transition:none; color:#fff; overflow:hidden; }
+        #tl-v5-popup { position:fixed; inset:0; z-index:1000001; background:rgba(10, 22, 40, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:none; transition:none; color:#fff; overflow:hidden; }
         #tl-v5-popup.open { display:flex !important; }
         .tl-v5-header { padding:12px 20px; cursor:grab; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02); user-select:none; }
         .tl-v5-header:active { cursor:grabbing; }
@@ -9163,8 +9163,8 @@
             if (document.getElementById('tl-v5-fab')) return;
             const fab = document.createElement('button');
             fab.id = 'tl-v5-fab';
-            fab.title = 'Painel Gráfico Global V5';
-            fab.innerHTML = '📈';
+            fab.title = 'Abrir Gráfico Global V5';
+            fab.innerHTML = 'GRÁFICO TPH V5';
             document.body.appendChild(fab);
 
             const overlay = document.createElement('div');
@@ -9822,7 +9822,9 @@
                 }, 100);
             }
 
+            let lastOpenTime = 0;
             function openPopup() {
+                lastOpenTime = Date.now();
                 overlay.classList.add('open');
                 popup.style.display = 'flex';
                 popup.style.animation = 'tl-popup-in .2s ease-out';
@@ -9847,6 +9849,8 @@
             });
             overlay.addEventListener('click', (e) => { 
                 e.preventDefault(); e.stopPropagation();
+                // Previne o fechamento imediato se o clique original no FAB "vazar" para o overlay
+                if (Date.now() - lastOpenTime < 500) return;
                 if (e.target === overlay) closePopup();
             });
             inputs.search.addEventListener('click', (e) => { e.preventDefault(); syncData(true); });
