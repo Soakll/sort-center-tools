@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         TL All-in-One Suite
 // @namespace    http://tampermonkey.net/
-// @version      1.1.36
+// @version      1.1.37
 // @description  Suite unificada: VRID Info, Mapa VSM, CPT Tracker, Painel Prod, TPH Chart
 // @author       emanunec
-// @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ob*
-// @match        https://trans-logistics.amazon.com/ssp/dock/hrz/ib*
-// @match        https://trans-logistics.amazon.com/yms/*
+// @match        https://*.amazon.com/ssp/dock/hrz/ob*
+// @match        https://*.amazon.com/ssp/dock/hrz/ib*
+// @match        https://*.amazon.com/yms/*
 // @match        https://track.relay.amazon.dev/*
+// @match        https://*.amazon.com/sortcenter/flowrate*
+// @match        https://*.amazon.com/sortcenter/vista/*
 // @run-at       document-start
 // @require      https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
@@ -34,7 +36,7 @@
 (function () {
     'use strict';
     GM_addStyle('input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none !important; margin: 0 !important; } input[type=number] { -moz-appearance: textfield !important; } option { background: #161b22; color: #fff; }');
-    const VERSION = "1.1.36";
+    const VERSION = "1.1.37";
 
     // Cleanup automático e preenchimento dos padrões (executa apenas uma vez)
     if (GM_getValue('vsm_auto_cleanup_v35', false) === false) {
@@ -949,7 +951,7 @@
     _SUITE.href = location.href;
     _SUITE.isRTT = location.hostname === 'track.relay.amazon.dev';
     _SUITE.isYMS = location.hostname === 'trans-logistics.amazon.com' && location.pathname.includes('/yms/');
-    _SUITE.isVista = _SUITE.href.includes('/sortcenter/flowrate');
+    _SUITE.isVista = location.pathname.includes('/sortcenter/flowrate') || location.pathname.includes('/sortcenter/vista');
     _SUITE.isOutbound = _SUITE.href.includes('/ssp/dock/hrz/ob');
     _SUITE.isIB = _SUITE.href.includes('/ssp/dock/hrz/ib');
     _SUITE.isDock = _SUITE.isOutbound || _SUITE.isIB;
@@ -8980,7 +8982,7 @@
     })();
     _onReady(function () {
         (function loadModuleTPH() {
-            if (!_SUITE.isDock) return;
+            if (!_SUITE.isVista) return;
             'use strict';
             if (location.pathname.includes('/yms/')) return;
             const CONFIG = {
@@ -9101,10 +9103,10 @@
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=Space+Mono&family=Syne:wght@600&display=swap');
         #tl-v5-fab { position:fixed; bottom:24px; left:24px; z-index:99999; width:50px; height:50px; border-radius:50%; background:linear-gradient(135deg, #1a0533 0%, #0a1628 100%); color:#a89dff; font-size:22px; border:2px solid rgba(255,255,255,0.1); cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; transition:transform 0.2s; }
         #tl-v5-fab:hover { transform:scale(1.1); box-shadow:0 12px 30px rgba(168,157,255,0.3); }
-        #tl-v5-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99998; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
-        #tl-v5-overlay.open { display:block; opacity:1; }
-        #tl-v5-popup { position:fixed; inset:0; z-index:99999; background:rgba(10, 22, 40, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:none; transition:none; color:#fff; overflow:hidden; }
-        #tl-v5-popup.open { display:flex; }
+        #tl-v5-overlay { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); z-index:2147483646; display:none; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s ease; }
+        #tl-v5-overlay.open { display:block !important; opacity:1; }
+        #tl-v5-popup { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:2147483647; background:rgba(10, 22, 40, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display:none; flex-direction:column; font-family:'DM Sans', sans-serif; border:none; transition:none; color:#fff; overflow:hidden; }
+        #tl-v5-popup.open { display:flex !important; }
         .tl-v5-header { padding:12px 20px; cursor:grab; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02); user-select:none; }
         .tl-v5-header:active { cursor:grabbing; }
         .tl-v5-header-title { font-family:'Syne', sans-serif; font-weight:600; font-size:15px; color:#fff; display:flex; align-items:center; gap:8px; }
@@ -9117,13 +9119,13 @@
         .tl-v5-rh-se { bottom:-4px; right:-4px; width:16px; height:16px; cursor:se-resize; }
         #tl-v5-popup.fullscreen .tl-v5-rh { display:none; }
         .tl-v5-body { padding:20px; flex:1; display:flex; flex-direction:column; overflow:hidden; position:relative; }
-        .tl-v5-controls-bar { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:1.5rem; background:rgba(255,255,255,0.03); padding:12px 16px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); }
-        .tl-v5-inp-group { display:flex; flex-direction:column; gap:4px; }
-        .tl-v5-inp-label { font-size:10px; color:rgba(255,255,255,0.5); text-transform:uppercase; letter-spacing:0.5px; }
-        .tl-v5-inp-label.label-green { color:${CONFIG.ui.needColor}; }
-        .tl-v5-inp-label.label-red { color:${CONFIG.ui.metaColor}; }
-        .tl-v5-inp { background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:6px; padding:6px 10px; font-size:12px; font-family:'Space Mono', monospace; outline:none; transition:border 0.2s; }
-        .tl-v5-inp:focus { border-color:${CONFIG.ui.realColor}; }
+        .tl-v5-controls-bar { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; margin-bottom:1rem; background:rgba(20,25,35,0.4); padding:10px 15px; border-radius:4px; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .tl-v5-inp-group { display:flex; flex-direction:column; gap:4px; align-items:center; }
+        .tl-v5-inp-label { font-size:10px; color:rgba(255,255,255,0.5); font-weight:bold; text-transform:uppercase; letter-spacing:0.8px; white-space:nowrap; }
+        .tl-v5-inp-label.label-green { color:#39ff14; }
+        .tl-v5-inp-label.label-red { color:#ff2a5f; }
+        .tl-v5-inp { background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:3px; padding:4px 8px; font-size:13px; font-family:sans-serif; outline:none; font-weight:bold; text-align:center; }
+        .tl-v5-inp:focus { border-color:#a89dff; box-shadow: 0 0 0 1px rgba(168,157,255,0.2); }
         .tl-v5-inp[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor:pointer; }
         .tl-v5-btn-primary { background:${CONFIG.ui.realColor}; color:#000; border:none; border-radius:6px; padding:6px 16px; font-weight:600; font-size:12px; font-family:'DM Sans', sans-serif; cursor:pointer; height:29px; transition:opacity 0.2s; }
         .tl-v5-btn-primary:hover { opacity:0.8; }
@@ -9818,7 +9820,8 @@
                     }
                 }, 100);
             }
-            fab.addEventListener('click', async () => {
+            fab.addEventListener('click', async (e) => {
+                e.preventDefault(); e.stopPropagation();
                 popup.classList.add('open'); overlay.classList.add('open');
                 if (ui.loaderMsg.style.color === 'rgb(248, 113, 113)') ui.loader.style.display = 'none';
 
@@ -9828,8 +9831,16 @@
                 if (timeBlocks.length === 0) syncData(false);
                 else renderChart(); // Força re-render para atualizar HC grid se os rates mudaram
             });
-            document.getElementById('tl-v5-btn-close').addEventListener('click', () => { popup.classList.remove('open'); overlay.classList.remove('open'); });
-            overlay.addEventListener('click', () => { popup.classList.remove('open'); overlay.classList.remove('open'); });
+            document.getElementById('tl-v5-btn-close').addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                popup.classList.remove('open'); overlay.classList.remove('open');
+            });
+            overlay.addEventListener('click', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                if (e.target === overlay) {
+                    popup.classList.remove('open'); overlay.classList.remove('open');
+                }
+            });
             inputs.search.addEventListener('click', (e) => { e.preventDefault(); syncData(true); });
             inputs.autoToggle.addEventListener('click', function (e) {
                 e.preventDefault(); AUTO_REFRESH_ON = !AUTO_REFRESH_ON;
@@ -9860,7 +9871,7 @@
     });
     _onReady(function () {
         (function loadModulePainelProd() {
-            if (!_SUITE.isDock) return;
+            if (!_SUITE.isVista) return;
             'use strict';
             if (location.pathname.includes('/yms/')) return;
             var BASE = _SUITE.BASE;
@@ -10095,7 +10106,7 @@
                 '<input type="range" id="tl-as-speed" class="tl-as-slider" min="0" max="2" step="1" value="' + (autoScrollSpeed >= 1.4 ? 2 : (autoScrollSpeed <= 0.7 ? 0 : 1)) + '">' +
                 '<span style="font-size:12px;opacity:0.6">🏃</span>' +
                 '</div>' +
-                '<button type="button" id="tl-refresh-btn">' + _SUITE.L('prodRefresh') + '</button>';
+                '';
             popup.appendChild(autoBar);
             var goalBar = document.createElement('div');
             goalBar.id = 'tl-goal-bar';
@@ -10272,7 +10283,7 @@
                 var statusEl = document.getElementById('tl-prod-status');
                 var bodyEl = document.getElementById('tl-prod-body');
                 if (statusEl) statusEl.textContent = _SUITE.L('prodFetching');
-                
+
                 var currentBase = targetBase || _SUITE.BASE;
                 var range = getTimeRange();
                 var start = range.start, end = range.end;
@@ -10293,7 +10304,7 @@
                     cursor = next;
                 }
                 currentSlots = slots.map(function (s) { return s.label; });
-                
+
                 // Se for retry, força a busca de um token NOVO ignorando o DOM local
                 _SUITE.utils.fetchAntiCsrfToken(function (token) {
                     if (!token) {
@@ -10322,7 +10333,7 @@
                                 if (finalUrl.includes('midway-auth') || finalUrl.includes('/SSO/') || r.status === 401 || r.status === 403) {
                                     _SUITE.antiCsrfToken = '';
                                     GM_deleteValue('anti_csrf_token_global');
-                                    
+
                                     if (!isRetry) {
                                         console.warn("[Ranking] Sessão expirada no domínio " + currentBase + ". Tentando renovar...");
                                         setTimeout(() => fetchProductivity(true, currentBase), 500);
@@ -10334,7 +10345,7 @@
                                         setTimeout(() => fetchProductivity(true, altBase), 500);
                                         return;
                                     }
-                                    
+
                                     if (statusEl) statusEl.textContent = _SUITE.L('prodSessionExpired');
                                     if (bodyEl) bodyEl.innerHTML = '<div class="tl-prod-error">' + _SUITE.L('prodSessionExpiredMsg') + '<br><a href="' + location.href + '">' + _SUITE.L('prodReloadMsg') + '</a> ' + _SUITE.L('prodTryAgain') + '</div>';
                                     return;
@@ -10628,16 +10639,6 @@
             setTimeout(function () {
                 var closeBtn = document.getElementById('tl-prod-close');
                 if (closeBtn) closeBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); closePopup(); });
-                var refreshBtn = document.getElementById('tl-refresh-btn');
-                if (refreshBtn) refreshBtn.addEventListener('click', function (e) {
-                    e.preventDefault(); e.stopPropagation();
-                    _SUITE.antiCsrfToken = '';
-                    fetchProductivity();
-                    if (autoRefreshOn) {
-                        stopAutoRefresh();
-                        startAutoRefresh();
-                    }
-                });
                 var applyBtn = document.getElementById('tl-apply-btn');
                 if (applyBtn) applyBtn.addEventListener('click', function (e) {
                     e.preventDefault(); e.stopPropagation();
